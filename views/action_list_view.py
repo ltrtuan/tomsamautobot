@@ -251,37 +251,46 @@ class ActionItemFrame(tk.Frame):
         visible_frames.sort(key=lambda f: f.winfo_y())
         
  
-        # Tìm vị trí mới dựa trên vị trí con trỏ và phần giao nhau
-        new_index = len(visible_frames)  # Mặc định là cuối cùng
-        original_index = self._drag_data["index"]
+        # Phát hiện hướng di chuyển
+        is_moving_down = delta_y > 0  # True nếu kéo xuống, False nếu kéo lên
+        current_index = self._drag_data["index"]
 
-        # Vị trí con trỏ chuột trong hệ tọa độ của canvas
+        # Vị trí con trỏ chuột
         mouse_y = self.winfo_y() + event.y
+        # Trung tâm của item đang kéo
+        item_center = self.winfo_y() + self.winfo_height() / 2
 
-        # Tính toán khoảng cách và vị trí thả
-        min_distance = float('inf')
-        best_index = new_index
+        # Thiết lập ngưỡng lớn hơn cho kéo xuống
+        threshold_ratio = 0.3 if is_moving_down else 0.5  # 30% cho kéo xuống, 50% cho kéo lên
+
+        # Mặc định là vị trí cuối cùng
+        new_index = len(visible_frames)
 
         for i, frame in enumerate(visible_frames):
-            # Tính toán điểm trên và dưới của frame
+            # Tính ngưỡng đặc biệt cho từng frame
             frame_top = frame.winfo_y()
             frame_bottom = frame.winfo_y() + frame.winfo_height()
+            frame_height = frame.winfo_height()
     
-            # Tính khoảng cách từ chuột đến điểm chính giữa của frame
-            top_distance = abs(mouse_y - frame_top)
-            bottom_distance = abs(mouse_y - frame_bottom)
+            # Vùng trên của frame
+            top_threshold = frame_top + frame_height * threshold_ratio
+            # Vùng dưới của frame
+            bottom_threshold = frame_bottom - frame_height * threshold_ratio
     
-            # Chọn khoảng cách nhỏ nhất
-            if top_distance < min_distance:
-                min_distance = top_distance
-                best_index = i
-    
-            if bottom_distance < min_distance and i == len(visible_frames)-1:
-                min_distance = bottom_distance
-                best_index = i + 1
+            # Xác định vị trí mới dựa trên hướng di chuyển
+            if is_moving_down:  # Kéo từ trên xuống
+                # Nếu trung tâm của item đang kéo đã vượt qua ngưỡng trên của frame
+                if item_center > top_threshold and current_index < i:
+                    new_index = i
+                    break
+            else:  # Kéo từ dưới lên
+                # Nếu trung tâm của item đang kéo đã vượt qua ngưỡng dưới của frame
+                if item_center < bottom_threshold and current_index > i:
+                    new_index = i
+                    break
 
-        # Cập nhật vị trí mới
-        new_index = best_index
+        # Hiển thị debug info
+        print(f"Moving {'down' if is_moving_down else 'up'}, Index: {new_index}")
                 
     
         # Cập nhật placeholder
