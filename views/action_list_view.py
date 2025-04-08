@@ -201,7 +201,7 @@ class ActionItemFrame(tk.Frame):
         # Đổi từ pack sang place để kéo
         self.pack_info_saved = self.pack_info()
         self.pack_forget()
-    
+        
         # Đặt vị trí ban đầu
         initial_y = self.master.winfo_y() + self._drag_data["y_start"]
         self.place(x=0, y=initial_y, relwidth=1)
@@ -212,6 +212,9 @@ class ActionItemFrame(tk.Frame):
     
         # Đánh dấu đang kéo
         self.is_dragging = True
+        
+        # Cập nhật UI thường xuyên để tránh giật lag
+        self.update_idletasks()
         
 
     def on_drag_motion(self, event):
@@ -232,8 +235,18 @@ class ActionItemFrame(tk.Frame):
     
         # Xử lý placeholder và cập nhật index
         parent = self.master
-        visible_frames = [f for f in parent.winfo_children() 
-                         if isinstance(f, ActionItemFrame) and f != self]
+       
+        visible_frames = []
+        for child in parent.winfo_children():
+            if isinstance(child, ActionItemFrame) and child != self:
+                # Thêm điều kiện để đảm bảo chỉ xem xét các frame đã được pack
+                try:
+                    child.pack_info()  # Kiểm tra xem widget đã được pack chưa
+                    visible_frames.append(child)
+                except:
+                    pass  # Bỏ qua các widget chưa được pack
+
+        # Đảm bảo sắp xếp theo vị trí y để xác định đúng vị trí
         visible_frames.sort(key=lambda f: f.winfo_y())
     
         # Tìm vị trí mới
@@ -257,10 +270,28 @@ class ActionItemFrame(tk.Frame):
         )
     
         # Chèn placeholder vào vị trí chính xác
-        if new_index < len(visible_frames):
-            parent._placeholder.pack(before=visible_frames[new_index], fill=tk.X, pady=2)
-        else:
-            parent._placeholder.pack(fill=tk.X, pady=2)    
+        try:
+            if new_index < len(visible_frames):
+                # Kiểm tra trạng thái pack trước khi sử dụng before
+                try:
+                    visible_frames[new_index].pack_info()  # Kiểm tra xem widget đã được pack chưa
+                    parent._placeholder.pack(before=visible_frames[new_index], fill=tk.X, pady=2)
+                except:
+                    # Nếu widget chưa được pack, đặt placeholder ở cuối
+                    parent._placeholder.pack(fill=tk.X, pady=2)
+            else:
+                parent._placeholder.pack(fill=tk.X, pady=2)
+        
+            # Đảm bảo item đang kéo nằm trên placeholder
+            self.lift()  # Đưa item đang kéo lên trên cùng sau khi đặt placeholder
+        except Exception as e:
+            print(f"Lỗi khi đặt placeholder: {e}")
+            # Nếu vẫn gặp lỗi, thử cách khác - đặt placeholder ở cuối
+            try:
+                parent._placeholder.pack(fill=tk.X, pady=2)
+                self.lift()
+            except:
+                pass
       
         
         # Tính toán vị trí mới dựa trên tọa độ chuột
