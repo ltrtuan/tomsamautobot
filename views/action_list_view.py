@@ -248,15 +248,26 @@ class ActionItemFrame(tk.Frame):
 
         # Đảm bảo sắp xếp theo vị trí y để xác định đúng vị trí
         visible_frames.sort(key=lambda f: f.winfo_y())
-    
-        # Tìm vị trí mới
+        
+ 
+        # Tìm vị trí mới dựa trên điểm giữa của các item
         new_index = 0
+        original_index = self._drag_data["index"]
+
+        # Tính điểm giữa của item đang kéo
+        item_center = self.winfo_y() + self.winfo_height() / 2
+
         for i, frame in enumerate(visible_frames):
-            if new_y < frame.winfo_y() + frame.winfo_height()/2:
+            # Tính điểm giữa của frame đích
+            frame_center = frame.winfo_y() + frame.winfo_height() / 2
+    
+            if item_center < frame_center:
                 new_index = i
                 break
             else:
                 new_index = i + 1
+                
+
     
         # Cập nhật placeholder
         if hasattr(parent, '_placeholder'):
