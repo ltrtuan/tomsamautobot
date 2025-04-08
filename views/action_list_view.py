@@ -202,84 +202,55 @@ class ActionItemFrame(tk.Frame):
         
         # Đưa phần tử lên trên cùng
         self.lift()
+        
 
     def on_drag_motion(self, event):
-        if not hasattr(self, '_dragging') or not self._dragging:
+        if not hasattr(self, '_drag_data'):
             return
         
-        # Tính toán khoảng cách kéo
-        dy = event.y_root - self._drag_start_y
-        new_y = self._original_place + dy
+        # Tính toán vị trí mới và di chuyển widget
+        delta_y = event.y - self._drag_data["y_start"]
+        new_y = self.winfo_y() + delta_y
+        self.place(x=0, y=new_y, relwidth=1)
+        self.lift()
     
-        # Giới hạn trong vùng nhìn thấy của parent
+        # Hiệu ứng visual
+        self.config(bg="#e3f2fd")  # Giữ nguyên màu nền khi kéo
+    
+        # Xử lý placeholder và cập nhật index
         parent = self.master
-        if new_y < 0:
-            new_y = 0
-        elif new_y > parent.winfo_height() - self.winfo_height():
-            new_y = parent.winfo_height() - self.winfo_height()
+        visible_frames = [f for f in parent.winfo_children() 
+                         if isinstance(f, ActionItemFrame) and f != self]
+        visible_frames.sort(key=lambda f: f.winfo_y())
     
-        # Tìm vị trí mục tiêu dựa trên vị trí chuột
-        target_index = -1
-    
-        # Xóa placeholder cũ nếu có
-        if hasattr(parent, '_placeholder') and parent._placeholder:
-            parent._placeholder.destroy()
-            parent._placeholder = None
-    
-        # Tìm vị trí mục tiêu trong danh sách các frame đã được pack
-        visible_frames = []
-        for frame in parent.winfo_children():
-            if isinstance(frame, ActionItemFrame) and frame is not self:
-                try:
-                    # Kiểm tra nếu frame đang được quản lý bởi pack manager
-                    frame_info = frame.pack_info()
-                    frame_y = frame.winfo_y()
-                    visible_frames.append((frame, frame_y))
-                except:
-                    pass  # Bỏ qua frame không được quản lý bởi pack
-    
-        # Sắp xếp frames theo vị trí y
-        visible_frames.sort(key=lambda x: x[1])
-    
-        # Tìm vị trí chèn dựa trên vị trí chuột
-        for i, (frame, frame_y) in enumerate(visible_frames):
-            frame_height = frame.winfo_height()
-            frame_mid_y = frame_y + frame_height / 2
-        
-            if new_y < frame_mid_y:
-                target_index = i
+        # Tìm vị trí mới
+        new_index = 0
+        for i, frame in enumerate(visible_frames):
+            if new_y < frame.winfo_y() + frame.winfo_height()/2:
+                new_index = i
                 break
+            else:
+                new_index = i + 1
     
-        # Nếu kéo xuống cuối danh sách
-        if target_index == -1:
-            target_index = len(visible_frames)
+        # Cập nhật placeholder
+        if hasattr(parent, '_placeholder'):
+            parent._placeholder.destroy()
     
-        # Tạo placeholder tại vị trí mục tiêu
         parent._placeholder = tk.Frame(
             parent,
             height=self.winfo_height(),
             bg=cfg.DRAG_PLACEHOLDER_COLOR,
-            highlightbackground="#555555",
-            highlightthickness=2
+            highlightthickness=0
         )
     
-        # Chèn placeholder vào vị trí phù hợp
-        try:
-            if target_index < len(visible_frames):
-                target_frame = visible_frames[target_index][0]
-                parent._placeholder.pack(fill=tk.X, pady=(0, 10), padx=5, before=target_frame)
-            else:
-                parent._placeholder.pack(fill=tk.X, pady=(0, 10), padx=5)
-        except tk.TclError:
-            # Nếu có lỗi pack, sử dụng phương thức an toàn hơn
-            parent._placeholder.pack(fill=tk.X, pady=(0, 10), padx=5)
+        # Chèn placeholder vào vị trí chính xác
+        if new_index < len(visible_frames):
+            parent._placeholder.pack(before=visible_frames[new_index], fill=tk.X, pady=2)
+        else:
+            parent._placeholder.pack(fill=tk.X, pady=2)
     
-        # Di chuyển phần tử theo chuột
-        self.place(x=0, y=new_y, relwidth=1)
-        self.lift()  # Đưa phần tử đang kéo lên trên cùng
-    
-        # Đảm bảo luôn hiển thị nổi bật
-        self.config(bg="#e3f2fd")  # Màu nền nhẹ hơn khi đang kéo
+        # Lưu index mới
+        self._drag_data["new_index"] = new_index
 
 
     def on_drag_end(self, event):
@@ -584,22 +555,42 @@ class ActionListView(ttk.Frame):
         # Resize canvas window to fill available space
         canvas_width = event.width
         self.canvas.itemconfig(self.canvas_frame, width=canvas_width)   
+        
     
     def _on_reorder(self, from_index, to_index):
-        # Adjust to_index if moving down the list
+        if from_index == to_index:
+            return
+    
+        # Điều chỉnh index khi kéo xuống
         if from_index < to_index:
             to_index -= 1
-            
-        # Call the registered drag callback
+    
+        # 1. Cập nhật model thông qua callback
         if self.drag_callback:
             self.drag_callback(from_index, to_index)
-        
-        # Cập nhật lại thứ tự trong action_frames
-        item = self.action_frames.pop(from_index)
-        self.action_frames.insert(to_index, item)
     
-        # Cập nhật số thứ tự cho tất cả các frame
-        self.update_all_indices()
+        # 2. Cập nhật danh sách UI
+        # Xóa toàn bộ frame cũ
+        for frame in self.action_frames:
+            frame.pack_forget()
+    
+        # Sắp xếp lại action_frames
+        moved_item = self.action_frames.pop(from_index)
+        self.action_frames.insert(to_index, moved_item)
+    
+        # 3. Hiển thị lại với số thứ tự mới
+        for idx, frame in enumerate(self.action_frames):
+            frame.index = idx + 1
+            frame.index_label.config(text=f"{idx+1}.")
+            frame.pack(fill=tk.X, pady=2, padx=2)
+            frame.config(bg=cfg.LIGHT_BG_COLOR)  # Đặt lại màu nền
+    
+        # 4. Xóa placeholder
+        if hasattr(self.master, '_placeholder'):
+            self.master._placeholder.destroy()
+    
+        # 5. Cập nhật scrollregion
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
         
 
     

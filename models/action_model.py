@@ -44,3 +44,18 @@ class ActionModel:
     def add_sample_actions(self):
         self.add_action(ActionItem("Tìm Hình Ảnh", {"path": "C:/images/button.png", "confidence": "0.8"}))
         self.add_action(ActionItem("Di Chuyển Chuột", {"x": "500", "y": "300", "duration": "0.5"}))
+
+    def reorder_action(self, old_index, new_index):
+        """Di chuyển hành động từ vị trí cũ đến vị trí mới"""
+        if old_index != new_index and 0 <= old_index < len(self.actions) and 0 <= new_index < len(self.actions):
+            action = self.actions.pop(old_index)
+            self.actions.insert(new_index, action)
+            # Có thể lưu lại nếu cần
+
+    def save_actions(self):
+        """Lưu danh sách hành động vào storage"""
+        try:
+            with open(ACTIONS_JSON_PATH, 'w') as f:
+                json.dump([a.to_dict() for a in self.actions], f, indent=2)
+        except Exception as e:
+            print(f"Lỗi khi lưu hành động: {str(e)}")
