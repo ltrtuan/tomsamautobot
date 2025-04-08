@@ -313,29 +313,37 @@ class ActionItemFrame(tk.Frame):
         """Xử lý sự kiện kết thúc kéo"""
         if not hasattr(self, '_drag_data') or not self.is_dragging:
             return
-        
+    
         # Đặt lại cấu hình
         self.config(bg=cfg.LIGHT_BG_COLOR)  # Đặt lại màu nền
     
         # Chuyển từ place về pack
         self.place_forget()
     
-        # Lấy vị trí mới
+        # Lấy vị trí cũ và mới
         old_index = self._drag_data["index"]
         new_index = self._drag_data.get("new_index", old_index)
-    
-        # Đặt lại các biến trạng thái
-        self.is_dragging = False
-        delattr(self, '_drag_data')
     
         # Xóa placeholder
         if hasattr(self.master, '_placeholder') and self.master._placeholder:
             self.master._placeholder.destroy()
             delattr(self.master, '_placeholder')
     
-        # Chỉ gọi callback khi vị trí thay đổi
-        if old_index != new_index and hasattr(self, 'on_reorder_callback') and self.on_reorder_callback:
+        # THÊM MỚI: Luôn đặt lại item với pack()
+        # Nếu vị trí không thay đổi, chỉ pack lại item đó
+        if old_index == new_index:
+            self.pack(fill=tk.X, pady=2, padx=2)
+        # Nếu vị trí thay đổi, gọi callback để cập nhật
+        elif hasattr(self, 'on_reorder_callback') and self.on_reorder_callback:
             self.on_reorder_callback(old_index, new_index)
+        else:
+            # Trường hợp có thay đổi nhưng không có callback
+            self.pack(fill=tk.X, pady=2, padx=2)
+    
+        # Đặt lại các biến trạng thái
+        self.is_dragging = False
+        delattr(self, '_drag_data')
+
 
 
 class ActionListView(ttk.Frame):
