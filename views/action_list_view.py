@@ -189,30 +189,43 @@ class ActionItemFrame(tk.Frame):
                 widget.config(bg=cfg.LIGHT_BG_COLOR)
     
     def on_drag_start(self, event):
-        # Lưu thông tin bắt đầu kéo
-        self._drag_start_y = event.y_root
-        self._original_place = self.winfo_y()
-        self._dragging = True
-        
-        # Hiệu ứng khi bắt đầu kéo
-        self.config(relief=tk.SUNKEN, highlightbackground=cfg.PRIMARY_COLOR, highlightthickness=1)
-        
-        # Vô hiệu hóa hover effect trong khi kéo
-        self._original_bg = self.cget("bg")
-        
-        # Đưa phần tử lên trên cùng
-        self.lift()
+        """Xử lý sự kiện bắt đầu kéo"""
+        # Ghi nhớ vị trí ban đầu và widget đang kéo
+        self._drag_data = {
+            "x_start": event.x,
+            "y_start": event.y,
+            "widget": self,
+            "index": self.index - 1  # Chuyển index hiển thị sang index thực tế
+        }
+    
+        # Đổi từ pack sang place để kéo
+        self.pack_info_saved = self.pack_info()
+        self.pack_forget()
+    
+        # Đặt vị trí ban đầu
+        initial_y = self.master.winfo_y() + self._drag_data["y_start"]
+        self.place(x=0, y=initial_y, relwidth=1)
+        self.lift()  # Đưa lên trên cùng
+    
+        # Hiệu ứng kéo
+        self.config(bg="#e3f2fd")  # Màu nền nhẹ hơn khi kéo
+    
+        # Đánh dấu đang kéo
+        self.is_dragging = True
         
 
     def on_drag_motion(self, event):
-        if not hasattr(self, '_drag_data'):
+        """Xử lý sự kiện đang kéo"""
+        if not hasattr(self, '_drag_data') or not self.is_dragging:
             return
         
-        # Tính toán vị trí mới và di chuyển widget
+        # Tính vị trí mới
         delta_y = event.y - self._drag_data["y_start"]
         new_y = self.winfo_y() + delta_y
+    
+        # Di chuyển widget theo chuột
         self.place(x=0, y=new_y, relwidth=1)
-        self.lift()
+        self.lift()  # Đảm bảo widget hiển thị trên cùng
     
         # Hiệu ứng visual
         self.config(bg="#e3f2fd")  # Giữ nguyên màu nền khi kéo
@@ -266,93 +279,32 @@ class ActionItemFrame(tk.Frame):
 
 
     def on_drag_end(self, event):
-        if not hasattr(self, '_dragging') or not self._dragging:
+        """Xử lý sự kiện kết thúc kéo"""
+        if not hasattr(self, '_drag_data') or not self.is_dragging:
             return
         
-        self._dragging = False
-        parent = self.master
-        
+        # Đặt lại cấu hình
+        self.config(bg=cfg.LIGHT_BG_COLOR)  # Đặt lại màu nền
     
-        # Xóa placeholder và xử lý sắp xếp lại
-        if hasattr(parent, '_placeholder') and parent._placeholder:
-            # Phục hồi frame hiện tại về trạng thái bình thường
-            self.place_forget()
-        
-            try:
-                # Tìm chỉ mục của placeholder trong danh sách các widget
-                placeholder_idx = 0
-                for i, widget in enumerate(parent.winfo_children()):
-                    if widget is parent._placeholder:
-                        placeholder_idx = i
-                        break
-            
-                # Đếm số ActionItemFrame trước placeholder (không bao gồm self)
-                target_idx = 0
-                for widget in parent.winfo_children()[:placeholder_idx]:
-                    if isinstance(widget, ActionItemFrame) and widget is not self:
-                        target_idx += 1
-            
-                # Xác định chỉ mục nguồn
-                source_idx = 0
-                visible_frames = [f for f in parent.winfo_children() 
-                                   if isinstance(f, ActionItemFrame)]
-                for i, frame in enumerate(visible_frames):
-                    if frame is self:
-                        source_idx = i
-                        break
-                    
-                # Xóa placeholder
-                parent._placeholder.destroy()
-                parent._placeholder = None
-            
-                # Sắp xếp lại nếu vị trí thay đổi
-                if source_idx != target_idx:
-                    # Cẩn thận xử lý pack_forget và pack lại
-                    self.pack_forget()
-                
-                    # Lấy danh sách frame hiện tại (sau khi đã loại bỏ self)
-                    current_frames = [f for f in parent.winfo_children() 
-                                       if isinstance(f, ActionItemFrame)]
-                
-                    # Chèn vào vị trí mới
-                    if target_idx < len(current_frames):
-                        self.pack(fill=tk.X, pady=(0, 10), padx=5, before=current_frames[target_idx])
-                    else:
-                        self.pack(fill=tk.X, pady=(0, 10), padx=5)
-                
-                    # Thông báo cho controller về thay đổi thứ tự
-                    if self.on_reorder_callback:
-                        # Điều chỉnh target_idx nếu kéo xuống
-                        if source_idx < target_idx:
-                            target_idx -= 1
-                        self.on_reorder_callback(source_idx, target_idx)
-                
-                        # Không cần cập nhật số thứ tự ở đây vì đã được xử lý trong _on_reorder
-                else:
-                    # Nếu không thay đổi vị trí, pack lại vào vị trí cũ
-                    self.pack(fill=tk.X, pady=(0, 10), padx=5)
-                
-            except Exception as e:
-                print(f"Error in drag_end: {e}")
-                # Khôi phục an toàn nếu có lỗi
-                self.pack(fill=tk.X, pady=(0, 10), padx=5)
-        else:
-            # Khôi phục nếu không có placeholder
-            self.place_forget()
-            self.pack(fill=tk.X, pady=(0, 10), padx=5)
+        # Chuyển từ place về pack
+        self.place_forget()
     
-        # Khôi phục hiển thị bình thường
-        self.config(relief=tk.RAISED, highlightbackground=cfg.BORDER_COLOR, highlightthickness=1)
-          
-        # Cập nhật lại hiển thị của tất cả các con widget
-        for widget in self.winfo_children():
-            if isinstance(widget, tk.Frame):
-                widget.config(bg=cfg.LIGHT_BG_COLOR)
-                for subwidget in widget.winfo_children():
-                    if isinstance(subwidget, tk.Label):
-                        subwidget.config(bg=cfg.LIGHT_BG_COLOR)
-            elif isinstance(widget, tk.Label):
-                widget.config(bg=cfg.LIGHT_BG_COLOR)
+        # Lấy vị trí mới
+        old_index = self._drag_data["index"]
+        new_index = self._drag_data.get("new_index", old_index)
+    
+        # Đặt lại các biến trạng thái
+        self.is_dragging = False
+        delattr(self, '_drag_data')
+    
+        # Xóa placeholder
+        if hasattr(self.master, '_placeholder') and self.master._placeholder:
+            self.master._placeholder.destroy()
+            delattr(self.master, '_placeholder')
+    
+        # Chỉ gọi callback khi vị trí thay đổi
+        if old_index != new_index and hasattr(self, 'on_reorder_callback') and self.on_reorder_callback:
+            self.on_reorder_callback(old_index, new_index)
 
 
 class ActionListView(ttk.Frame):
@@ -572,29 +524,33 @@ class ActionListView(ttk.Frame):
     def _on_reorder(self, from_index, to_index):
         if from_index == to_index:
             return
-
-        # Điều chỉnh index khi kéo xuống
+        
+        # Điều chỉnh to_index nếu cần
         if from_index < to_index:
             to_index -= 1
-
-        # 1. Cập nhật model thông qua callback
+        
+        # Gọi callback để cập nhật model
         if self.drag_callback:
             self.drag_callback(from_index, to_index)
-
-        # 2. Cập nhật danh sách UI
-        # Di chuyển item trong action_frames
-        moved_item = self.action_frames.pop(from_index)
-        self.action_frames.insert(to_index, moved_item)
-
-        # 3. Cập nhật số thứ tự và hiển thị lại
-        for idx, frame in enumerate(self.action_frames):
-            frame.index = idx + 1  # Cập nhật thuộc tính index
-            frame.index_label.config(text=f"{idx+1}.")  # Cập nhật label
-            frame.pack(fill=tk.X, pady=2, padx=2)  # Hiển thị lại với thứ tự mới
-
-        # 4. Force update UI
+    
+        # Cập nhật UI và số thứ tự
+        # Di chuyển item trong danh sách action_frames
+        item = self.action_frames.pop(from_index)
+        self.action_frames.insert(to_index, item)
+    
+        # Hiển thị lại các frame theo thứ tự mới
+        for i, frame in enumerate(self.action_frames):
+            frame.pack_forget()  # Xóa khỏi UI
+    
+        # Thêm lại vào UI với số thứ tự đã cập nhật
+        for i, frame in enumerate(self.action_frames):
+            frame.index = i + 1
+            if hasattr(frame, 'index_label'):
+                frame.index_label.config(text=f"{i+1}.")
+            frame.pack(fill=tk.X, pady=2, padx=2)
+    
+        # Force update
         self.update_idletasks()
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
         
 
     
