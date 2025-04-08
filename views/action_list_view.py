@@ -14,7 +14,8 @@ class ActionItemFrame(tk.Frame):
             highlightbackground=cfg.BORDER_COLOR,
             highlightthickness=1,
             relief=tk.FLAT,            # Thay đổi relief
-            bd=1
+            bd=1,
+            height=60  # Thêm chiều cao cố định
         )
         
         # Lưu trữ các thuộc tính quan trọng
@@ -155,9 +156,9 @@ class ActionItemFrame(tk.Frame):
             except ValueError:
                 accuracy_display = f"{accuracy}%"
             
-            return f"Hình: {filename}\nĐộ chính xác: {accuracy_display}"
+            return f"Hình: {filename} | Độ chính xác: {accuracy_display}"
         elif action.action_type == "Di Chuyển Chuột":
-            return f"X: {action.parameters.get('x', '')}, Y: {action.parameters.get('y', '')}, Thời gian: {action.parameters.get('duration', '')}s"
+            return f"X: {action.parameters.get('x', '')}, Y: {action.parameters.get('y', '')} | Thời gian: {action.parameters.get('duration', '')}s"
         return ""
         
     def _on_hover(self, event):
@@ -250,24 +251,38 @@ class ActionItemFrame(tk.Frame):
         visible_frames.sort(key=lambda f: f.winfo_y())
         
  
-        # Tìm vị trí mới dựa trên điểm giữa của các item
-        new_index = 0
+        # Tìm vị trí mới dựa trên vị trí con trỏ và phần giao nhau
+        new_index = len(visible_frames)  # Mặc định là cuối cùng
         original_index = self._drag_data["index"]
 
-        # Tính điểm giữa của item đang kéo
-        item_center = self.winfo_y() + self.winfo_height() / 2
+        # Vị trí con trỏ chuột trong hệ tọa độ của canvas
+        mouse_y = self.winfo_y() + event.y
+
+        # Tính toán khoảng cách và vị trí thả
+        min_distance = float('inf')
+        best_index = new_index
 
         for i, frame in enumerate(visible_frames):
-            # Tính điểm giữa của frame đích
-            frame_center = frame.winfo_y() + frame.winfo_height() / 2
+            # Tính toán điểm trên và dưới của frame
+            frame_top = frame.winfo_y()
+            frame_bottom = frame.winfo_y() + frame.winfo_height()
     
-            if item_center < frame_center:
-                new_index = i
-                break
-            else:
-                new_index = i + 1
-                
+            # Tính khoảng cách từ chuột đến điểm chính giữa của frame
+            top_distance = abs(mouse_y - frame_top)
+            bottom_distance = abs(mouse_y - frame_bottom)
+    
+            # Chọn khoảng cách nhỏ nhất
+            if top_distance < min_distance:
+                min_distance = top_distance
+                best_index = i
+    
+            if bottom_distance < min_distance and i == len(visible_frames)-1:
+                min_distance = bottom_distance
+                best_index = i + 1
 
+        # Cập nhật vị trí mới
+        new_index = best_index
+                
     
         # Cập nhật placeholder
         if hasattr(parent, '_placeholder'):
@@ -303,18 +318,6 @@ class ActionItemFrame(tk.Frame):
                 self.lift()
             except:
                 pass
-      
-        
-        # Tính toán vị trí mới dựa trên tọa độ chuột
-        current_y = self.winfo_y() + event.y
-        new_index = 0
-        for i, frame in enumerate(visible_frames):
-            frame_mid = frame.winfo_y() + frame.winfo_height() / 2
-            if current_y < frame_mid:
-                new_index = i
-                break
-            else:
-                new_index = i + 1
 
         # Cập nhật placeholder và lưu new_index
         self._drag_data["new_index"] = new_index
