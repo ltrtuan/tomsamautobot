@@ -255,8 +255,7 @@ class ActionItemFrame(tk.Frame):
         is_moving_down = delta_y > 0  # True nếu kéo xuống, False nếu kéo lên
         current_index = self._drag_data["index"]
 
-        # Vị trí con trỏ chuột
-        mouse_y = self.winfo_y() + event.y
+     
         # Trung tâm của item đang kéo
         item_center = self.winfo_y() + self.winfo_height() / 2
 
@@ -265,32 +264,25 @@ class ActionItemFrame(tk.Frame):
 
         # Mặc định là vị trí cuối cùng
         new_index = len(visible_frames)
+        
+        # LẤY VỊ TRÍ CON TRỎ CHÍNH XÁC TRONG HỆ TỌA ĐỘ CANVAS
+        mouse_abs_y = event.y_root
 
         for i, frame in enumerate(visible_frames):
-            # Tính ngưỡng đặc biệt cho từng frame
-            frame_top = frame.winfo_y()
-            frame_bottom = frame.winfo_y() + frame.winfo_height()
-            frame_height = frame.winfo_height()
-    
-            # Vùng trên của frame
-            top_threshold = frame_top + frame_height * threshold_ratio
-            # Vùng dưới của frame
-            bottom_threshold = frame_bottom - frame_height * threshold_ratio
-    
-            # Xác định vị trí mới dựa trên hướng di chuyển
-            if is_moving_down:  # Kéo từ trên xuống
-                # Nếu trung tâm của item đang kéo đã vượt qua ngưỡng trên của frame
-                if item_center > top_threshold and current_index < i:
-                    new_index = i
-                    break
-            else:  # Kéo từ dưới lên
-                # Nếu trung tâm của item đang kéo đã vượt qua ngưỡng dưới của frame
-                if item_center < bottom_threshold and current_index > i:
-                    new_index = i
-                    break
-
-        # Hiển thị debug info
-        print(f"Moving {'down' if is_moving_down else 'up'}, Index: {new_index}")
+            # Lấy vị trí tuyệt đối của frame
+            frame_abs_top = frame.winfo_rooty()
+            frame_abs_bottom = frame_abs_top + frame.winfo_height()
+            frame_abs_mid = frame_abs_top + frame.winfo_height()/2
+        
+            # Cải tiến: Chia frame thành 2 phần
+            if mouse_abs_y < frame_abs_mid:
+                # Con trỏ nằm ở nửa trên của frame
+                new_index = i
+                break
+            elif i == len(visible_frames) - 1 and mouse_abs_y >= frame_abs_mid:
+                # Con trỏ nằm ở nửa dưới của frame cuối cùng
+                new_index = len(visible_frames)
+                break
                 
     
         # Cập nhật placeholder
