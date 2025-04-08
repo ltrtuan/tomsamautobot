@@ -247,9 +247,21 @@ class ActionItemFrame(tk.Frame):
         if new_index < len(visible_frames):
             parent._placeholder.pack(before=visible_frames[new_index], fill=tk.X, pady=2)
         else:
-            parent._placeholder.pack(fill=tk.X, pady=2)
-    
-        # Lưu index mới
+            parent._placeholder.pack(fill=tk.X, pady=2)    
+      
+        
+        # Tính toán vị trí mới dựa trên tọa độ chuột
+        current_y = self.winfo_y() + event.y
+        new_index = 0
+        for i, frame in enumerate(visible_frames):
+            frame_mid = frame.winfo_y() + frame.winfo_height() / 2
+            if current_y < frame_mid:
+                new_index = i
+                break
+            else:
+                new_index = i + 1
+
+        # Cập nhật placeholder và lưu new_index
         self._drag_data["new_index"] = new_index
 
 
@@ -560,36 +572,28 @@ class ActionListView(ttk.Frame):
     def _on_reorder(self, from_index, to_index):
         if from_index == to_index:
             return
-    
+
         # Điều chỉnh index khi kéo xuống
         if from_index < to_index:
             to_index -= 1
-    
+
         # 1. Cập nhật model thông qua callback
         if self.drag_callback:
             self.drag_callback(from_index, to_index)
-    
+
         # 2. Cập nhật danh sách UI
-        # Xóa toàn bộ frame cũ
-        for frame in self.action_frames:
-            frame.pack_forget()
-    
-        # Sắp xếp lại action_frames
+        # Di chuyển item trong action_frames
         moved_item = self.action_frames.pop(from_index)
         self.action_frames.insert(to_index, moved_item)
-    
-        # 3. Hiển thị lại với số thứ tự mới
+
+        # 3. Cập nhật số thứ tự và hiển thị lại
         for idx, frame in enumerate(self.action_frames):
-            frame.index = idx + 1
-            frame.index_label.config(text=f"{idx+1}.")
-            frame.pack(fill=tk.X, pady=2, padx=2)
-            frame.config(bg=cfg.LIGHT_BG_COLOR)  # Đặt lại màu nền
-    
-        # 4. Xóa placeholder
-        if hasattr(self.master, '_placeholder'):
-            self.master._placeholder.destroy()
-    
-        # 5. Cập nhật scrollregion
+            frame.index = idx + 1  # Cập nhật thuộc tính index
+            frame.index_label.config(text=f"{idx+1}.")  # Cập nhật label
+            frame.pack(fill=tk.X, pady=2, padx=2)  # Hiển thị lại với thứ tự mới
+
+        # 4. Force update UI
+        self.update_idletasks()
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
         
 

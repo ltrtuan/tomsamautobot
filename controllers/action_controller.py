@@ -221,11 +221,10 @@ class ActionController:
         self.view.show_message("Hoàn Thành", "Chuỗi hành động đã được thực hiện")
 
     def on_reorder_actions(self, old_index, new_index):
-        """Xử lý logic business khi thay đổi vị trí hành động"""
-        # 1. Cập nhật model
-        self.model.actions.insert(new_index, self.model.actions.pop(old_index))
+        """Cập nhật model khi kéo thả"""
+        # Di chuyển item trong danh sách actions
+        action = self.model.actions.pop(old_index)
+        self.model.actions.insert(new_index, action)
     
-        # 2. Lưu trạng thái
+        # Lưu trạng thái (nếu cần)
         self.model.save_actions()
-    
-        # 3. Không cần gọi update_view() vì UI đã tự cập nhật
