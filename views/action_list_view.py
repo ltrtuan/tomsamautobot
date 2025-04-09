@@ -250,39 +250,39 @@ class ActionItemFrame(tk.Frame):
         # Đảm bảo sắp xếp theo vị trí y để xác định đúng vị trí
         visible_frames.sort(key=lambda f: f.winfo_y())
         
- 
-        # Phát hiện hướng di chuyển
-        is_moving_down = delta_y > 0  # True nếu kéo xuống, False nếu kéo lên
-        current_index = self._drag_data["index"]
-
-     
-        # Trung tâm của item đang kéo
-        item_center = self.winfo_y() + self.winfo_height() / 2
-
-        # Thiết lập ngưỡng lớn hơn cho kéo xuống
-        threshold_ratio = 0.3 if is_moving_down else 0.5  # 30% cho kéo xuống, 50% cho kéo lên
 
         # Mặc định là vị trí cuối cùng
         new_index = len(visible_frames)
-        
-        # LẤY VỊ TRÍ CON TRỎ CHÍNH XÁC TRONG HỆ TỌA ĐỘ CANVAS
-        mouse_abs_y = event.y_root
+        current_index = self._drag_data["index"]
+
+        # Lấy vị trí chuột tuyệt đối
+        mouse_abs_y = event.y_root        
+      
+        is_moving_down = self.winfo_y() > self._drag_data.get("original_y", 0)
+
+        # Thiết lập ngưỡng thả - 30% cho kéo từ trên xuống, 50% cho kéo từ dưới lên
+        threshold_percent = 0.3 if is_moving_down else 0.5
+        if is_moving_down:
+            # Giảm ngưỡng cho Tìm Hình Ảnh khi kéo xuống để dễ thả hơn
+            threshold_percent = 0.2
 
         for i, frame in enumerate(visible_frames):
-            # Lấy vị trí tuyệt đối của frame
+            # Tính toán vị trí ngưỡng trong frame dựa trên % chiều cao
             frame_abs_top = frame.winfo_rooty()
-            frame_abs_bottom = frame_abs_top + frame.winfo_height()
-            frame_abs_mid = frame_abs_top + frame.winfo_height()/2
-        
-            # Cải tiến: Chia frame thành 2 phần
-            if mouse_abs_y < frame_abs_mid:
-                # Con trỏ nằm ở nửa trên của frame
+            frame_height = frame.winfo_height()
+            threshold_point = frame_abs_top + (frame_height * threshold_percent)
+    
+            # Nếu chuột nằm trên ngưỡng của frame
+            if mouse_abs_y < threshold_point:
                 new_index = i
                 break
-            elif i == len(visible_frames) - 1 and mouse_abs_y >= frame_abs_mid:
-                # Con trỏ nằm ở nửa dưới của frame cuối cùng
-                new_index = len(visible_frames)
-                break
+            # Xử lý trường hợp frame cuối cùng
+            elif i == len(visible_frames) - 1:
+                # Ngưỡng phía dưới của frame cuối
+                bottom_threshold = frame_abs_top + frame_height * (1 - threshold_percent)
+                if mouse_abs_y > bottom_threshold:
+                    # Nếu chuột dưới ngưỡng của frame cuối, đặt sau frame đó
+                    new_index = len(visible_frames)
                 
     
         # Cập nhật placeholder
