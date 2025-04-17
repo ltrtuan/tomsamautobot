@@ -120,9 +120,7 @@ class ActionController:
     
         
     def select_screen_area(self, dialog):
-        """
-        Phương thức hiển thị selector để chọn khu vực màn hình
-        """
+        """Hiển thị trình chọn khu vực màn hình"""
         from views.screen_area_selector import ScreenAreaSelector
     
         def on_area_selected(x, y, width, height):
@@ -131,10 +129,14 @@ class ActionController:
             dialog.y_var.set(str(int(y)))
             dialog.width_var.set(str(int(width)))
             dialog.height_var.set(str(int(height)))
+            print(f"Đã chọn khu vực: x={x}, y={y}, width={width}, height={height}")
     
-        # Khởi tạo và hiển thị selector
-        selector = ScreenAreaSelector(dialog, callback=on_area_selected)
-        selector.show()
+        # QUAN TRỌNG: Truyền dialog thay vì self.root
+        try:
+            selector = ScreenAreaSelector(dialog, callback=on_area_selected)
+            selector.show()
+        except Exception as e:
+            print(f"Lỗi khi hiển thị selector: {e}")
 
     def select_program(self, dialog):
         from tkinter import filedialog
