@@ -36,6 +36,7 @@
     <Compile Include="views\action_list_view.py" />
     <Compile Include="views\old_code_select_area.py" />
     <Compile Include="views\screen_area_selector.py" />
+    <Compile Include="views\settings_dialog.py" />
     <Compile Include="views\__init__.py" />
   </ItemGroup>
   <ItemGroup>

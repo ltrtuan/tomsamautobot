@@ -5,6 +5,8 @@ from controllers.action_controller import ActionController
 import config as cfg
 
 def main():
+     # Tải cấu hình
+    cfg.load_config()
     # Create main window
     root = tk.Tk()
     root.title("TomSamAutobot")

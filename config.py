@@ -34,3 +34,36 @@ DRAG_PLACEHOLDER_COLOR = "#f2f3ed"     # Màu xám đậm cho placeholder
 DRAG_HANDLE_COLOR = "#666666"          # Màu cho nút kéo thả
 DRAG_HIGHLIGHT_COLOR = "#0066cc"       # Màu viền khi đang kéo
 DRAG_ACTIVE_BG = "#e0e0e0"             # Màu nền khi đang kéo
+
+
+# Biến toàn cục
+FILE_PATH = ""
+
+# Hàm lưu cấu hình
+def save_config():
+    import json
+    import os
+    
+    config_data = {
+        "FILE_PATH": FILE_PATH
+    }
+    
+    # Lưu vào file config
+    config_file = os.path.join(os.path.dirname(__file__), "app_config.json")
+    with open(config_file, "w") as f:
+        json.dump(config_data, f, indent=4)
+
+# Hàm tải cấu hình
+def load_config():
+    import json
+    import os
+    global FILE_PATH
+    
+    config_file = os.path.join(os.path.dirname(__file__), "app_config.json")
+    if os.path.exists(config_file):
+        try:
+            with open(config_file, "r") as f:
+                config_data = json.load(f)
+                FILE_PATH = config_data.get("FILE_PATH", "")
+        except Exception as e:
+            print(f"Lỗi khi tải cấu hình: {e}")
