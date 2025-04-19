@@ -63,7 +63,7 @@ class ScreenAreaSelector:
             # Thêm hướng dẫn
             self.instruction = tk.Label(
                 self.overlay, 
-                text="Kéo chuột chọn khu vực - ESC thoát",
+                text="Kéo chuột chọn khu vực - ESC để lưu và thoát",
                 font=('Arial', 16, 'bold'),
                 bg='black', 
                 fg='white'
@@ -74,22 +74,6 @@ class ScreenAreaSelector:
             self.canvas.bind("<ButtonPress-1>", self.on_mouse_down)
             self.canvas.bind("<B1-Motion>", self.on_mouse_move)
             self.canvas.bind("<ButtonRelease-1>", self.on_mouse_up)
-            
-            # Nút Đồng ý - đặt trong frame riêng
-            self.button_frame = tk.Frame(self.overlay, bg='black')
-            self.button_frame.pack(side=tk.BOTTOM, pady=20, fill=tk.X)
-            
-            self.ok_button = tk.Button(
-                self.button_frame,
-                text="Đồng ý",
-                bg='#4285f4',
-                fg='white',
-                font=('Arial', 12),
-                padx=20,
-                pady=5,
-                command=self.on_ok
-            )
-            self.ok_button.pack(pady=10)
             
             # Grab tất cả input cho overlay
             self.overlay.grab_set()
@@ -103,8 +87,6 @@ class ScreenAreaSelector:
             # Kiểm tra focus liên tục
             self.check_focus_id = self.overlay.after(100, self.check_focus)
             
-            # Đảm bảo button frame nổi lên trên
-            self.button_frame.lift()
         
         except Exception as e:
             print(f"Error in show(): {e}")
@@ -200,22 +182,11 @@ class ScreenAreaSelector:
                 self.selected_area = (int(self.start_x), int(self.start_y), int(width), int(height))
                 print(f"Selected area: {self.selected_area}")
                 
-                # Đảm bảo nút Đồng ý hiển thị rõ
-                self.button_frame.lift()
+                # Cập nhật hướng dẫn
+                self.instruction.config(text="Nhấn ESC để lưu vùng đã chọn và thoát")
         except Exception as e:
             print(f"Error in on_mouse_up: {e}")
-            
-    def on_ok(self):
-        try:
-            # Kiểm tra xem đã chọn khu vực chưa
-            if hasattr(self, 'selected_area'):
-                x, y, width, height = self.selected_area
-                if self.callback:
-                    self.callback(x, y, width, height)
-            self.close()
-        except Exception as e:
-            print(f"Error in on_ok: {e}")
-            self.close()
+    
         
     def close(self, event=None):
         try:
@@ -223,6 +194,12 @@ class ScreenAreaSelector:
             if hasattr(self, 'check_focus_id') and self.check_focus_id:
                 self.overlay.after_cancel(self.check_focus_id)
             
+            # Kiểm tra xem đã chọn khu vực chưa và gọi callback
+            if hasattr(self, 'selected_area'):
+                x, y, width, height = self.selected_area
+                if self.callback:
+                    self.callback(x, y, width, height)
+
             # Giải phóng grab nếu có
             if hasattr(self, 'overlay') and self.overlay.winfo_exists():
                 try:
