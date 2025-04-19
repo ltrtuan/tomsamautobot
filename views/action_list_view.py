@@ -1,6 +1,7 @@
 ﻿import tkinter as tk
 from tkinter import ttk, messagebox
 import config as cfg
+from views.settings_dialog import SettingsDialog
 
 class ActionItemFrame(tk.Frame):
     def __init__(self, parent, action, index, **kwargs):
@@ -420,7 +421,8 @@ class ActionListView(ttk.Frame):
             relief=tk.FLAT,
             padx=4,  # Giảm padding
             pady=4,
-            cursor="hand2"
+            cursor="hand2",
+            command=self.open_settings
         )
         variables_btn.pack(fill=tk.X, padx=4, pady=2)
     
@@ -550,7 +552,7 @@ class ActionListView(ttk.Frame):
         self.edit_callback = None
         self.delete_callback = None
         self.drag_callback = None
-        
+            
     def update_listbox(self, actions):
         # Clear existing frames
         for frame in self.action_frames:
@@ -638,3 +640,7 @@ class ActionListView(ttk.Frame):
         self.edit_callback = edit_callback
         self.delete_callback = delete_callback
         self.drag_callback = drag_callback
+
+    # Thêm phương thức mở dialog
+    def open_settings(self):
+        SettingsDialog(self.master)
