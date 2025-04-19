@@ -29,22 +29,33 @@ class ActionController:
     def add_action(self):
         from views.action_dialog_view import ActionDialogView
         dialog = ActionDialogView(self.root)
-    
-        # Gán callback trực tiếp cho nút Lưu
-        dialog.save_button.config(command=lambda: print("Nút Lưu được nhấn") or self.on_dialog_save(dialog))
-    
+
         # Kết nối sự kiện chọn loại hành động
         dialog.action_type_combo.bind("<<ComboboxSelected>>", lambda e: self.on_action_type_changed(dialog))
-        self.on_action_type_changed(dialog)
     
+        # Cấu hình và hiển thị dialog mặc định
+        browse_button, select_area_button, select_program_button = self.on_action_type_changed(dialog)
+    
+        # Đăng ký sự kiện cho các nút
+        if browse_button:
+            browse_button.config(command=lambda: self.browse_image(dialog))
+        if select_area_button:
+            select_area_button.config(command=lambda: self.select_screen_area(dialog))
+        if select_program_button:
+            select_program_button.config(command=lambda: self.browse_program(dialog))
+    
+        # Đặt hành động khi lưu
+        dialog.save_button.config(command=lambda: self.on_dialog_save(dialog))
+
         # Hiển thị dialog và đợi
         dialog.grab_set()  # Đảm bảo dialog là modal
         self.root.wait_window(dialog)
-    
+
         # Xử lý kết quả sau khi dialog đóng
         if dialog.result:
             self.model.add_action(dialog.result)
             self.update_view()
+
 
     def edit_action(self, index):
         action = self.model.get_action(index)
@@ -106,22 +117,41 @@ class ActionController:
         )
         if filename:
             dialog.image_path_var.set(filename)
-
+    
+        
     def select_screen_area(self, dialog):
-        """Phương thức hiển thị selector để chọn khu vực màn hình"""
+        """Hiển thị trình chọn khu vực màn hình"""
+        try:
+            # Debug
+            print("Importing ScreenAreaSelector...")
+            from views.screen_area_selector import ScreenAreaSelector
+        
+            def on_area_selected(x, y, width, height):
+                try:
+                    # Cập nhật giá trị trong dialog
+                    dialog.x_var.set(str(int(x)))
+                    dialog.y_var.set(str(int(y)))
+                    dialog.width_var.set(str(int(width)))
+                    dialog.height_var.set(str(int(height)))
+                    print(f"Đã chọn khu vực: x={x}, y={y}, width={width}, height={height}")
+                except Exception as e:
+                    print(f"Error updating dialog values: {e}")
+        
+            # TẠO VÀ HIỂN THỊ SELECTOR Ở NGOÀI HÀM CALLBACK
+            print("Creating ScreenAreaSelector instance...")
+            selector = ScreenAreaSelector(dialog, callback=on_area_selected)
+            print("Showing selector...")
+            selector.show()
     
-        def on_area_selected(x, y, width, height):
-            # Cập nhật giá trị trong dialog
-            dialog.x_var.set(str(int(x)))
-            dialog.y_var.set(str(int(y)))
-            dialog.width_var.set(str(int(width)))
-            dialog.height_var.set(str(int(height)))
-    
-        # Tạo và hiển thị bộ chọn vùng màn hình
-        # Lưu ý: Truyền dialog sửa hành động thay vì self.root
-        from views.screen_area_selector import ScreenAreaSelector
-        selector = ScreenAreaSelector(dialog, callback=on_area_selected)
-        selector.show()
+        except Exception as e:
+            print(f"Error in select_screen_area: {e}")
+            import traceback
+            traceback.print_exc()
+            # Đảm bảo dialog luôn hiển thị lại
+            try:
+                dialog.deiconify()
+            except:
+                print("Could not deiconify dialog")
 
     def select_program(self, dialog):
         from tkinter import filedialog
