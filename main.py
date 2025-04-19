@@ -9,7 +9,7 @@ def main():
     cfg.load_config()
     # Create main window
     root = tk.Tk()
-    root.title("TomSamAutobot")
+    root.title("Tom Sam Autobot")
     root.configure(bg=cfg.LIGHT_BG_COLOR)
     
     # Thiết lập kích thước cửa sổ

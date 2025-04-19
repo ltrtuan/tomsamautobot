@@ -216,6 +216,10 @@ class ActionDialogView(tk.Toplevel):
         self.image_path_var = tk.StringVar(value=parameters.get("path", ""))
         path_entry = ttk.Entry(path_frame, textvariable=self.image_path_var, width=40)
         path_entry.pack(side=tk.LEFT, padx=(0, 5), fill=tk.X, expand=True)
+        
+        # THÊM MỚI: Nút chụp màn hình
+        screenshot_button = ttk.Button(path_frame, text="Chụp Màn Hình")
+        screenshot_button.pack(side=tk.LEFT, padx=5)
     
         # Nút duyệt hình ảnh
         browse_button = ttk.Button(path_frame, text="Duyệt...")
@@ -371,7 +375,7 @@ class ActionDialogView(tk.Toplevel):
         select_program_button = ttk.Button(program_frame, text="Browse...")
         select_program_button.pack(side=tk.RIGHT, padx=5)
     
-        return browse_button, select_area_button, select_program_button
+        return browse_button, select_area_button, select_program_button, screenshot_button
 
     def create_mouse_move_params(self, parameters=None):
         # Clear previous parameter widgets

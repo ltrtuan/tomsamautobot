@@ -1,4 +1,8 @@
 ﻿from models.action_model import ActionItem
+import os
+import time
+import pyautogui
+from PIL import Image
 
 class ActionController:
     def __init__(self, root):
@@ -34,7 +38,7 @@ class ActionController:
         dialog.action_type_combo.bind("<<ComboboxSelected>>", lambda e: self.on_action_type_changed(dialog))
     
         # Cấu hình và hiển thị dialog mặc định
-        browse_button, select_area_button, select_program_button = self.on_action_type_changed(dialog)
+        browse_button, select_area_button, select_program_button, screenshot_button = self.on_action_type_changed(dialog)
     
         # Đăng ký sự kiện cho các nút
         if browse_button:
@@ -43,7 +47,8 @@ class ActionController:
             select_area_button.config(command=lambda: self.select_screen_area(dialog))
         if select_program_button:
             select_program_button.config(command=lambda: self.browse_program(dialog))
-    
+        if screenshot_button:
+            screenshot_button.config(command=lambda: self.capture_screen_area(dialog))
         # Đặt hành động khi lưu
         dialog.save_button.config(command=lambda: self.on_dialog_save(dialog))
 
@@ -99,10 +104,11 @@ class ActionController:
             parameters = dialog.current_action.parameters
         
         if action_type == "Tìm Hình Ảnh":
-            browse_button, select_area_button, select_program_button = dialog.create_image_search_params(parameters)
+            browse_button, select_area_button, select_program_button, screenshot_button = dialog.create_image_search_params(parameters)
             browse_button.config(command=lambda: self.browse_image(dialog))
             select_area_button.config(command=lambda: self.select_screen_area(dialog))
             select_program_button.config(command=lambda: self.select_program(dialog))
+            screenshot_button.config(command=lambda: self.capture_screen_area(dialog))
         elif action_type == "Di Chuyển Chuột":
             dialog.create_mouse_move_params(parameters)
 
@@ -258,3 +264,56 @@ class ActionController:
     
         # Lưu trạng thái (nếu cần)
         self.model.save_actions()
+        
+    def capture_screen_area(self, dialog):
+        """Hiển thị trình chọn khu vực màn hình và chụp ảnh khi bấm ESC"""
+        from views.screen_area_selector import ScreenAreaSelector
+    
+        def on_area_selected(x, y, width, height):
+            try:
+                # Lấy đường dẫn lưu từ cài đặt
+                save_path = self.get_save_path()
+            
+                # Tạo tên file với timestamp
+                timestamp = time.strftime("%Y%m%d_%H%M%S")
+                filename = f"screenshot_{timestamp}.png"
+                full_path = os.path.join(save_path, filename)
+            
+                # Đảm bảo thư mục tồn tại
+                os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            
+                # Chụp ảnh màn hình độ phân giải cao
+                screenshot = pyautogui.screenshot(region=(x, y, width, height))
+                screenshot.save(full_path)
+            
+                # Cập nhật đường dẫn hình ảnh trong dialog
+                dialog.image_path_var.set(full_path)
+                print(f"Đã lưu ảnh chụp tại: {full_path}")
+            except Exception as e:
+                print(f"Lỗi khi chụp màn hình: {e}")
+    
+        # Tạo và hiển thị selector
+        try:
+            selector = ScreenAreaSelector(dialog, callback=on_area_selected)
+            selector.show()
+        except Exception as e:
+            print(f"Lỗi khi hiển thị selector: {e}")
+            dialog.deiconify()
+
+    def get_save_path(self):
+        """Lấy đường dẫn lưu từ cài đặt, hoặc mặc định là ổ C"""
+        try:
+            # Thử lấy FILE_PATH từ cài đặt
+            from config import get_config
+            config = get_config()
+            path = config.get("FILE_PATH", "")
+        
+            if path and os.path.exists(os.path.dirname(path)):
+                return os.path.dirname(path)
+        except Exception as e:
+            print(f"Không thể lấy đường dẫn từ cài đặt: {e}")
+    
+        # Mặc định lưu vào C:\TomSamAutobot\screenshots
+        default_path = "C:\\TomSamAutobot\\screenshots"
+        os.makedirs(default_path, exist_ok=True)
+        return default_path
