@@ -121,22 +121,37 @@ class ActionController:
         
     def select_screen_area(self, dialog):
         """Hiển thị trình chọn khu vực màn hình"""
-        from views.screen_area_selector import ScreenAreaSelector
-    
-        def on_area_selected(x, y, width, height):
-            # Cập nhật giá trị trong dialog
-            dialog.x_var.set(str(int(x)))
-            dialog.y_var.set(str(int(y)))
-            dialog.width_var.set(str(int(width)))
-            dialog.height_var.set(str(int(height)))
-            print(f"Đã chọn khu vực: x={x}, y={y}, width={width}, height={height}")
-    
-        # QUAN TRỌNG: Truyền dialog thay vì self.root
         try:
+            # Debug
+            print("Importing ScreenAreaSelector...")
+            from views.screen_area_selector import ScreenAreaSelector
+        
+            def on_area_selected(x, y, width, height):
+                try:
+                    # Cập nhật giá trị trong dialog
+                    dialog.x_var.set(str(int(x)))
+                    dialog.y_var.set(str(int(y)))
+                    dialog.width_var.set(str(int(width)))
+                    dialog.height_var.set(str(int(height)))
+                    print(f"Đã chọn khu vực: x={x}, y={y}, width={width}, height={height}")
+                except Exception as e:
+                    print(f"Error updating dialog values: {e}")
+        
+            # TẠO VÀ HIỂN THỊ SELECTOR Ở NGOÀI HÀM CALLBACK
+            print("Creating ScreenAreaSelector instance...")
             selector = ScreenAreaSelector(dialog, callback=on_area_selected)
+            print("Showing selector...")
             selector.show()
+    
         except Exception as e:
-            print(f"Lỗi khi hiển thị selector: {e}")
+            print(f"Error in select_screen_area: {e}")
+            import traceback
+            traceback.print_exc()
+            # Đảm bảo dialog luôn hiển thị lại
+            try:
+                dialog.deiconify()
+            except:
+                print("Could not deiconify dialog")
 
     def select_program(self, dialog):
         from tkinter import filedialog
