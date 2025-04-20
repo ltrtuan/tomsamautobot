@@ -154,6 +154,9 @@ class ActionDialogView(tk.Toplevel):
                 bg=cfg.LIGHT_BG_COLOR
             )
             action_type_value.pack(side=tk.LEFT)
+            
+            # THÊM ĐOẠN CODE NÀY để đăng ký xử lý sau khi UI đã được tạo hoàn chỉnh
+            self.after(100, lambda: self.initialize_parameters())
     
         # Center dialog and make it modal
         self.transient(parent)
@@ -171,6 +174,8 @@ class ActionDialogView(tk.Toplevel):
     
         # Set window size and position
         self.geometry(f"{window_width}x{window_height}+{int(x)}+{int(y)}")
+        
+
 
     # Thêm các phương thức hỗ trợ cho cuộn
     def _on_frame_configure(self, event):
@@ -184,6 +189,30 @@ class ActionDialogView(tk.Toplevel):
     def _on_mousewheel(self, event):
         # Cuộn bằng chuột
         self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        
+    def initialize_parameters(self):
+        """Khởi tạo tham số dựa trên loại hành động hiện tại"""
+        if self.is_edit and hasattr(self.current_action, 'parameters'):
+            parameters = self.current_action.parameters
+            action_type = self.current_action.action_type
+        
+            # Chuyển đổi action_type từ chuỗi sang enum nếu cần
+            if isinstance(action_type, str):
+                try:
+                    action_type = ActionType.from_display_value(action_type)
+                except ValueError:
+                    pass
+        
+            # Gọi phương thức tạo tham số tương ứng dựa vào loại hành động
+            if action_type == ActionType.TIM_HINH_ANH:
+                browse_button, select_area_button, select_program_button, screenshot_button = self.create_image_search_params(parameters)
+                # Gán sự kiện cho các nút
+                browse_button.config(command=self.browse_image)
+                select_area_button.config(command=self.select_screen_area if hasattr(self, 'select_screen_area') else lambda: None)
+                select_program_button.config(command=self.browse_program if hasattr(self, 'browse_program') else lambda: None)
+                screenshot_button.config(command=self.take_screenshot if hasattr(self, 'take_screenshot') else lambda: None)
+            elif action_type == ActionType.DI_CHUYEN_CHUOT:
+                self.create_mouse_move_params(parameters)
         
     def create_image_search_params(self, parameters=None):
         # Xóa các widget cũ

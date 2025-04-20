@@ -92,8 +92,8 @@ class ActionModel:
         return None
         
     def add_sample_actions(self):
-        self.add_action(ActionItem(ActionType.TIM_HINH_ANH.value, {"path": "C:/images/button.png", "confidence": "0.8"}))
-        self.add_action(ActionItem(ActionType.DI_CHUYEN_CHUOT.value, {"x": "500", "y": "300", "duration": "0.5"}))
+        self.add_action(ActionItem(ActionType.TIM_HINH_ANH, {"path": "C:/images/button.png", "confidence": "0.8"}))
+        self.add_action(ActionItem(ActionType.DI_CHUYEN_CHUOT, {"x": "500", "y": "300", "duration": "0.5"}))
 
     def reorder_action(self, old_index, new_index):
         """Di chuyển hành động từ vị trí cũ đến vị trí mới"""
