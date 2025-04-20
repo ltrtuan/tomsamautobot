@@ -269,7 +269,18 @@ class ActionController:
         """Hiển thị trình chọn khu vực màn hình và chụp ảnh khi bấm ESC"""
         from views.screen_area_selector import ScreenAreaSelector
     
-        def on_area_selected(x, y, width, height):
+        def update_textboxes(x, y, width, height):
+            """Cập nhật textbox với giá trị tọa độ"""
+            try:
+                dialog.x_var.set(str(int(x)))
+                dialog.y_var.set(str(int(y)))
+                dialog.width_var.set(str(int(width)))
+                dialog.height_var.set(str(int(height)))
+            except Exception as e:
+                print(f"Lỗi khi cập nhật giá trị textbox: {e}")
+    
+        def take_screenshot_after_close(x, y, width, height):
+            """Chụp màn hình sau khi dialog đã đóng"""
             try:
                 # Lấy đường dẫn lưu từ cài đặt
                 save_path = self.get_save_path()
@@ -282,7 +293,7 @@ class ActionController:
                 # Đảm bảo thư mục tồn tại
                 os.makedirs(os.path.dirname(full_path), exist_ok=True)
             
-                # Chụp ảnh màn hình độ phân giải cao
+                # QUAN TRỌNG: Chụp ảnh màn hình độ phân giải cao sau khi dialog đã đóng
                 screenshot = pyautogui.screenshot(region=(x, y, width, height))
                 screenshot.save(full_path)
             
@@ -292,9 +303,13 @@ class ActionController:
             except Exception as e:
                 print(f"Lỗi khi chụp màn hình: {e}")
     
-        # Tạo và hiển thị selector
+        # Tạo và hiển thị selector với cả hai callback
         try:
-            selector = ScreenAreaSelector(dialog, callback=on_area_selected)
+            selector = ScreenAreaSelector(
+                dialog, 
+                callback=update_textboxes,
+                post_close_callback=take_screenshot_after_close
+            )
             selector.show()
         except Exception as e:
             print(f"Lỗi khi hiển thị selector: {e}")
@@ -314,6 +329,6 @@ class ActionController:
             print(f"Không thể lấy đường dẫn từ cài đặt: {e}")
     
         # Mặc định lưu vào C:\TomSamAutobot\screenshots
-        default_path = "C:\\TomSamAutobot\\screenshots"
+        default_path = "C:\\TomSamAutobot"
         os.makedirs(default_path, exist_ok=True)
         return default_path

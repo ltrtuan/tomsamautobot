@@ -143,6 +143,17 @@ class ActionDialogView(tk.Toplevel):
         # Pre-fill if editing
         if self.is_edit:
             self.action_type_var.set(self.current_action.action_type)
+            # Hide the combobox
+            self.action_type_combo.pack_forget()
+    
+            # Add a label instead
+            action_type_value = tk.Label(
+                type_frame,
+                text=self.current_action.action_type,
+                font=cfg.DEFAULT_FONT,
+                bg=cfg.LIGHT_BG_COLOR
+            )
+            action_type_value.pack(side=tk.LEFT)
     
         # Center dialog and make it modal
         self.transient(parent)

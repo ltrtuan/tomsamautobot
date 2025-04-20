@@ -5,9 +5,10 @@ import time
 import traceback  # Thêm để bắt lỗi chi tiết
 
 class ScreenAreaSelector:
-    def __init__(self, parent_dialog, callback=None):
+    def __init__(self, parent_dialog, callback=None, post_close_callback=None):
         self.parent_dialog = parent_dialog
         self.callback = callback
+        self.post_close_callback = post_close_callback
         
         # Biến theo dõi trạng thái
         self.start_x = 0
@@ -15,9 +16,7 @@ class ScreenAreaSelector:
         self.rect = None
         self.text_id = None
         self.is_selecting = False
-        
-        # Debug info
-        print("ScreenAreaSelector initialized")
+      
         
     def show(self):
         try:
@@ -195,9 +194,13 @@ class ScreenAreaSelector:
                 self.overlay.after_cancel(self.check_focus_id)
             
             # Kiểm tra xem đã chọn khu vực chưa và gọi callback
+            # Lưu tọa độ nếu đã chọn
+            selected_area = None
             if hasattr(self, 'selected_area'):
-                x, y, width, height = self.selected_area
+                selected_area = self.selected_area
+                # Gọi callback cập nhật textbox
                 if self.callback:
+                    x, y, width, height = selected_area
                     self.callback(x, y, width, height)
 
             # Giải phóng grab nếu có
@@ -212,6 +215,13 @@ class ScreenAreaSelector:
             
             # Hiển thị lại cửa sổ cha
             self.restore_parent()
+            
+            
+            # Gọi callback sau khi đóng dialog nếu có
+            if self.post_close_callback and selected_area:
+                # Dùng after để đảm bảo overlay đã đóng hoàn toàn
+                self.parent_dialog.after(100, lambda: self.post_close_callback(*selected_area))
+                
         except Exception as e:
             print(f"Error in close: {e}")
             # Đảm bảo luôn khôi phục parent dialog
