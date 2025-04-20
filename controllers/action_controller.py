@@ -186,19 +186,21 @@ class ActionController:
 
     def on_dialog_save(self, dialog):
         print("on_dialog_save được gọi!")
-        action_type = dialog.action_type_var.get()
-    
-        if not action_type:
+        action_type_display = dialog.action_type_var.get()
+
+        if not action_type_display:
             dialog.show_message("Lỗi", "Vui lòng chọn một loại hành động")
             return
-        
-        if action_type == "Tìm Hình Ảnh":
+    
+        action_type = ActionType.from_display_value(action_type_display)
+    
+        if action_type == ActionType.TIM_HINH_ANH:
             # Kiểm tra đường dẫn
             path = dialog.image_path_var.get()
             if not path:
                 dialog.show_message("Lỗi", "Vui lòng chọn một file hình ảnh")
                 return
-            
+        
             # Thu thập tất cả tham số
             parameters = {
                 "path": path,
@@ -214,7 +216,7 @@ class ActionController:
                 "program": dialog.program_var.get(),
                 "break_conditions": []
             }
-        
+    
             # Thu thập các điều kiện break
             for condition in dialog.break_conditions:
                 if condition["variable_var"].get():  # Chỉ thêm nếu biến được chỉ định
@@ -223,12 +225,20 @@ class ActionController:
                         "variable": condition["variable_var"].get(),
                         "value": condition["value_var"].get()
                     })
-                
-            dialog.result = ActionItem(action_type, parameters)
+            
+            dialog.result = ActionItem(action_type_display, parameters)
             dialog.destroy()
-        elif action_type == "Di Chuyển Chuột":
-            # Mã xử lý cho hành động di chuyển chuột...
-            pass
+        elif action_type == ActionType.DI_CHUYEN_CHUOT:
+            # Thu thập tham số cho hành động di chuyển chuột
+            parameters = {
+                "x": dialog.x_var.get() or "0",
+                "y": dialog.y_var.get() or "0",
+                "duration": dialog.duration_var.get() or "0.5"
+            }
+            dialog.result = ActionItem(action_type_display, parameters)
+            dialog.destroy()
+        else:
+            dialog.show_message("Lỗi", f"Loại hành động không được hỗ trợ: {action_type_display}")
 
     def run_sequence(self):
         from models.image_action import ImageAction
@@ -341,7 +351,7 @@ class ActionController:
         except Exception as e:
             print(f"Không thể lấy đường dẫn từ cài đặt: {e}")
     
-        # Mặc định lưu vào C:\TomSamAutobot\screenshots
-        default_path = "C:\\TomSamAutobot"
+        # Mặc định lưu vào C:\tomsamautobot
+        default_path = "C:\\tomsamautobot"
         os.makedirs(default_path, exist_ok=True)
         return default_path

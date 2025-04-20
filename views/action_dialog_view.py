@@ -163,7 +163,7 @@ class ActionDialogView(tk.Toplevel):
     
         # Set position relative to parent
         window_width = 500  # Tăng kích thước một chút
-        window_height = 500
+        window_height = 600
     
         # Calculate center position
         x = (parent.winfo_rootx() + (parent.winfo_width() / 2)) - (window_width / 2)
@@ -226,15 +226,19 @@ class ActionDialogView(tk.Toplevel):
         tk.Label(path_frame, text="Đường dẫn hình ảnh:", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT, padx=(0, 5))
         self.image_path_var = tk.StringVar(value=parameters.get("path", ""))
         path_entry = ttk.Entry(path_frame, textvariable=self.image_path_var, width=40)
-        path_entry.pack(side=tk.LEFT, padx=(0, 5), fill=tk.X, expand=True)
-        
-        # THÊM MỚI: Nút chụp màn hình
-        screenshot_button = ttk.Button(path_frame, text="Chụp Màn Hình")
-        screenshot_button.pack(side=tk.LEFT, padx=5)
+        path_entry.pack(side=tk.LEFT, padx=(0, 5), fill=tk.X, expand=True)        
     
         # Nút duyệt hình ảnh
         browse_button = ttk.Button(path_frame, text="Duyệt...")
         browse_button.pack(side=tk.RIGHT, padx=5)
+        
+        # Tạo frame mới cho nút chụp màn hình
+        screenshot_frame = tk.Frame(self.param_frame, bg=cfg.LIGHT_BG_COLOR)
+        screenshot_frame.pack(fill=tk.X, pady=(0, 10))
+
+        # Nút chụp màn hình trong frame mới
+        screenshot_button = ttk.Button(screenshot_frame, text="Chụp Màn Hình")
+        screenshot_button.pack(side=tk.LEFT, padx=5)
     
         # ========== PHẦN KHU VỰC TÌM KIẾM ==========
         region_frame = tk.LabelFrame(self.param_frame, text="Khu vực tìm kiếm", bg=cfg.LIGHT_BG_COLOR, pady=10, padx=10)
