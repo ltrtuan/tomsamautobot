@@ -1,4 +1,6 @@
-﻿class ActionItem:
+﻿from constants import ActionType
+
+class ActionItem:
     def __init__(self, action_type, parameters):
         self.action_type = action_type
         self.parameters = parameters
@@ -11,6 +13,32 @@ class ActionModel:
         self.actions = []
         
     def add_action(self, action):
+        # Kiểm tra nếu action là một đối tượng có thuộc tính action_type
+        if hasattr(action, "action_type"):
+            # Nếu action_type đã là một enum
+            if isinstance(action.action_type, ActionType):
+                # Giữ nguyên - đã đúng định dạng
+                pass
+            else:
+                # Nếu action_type là chuỗi, chuyển đổi sang enum
+                try:
+                    action_type_display = action.action_type
+                    action_type = ActionType.from_display_value(action_type_display)
+                    action.action_type = action_type
+                except ValueError:
+                    # Giữ nguyên nếu không thể chuyển đổi
+                    pass
+        # Trường hợp action là dictionary (tương thích ngược)
+        elif isinstance(action, dict) and "action_type" in action:
+            action_type_display = action["action_type"]
+            try:
+                action_type = ActionType.from_display_value(action_type_display)
+                action["action_type"] = action_type
+            except ValueError:
+                pass
+            # Chuyển đổi từ dict sang ActionItem
+            action = ActionItem(action["action_type"], action.get("parameters", {}))
+    
         self.actions.append(action)
         return len(self.actions) - 1
         
@@ -42,8 +70,8 @@ class ActionModel:
         return None
         
     def add_sample_actions(self):
-        self.add_action(ActionItem("Tìm Hình Ảnh", {"path": "C:/images/button.png", "confidence": "0.8"}))
-        self.add_action(ActionItem("Di Chuyển Chuột", {"x": "500", "y": "300", "duration": "0.5"}))
+        self.add_action(ActionItem(ActionType.TIM_HINH_ANH.value, {"path": "C:/images/button.png", "confidence": "0.8"}))
+        self.add_action(ActionItem(ActionType.DI_CHUYEN_CHUOT.value, {"x": "500", "y": "300", "duration": "0.5"}))
 
     def reorder_action(self, old_index, new_index):
         """Di chuyển hành động từ vị trí cũ đến vị trí mới"""

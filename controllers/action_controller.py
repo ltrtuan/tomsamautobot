@@ -1,4 +1,9 @@
 ﻿from models.action_model import ActionItem
+import os
+import time
+import pyautogui
+from PIL import Image
+from constants import ActionType
 
 class ActionController:
     def __init__(self, root):
@@ -34,7 +39,7 @@ class ActionController:
         dialog.action_type_combo.bind("<<ComboboxSelected>>", lambda e: self.on_action_type_changed(dialog))
     
         # Cấu hình và hiển thị dialog mặc định
-        browse_button, select_area_button, select_program_button = self.on_action_type_changed(dialog)
+        browse_button, select_area_button, select_program_button, screenshot_button = self.on_action_type_changed(dialog)
     
         # Đăng ký sự kiện cho các nút
         if browse_button:
@@ -43,7 +48,8 @@ class ActionController:
             select_area_button.config(command=lambda: self.select_screen_area(dialog))
         if select_program_button:
             select_program_button.config(command=lambda: self.browse_program(dialog))
-    
+        if screenshot_button:
+            screenshot_button.config(command=lambda: self.capture_screen_area(dialog))
         # Đặt hành động khi lưu
         dialog.save_button.config(command=lambda: self.on_dialog_save(dialog))
 
@@ -92,19 +98,32 @@ class ActionController:
         self.update_view()
             
     def on_action_type_changed(self, dialog):
-        action_type = dialog.action_type_var.get()
+        action_type_display = dialog.action_type_var.get()
+        
+        # Chuyển đổi từ giá trị hiển thị sang đối tượng enum
+        try:
+            action_type = ActionType.from_display_value(action_type_display)
+        except ValueError:
+            # Xử lý nếu không tìm thấy - giá trị mặc định
+            action_type = ActionType.TIM_HINH_ANH
     
         parameters = None
-        if dialog.is_edit and dialog.current_action.action_type == action_type:
+        if dialog.is_edit and dialog.current_action.action_type == action_type_display:
             parameters = dialog.current_action.parameters
         
-        if action_type == "Tìm Hình Ảnh":
-            browse_button, select_area_button, select_program_button = dialog.create_image_search_params(parameters)
+        if action_type == ActionType.TIM_HINH_ANH:
+            browse_button, select_area_button, select_program_button, screenshot_button = dialog.create_image_search_params(parameters)
             browse_button.config(command=lambda: self.browse_image(dialog))
             select_area_button.config(command=lambda: self.select_screen_area(dialog))
             select_program_button.config(command=lambda: self.select_program(dialog))
-        elif action_type == "Di Chuyển Chuột":
+            screenshot_button.config(command=lambda: self.capture_screen_area(dialog))
+            return browse_button, select_area_button, select_program_button, screenshot_button
+        elif action_type == ActionType.DI_CHUYEN_CHUOT:
             dialog.create_mouse_move_params(parameters)
+            return None, None, None, None
+        
+        # Default return để tránh lỗi
+        return None, None, None, None
 
     def browse_image(self, dialog):
         from tkinter import filedialog
@@ -258,3 +277,71 @@ class ActionController:
     
         # Lưu trạng thái (nếu cần)
         self.model.save_actions()
+        
+    def capture_screen_area(self, dialog):
+        """Hiển thị trình chọn khu vực màn hình và chụp ảnh khi bấm ESC"""
+        from views.screen_area_selector import ScreenAreaSelector
+    
+        def update_textboxes(x, y, width, height):
+            """Cập nhật textbox với giá trị tọa độ"""
+            try:
+                dialog.x_var.set(str(int(x)))
+                dialog.y_var.set(str(int(y)))
+                dialog.width_var.set(str(int(width)))
+                dialog.height_var.set(str(int(height)))
+            except Exception as e:
+                print(f"Lỗi khi cập nhật giá trị textbox: {e}")
+    
+        def take_screenshot_after_close(x, y, width, height):
+            """Chụp màn hình sau khi dialog đã đóng"""
+            try:
+                # Lấy đường dẫn lưu từ cài đặt
+                save_path = self.get_save_path()
+            
+                # Tạo tên file với timestamp
+                timestamp = time.strftime("%Y%m%d_%H%M%S")
+                filename = f"screenshot_{timestamp}.png"
+                full_path = os.path.join(save_path, filename)
+            
+                # Đảm bảo thư mục tồn tại
+                os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            
+                # QUAN TRỌNG: Chụp ảnh màn hình độ phân giải cao sau khi dialog đã đóng
+                screenshot = pyautogui.screenshot(region=(x, y, width, height))
+                screenshot.save(full_path)
+            
+                # Cập nhật đường dẫn hình ảnh trong dialog
+                dialog.image_path_var.set(full_path)
+                print(f"Đã lưu ảnh chụp tại: {full_path}")
+            except Exception as e:
+                print(f"Lỗi khi chụp màn hình: {e}")
+    
+        # Tạo và hiển thị selector với cả hai callback
+        try:
+            selector = ScreenAreaSelector(
+                dialog, 
+                callback=update_textboxes,
+                post_close_callback=take_screenshot_after_close
+            )
+            selector.show()
+        except Exception as e:
+            print(f"Lỗi khi hiển thị selector: {e}")
+            dialog.deiconify()
+
+    def get_save_path(self):
+        """Lấy đường dẫn lưu từ cài đặt, hoặc mặc định là ổ C"""
+        try:
+            # Thử lấy FILE_PATH từ cài đặt
+            from config import get_config
+            config = get_config()
+            path = config.get("FILE_PATH", "")
+        
+            if path and os.path.exists(os.path.dirname(path)):
+                return os.path.dirname(path)
+        except Exception as e:
+            print(f"Không thể lấy đường dẫn từ cài đặt: {e}")
+    
+        # Mặc định lưu vào C:\TomSamAutobot\screenshots
+        default_path = "C:\\TomSamAutobot"
+        os.makedirs(default_path, exist_ok=True)
+        return default_path

@@ -1,6 +1,7 @@
 ﻿import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import config as cfg
+from constants import ActionType
 
 class ActionDialogView(tk.Toplevel):
     def __init__(self, parent, action=None):
@@ -48,13 +49,12 @@ class ActionDialogView(tk.Toplevel):
     
         # Style cho Combobox
         self.style = ttk.Style()
-        self.style.configure("TCombobox", padding=5)
-    
-        action_types = ["Tìm Hình Ảnh", "Di Chuyển Chuột"]
+        self.style.configure("TCombobox", padding=5)    
+       
         self.action_type_combo = ttk.Combobox(
             type_frame, 
             textvariable=self.action_type_var, 
-            values=action_types, 
+            values=ActionType.get_display_values(),
             state="readonly", 
             width=25,
             font=cfg.DEFAULT_FONT
@@ -138,11 +138,22 @@ class ActionDialogView(tk.Toplevel):
             activeforeground="white",
             cursor="hand2"
         )
-        self.save_button.pack(side=tk.RIGHT)
+        self.save_button.pack(side=tk.RIGHT)        
         
         # Pre-fill if editing
         if self.is_edit:
             self.action_type_var.set(self.current_action.action_type)
+            # Hide the combobox
+            self.action_type_combo.pack_forget()
+
+            # Add a label instead
+            action_type_value = tk.Label(
+                type_frame,
+                text=ActionType.get_action_type_display(self.current_action.action_type),
+                font=cfg.DEFAULT_FONT,
+                bg=cfg.LIGHT_BG_COLOR
+            )
+            action_type_value.pack(side=tk.LEFT)
     
         # Center dialog and make it modal
         self.transient(parent)
@@ -216,6 +227,10 @@ class ActionDialogView(tk.Toplevel):
         self.image_path_var = tk.StringVar(value=parameters.get("path", ""))
         path_entry = ttk.Entry(path_frame, textvariable=self.image_path_var, width=40)
         path_entry.pack(side=tk.LEFT, padx=(0, 5), fill=tk.X, expand=True)
+        
+        # THÊM MỚI: Nút chụp màn hình
+        screenshot_button = ttk.Button(path_frame, text="Chụp Màn Hình")
+        screenshot_button.pack(side=tk.LEFT, padx=5)
     
         # Nút duyệt hình ảnh
         browse_button = ttk.Button(path_frame, text="Duyệt...")
@@ -371,7 +386,7 @@ class ActionDialogView(tk.Toplevel):
         select_program_button = ttk.Button(program_frame, text="Browse...")
         select_program_button.pack(side=tk.RIGHT, padx=5)
     
-        return browse_button, select_area_button, select_program_button
+        return browse_button, select_area_button, select_program_button, screenshot_button
 
     def create_mouse_move_params(self, parameters=None):
         # Clear previous parameter widgets
