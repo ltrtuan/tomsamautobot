@@ -1,6 +1,7 @@
 ﻿import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import config as cfg
+from constants import ActionType
 
 class ActionDialogView(tk.Toplevel):
     def __init__(self, parent, action=None):
@@ -48,13 +49,12 @@ class ActionDialogView(tk.Toplevel):
     
         # Style cho Combobox
         self.style = ttk.Style()
-        self.style.configure("TCombobox", padding=5)
-    
-        action_types = ["Tìm Hình Ảnh", "Di Chuyển Chuột"]
+        self.style.configure("TCombobox", padding=5)    
+       
         self.action_type_combo = ttk.Combobox(
             type_frame, 
             textvariable=self.action_type_var, 
-            values=action_types, 
+            values=ActionType.get_display_values(),
             state="readonly", 
             width=25,
             font=cfg.DEFAULT_FONT
@@ -138,18 +138,18 @@ class ActionDialogView(tk.Toplevel):
             activeforeground="white",
             cursor="hand2"
         )
-        self.save_button.pack(side=tk.RIGHT)
+        self.save_button.pack(side=tk.RIGHT)        
         
         # Pre-fill if editing
         if self.is_edit:
             self.action_type_var.set(self.current_action.action_type)
             # Hide the combobox
             self.action_type_combo.pack_forget()
-    
+
             # Add a label instead
             action_type_value = tk.Label(
                 type_frame,
-                text=self.current_action.action_type,
+                text=ActionType.get_action_type_display(self.current_action.action_type),
                 font=cfg.DEFAULT_FONT,
                 bg=cfg.LIGHT_BG_COLOR
             )

@@ -2,6 +2,7 @@
 from tkinter import ttk, messagebox
 import config as cfg
 from views.settings_dialog import SettingsDialog
+from constants import ActionType
 
 class ActionItemFrame(tk.Frame):
     def __init__(self, parent, action, index, **kwargs):
@@ -54,8 +55,9 @@ class ActionItemFrame(tk.Frame):
         )
         self.index_label.pack(side=tk.LEFT)
         
+        action_type_value = ActionType.get_action_type_display(action.action_type)
         # Thêm icon hành động - giống Power Automate
-        action_icon = "🔍" if action.action_type == "Tìm Hình Ảnh" else "🖱️"
+        action_icon = "🔍" if action_type_value == ActionType.TIM_HINH_ANH.value else "🖱️"
         icon_label = tk.Label(
             header_frame, 
             text=action_icon, 
@@ -67,7 +69,7 @@ class ActionItemFrame(tk.Frame):
         # Loại hành động
         action_type_label = tk.Label(
             header_frame, 
-            text=action.action_type, 
+            text=action_type_value, 
             font=("Segoe UI", 10, "bold"),
             bg=cfg.LIGHT_BG_COLOR,
             fg=cfg.PRIMARY_COLOR
@@ -135,10 +137,12 @@ class ActionItemFrame(tk.Frame):
      # Thêm phương thức mới để cập nhật số thứ tự
     def update_index(self, new_index):
         self.index = new_index
-        self.index_label.config(text=f"{new_index}.")
+        self.index_label.config(text=f"{new_index}.")    
         
     def _get_params_text(self, action):
-        if action.action_type == "Tìm Hình Ảnh":
+        action_type_value = ActionType.get_action_type_display(action.action_type)
+        
+        if action_type_value == ActionType.TIM_HINH_ANH.value:
             path = action.parameters.get('path', '')
             accuracy = action.parameters.get('accuracy', '80')
         
@@ -158,7 +162,7 @@ class ActionItemFrame(tk.Frame):
                 accuracy_display = f"{accuracy}%"
             
             return f"Hình: {filename} | Độ chính xác: {accuracy_display}"
-        elif action.action_type == "Di Chuyển Chuột":
+        elif action_type_value == ActionType.DI_CHUYEN_CHUOT.value:
             return f"X: {action.parameters.get('x', '')}, Y: {action.parameters.get('y', '')} | Thời gian: {action.parameters.get('duration', '')}s"
         return ""
         

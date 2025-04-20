@@ -3,6 +3,7 @@ import os
 import time
 import pyautogui
 from PIL import Image
+from constants import ActionType
 
 class ActionController:
     def __init__(self, root):
@@ -97,20 +98,32 @@ class ActionController:
         self.update_view()
             
     def on_action_type_changed(self, dialog):
-        action_type = dialog.action_type_var.get()
+        action_type_display = dialog.action_type_var.get()
+        
+        # Chuyển đổi từ giá trị hiển thị sang đối tượng enum
+        try:
+            action_type = ActionType.from_display_value(action_type_display)
+        except ValueError:
+            # Xử lý nếu không tìm thấy - giá trị mặc định
+            action_type = ActionType.TIM_HINH_ANH
     
         parameters = None
-        if dialog.is_edit and dialog.current_action.action_type == action_type:
+        if dialog.is_edit and dialog.current_action.action_type == action_type_display:
             parameters = dialog.current_action.parameters
         
-        if action_type == "Tìm Hình Ảnh":
+        if action_type == ActionType.TIM_HINH_ANH:
             browse_button, select_area_button, select_program_button, screenshot_button = dialog.create_image_search_params(parameters)
             browse_button.config(command=lambda: self.browse_image(dialog))
             select_area_button.config(command=lambda: self.select_screen_area(dialog))
             select_program_button.config(command=lambda: self.select_program(dialog))
             screenshot_button.config(command=lambda: self.capture_screen_area(dialog))
-        elif action_type == "Di Chuyển Chuột":
+            return browse_button, select_area_button, select_program_button, screenshot_button
+        elif action_type == ActionType.DI_CHUYEN_CHUOT:
             dialog.create_mouse_move_params(parameters)
+            return None, None, None, None
+        
+        # Default return để tránh lỗi
+        return None, None, None, None
 
     def browse_image(self, dialog):
         from tkinter import filedialog
