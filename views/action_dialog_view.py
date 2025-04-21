@@ -191,30 +191,28 @@ class ActionDialogView(tk.Toplevel):
         self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         
     def initialize_parameters(self):
-        """Khởi tạo tham số dựa trên loại hành động hiện tại"""
-        if self.is_edit and hasattr(self.current_action, 'parameters'):
-            parameters = self.current_action.parameters
-            action_type = self.current_action.action_type
-        
-            # Chuyển đổi action_type từ chuỗi sang enum nếu cần
-            if isinstance(action_type, str):
-                try:
-                    action_type = ActionType.from_display_value(action_type)
-                except ValueError:
-                    pass
-        
-            # Gọi phương thức tạo tham số tương ứng dựa vào loại hành động
-            if action_type == ActionType.TIM_HINH_ANH:
-                browse_button, select_area_button, select_program_button, screenshot_button = self.create_image_search_params(parameters)
-                # Gán sự kiện cho các nút
-                browse_button.config(command=self.browse_image)
-                select_area_button.config(command=self.select_screen_area if hasattr(self, 'select_screen_area') else lambda: None)
-                select_program_button.config(command=self.browse_program if hasattr(self, 'browse_program') else lambda: None)
-                screenshot_button.config(command=self.take_screenshot if hasattr(self, 'take_screenshot') else lambda: None)
-            elif action_type == ActionType.DI_CHUYEN_CHUOT:
-                self.create_mouse_move_params(parameters)
+        """Điền các parameters từ action hiện tại vào form"""
+        if not self.is_edit or not hasattr(self.current_action, 'parameters'):
+            return
+    
+        parameters = self.current_action.parameters
+        print(f"Loading parameters: {parameters}")
+    
+        # Điền các giá trị vào biến StringVar/BooleanVar tương ứng
+        for key, value in parameters.items():
+            # Tìm biến tương ứng với key
+            var_name = f"{key}_var"
+            if hasattr(self, var_name) and value is not None:
+                var = getattr(self, var_name)
+                if isinstance(var, tk.StringVar):
+                    var.set(str(value))
+                elif isinstance(var, tk.BooleanVar) and isinstance(value, bool):
+                    var.set(value)
+    
+        print("Parameters loaded successfully")
         
     def create_image_search_params(self, parameters=None):
+
         # Xóa các widget cũ
         for widget in self.param_frame.winfo_children():
             widget.destroy()
@@ -244,7 +242,8 @@ class ActionDialogView(tk.Toplevel):
     
         # Đăng ký hàm validation
         validate_float_cmd = (self.register(validate_number), '%P')
-        validate_int_cmd = (self.register(validate_integer), '%P')
+        validate_int_cmd = (self.register(validate_integer), '%P')        
+      
     
         # ========== PHẦN THÔNG TIN HÌNH ẢNH ==========
         # Frame chứa đường dẫn hình ảnh

@@ -35,6 +35,7 @@ class ActionModel:
         self.actions = []
         
     def add_action(self, action):
+        
         # Kiểm tra nếu action là một đối tượng có thuộc tính action_type
         if hasattr(action, "action_type"):
             # Nếu action_type đã là một enum
@@ -91,9 +92,31 @@ class ActionModel:
             return self.actions[index]
         return None
         
-    def add_sample_actions(self):
-        self.add_action(ActionItem(ActionType.TIM_HINH_ANH, {"path": "C:/images/button.png", "confidence": "0.8"}))
-        self.add_action(ActionItem(ActionType.DI_CHUYEN_CHUOT, {"x": "500", "y": "300", "duration": "0.5"}))
+    def add_sample_actions(self):        
+        # Thêm các actions mẫu
+        self.add_action(ActionItem(ActionType.TIM_HINH_ANH, {
+            "path": "C:/images/button.png", 
+            "confidence": "0.8",
+            "x": "0",
+            "y": "0",
+            "width": "100",
+            "height": "100",
+            "accuracy": "80",
+            "random_time": "0",
+            "double_click": False,
+            "random_skip": "0",
+            "variable": "",
+            "program": ""
+        }))
+    
+        self.add_action(ActionItem(ActionType.DI_CHUYEN_CHUOT, {
+            "x": "500", 
+            "y": "300", 
+            "duration": "0.5"
+        }))
+    
+        # Lưu ngay sau khi thêm sample actions
+        # self.save_actions()
 
     def reorder_action(self, old_index, new_index):
         """Di chuyển hành động từ vị trí cũ đến vị trí mới"""
@@ -137,16 +160,23 @@ class ActionModel:
                 with open(ACTIONS_JSON_PATH, 'r', encoding='utf-8') as f:
                     actions_data = json.load(f)
                     self.actions = []
-                    for action_data in actions_data:
-                        action_type = action_data.get("action_type")
-                        parameters = action_data.get("parameters", {})
-                        self.add_action(ActionItem(action_type, parameters))
-                return True
+                    if actions_data:  # Nếu file có dữ liệu
+                        for action_data in actions_data:
+                            action_type = action_data.get("action_type")
+                            parameters = action_data.get("parameters", {})
+                            self.add_action(ActionItem(action_type, parameters))
+                        return True
+                    else:  # Nếu file trống (empty array)
+                        self.add_sample_actions()
+                        return True
             else:
-                # Tạo file trống nếu không tồn tại
+                # Tạo file trống nếu không tồn tại và thêm sample actions
                 with open(ACTIONS_JSON_PATH, 'w', encoding='utf-8') as f:
                     json.dump([], f)
-                return False
+                self.add_sample_actions()
+                return True
         except Exception as e:
             print(f"Lỗi khi tải hành động: {str(e)}")
+            # Nếu có lỗi, vẫn thêm sample actions
+            self.add_sample_actions()
             return False

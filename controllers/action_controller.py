@@ -70,7 +70,7 @@ class ActionController:
         dialog = ActionDialogView(self.root, action)
     
         # Gán callback trực tiếp cho nút Lưu
-        dialog.save_button.config(command=lambda: self.on_dialog_save(dialog))
+        dialog.save_button.config(command=lambda: self.on_dialog_save(dialog))        
     
         # Kết nối sự kiện chọn loại hành động
         dialog.action_type_combo.bind("<<ComboboxSelected>>", lambda e: self.on_action_type_changed(dialog))
@@ -109,7 +109,7 @@ class ActionController:
     
         parameters = None
         if dialog.is_edit and dialog.current_action.action_type == action_type_display:
-            parameters = dialog.current_action.parameters
+            parameters = dialog.current_action.parameters        
         
         if action_type == ActionType.TIM_HINH_ANH:
             browse_button, select_area_button, select_program_button, screenshot_button = dialog.create_image_search_params(parameters)
