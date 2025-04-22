@@ -39,17 +39,8 @@ class ActionController:
         dialog.action_type_combo.bind("<<ComboboxSelected>>", lambda e: self.on_action_type_changed(dialog))
     
         # Cấu hình và hiển thị dialog mặc định
-        browse_button, select_area_button, select_program_button, screenshot_button = self.on_action_type_changed(dialog)
-    
-        # Đăng ký sự kiện cho các nút
-        if browse_button:
-            browse_button.config(command=lambda: self.browse_image(dialog))
-        if select_area_button:
-            select_area_button.config(command=lambda: self.select_screen_area(dialog))
-        if select_program_button:
-            select_program_button.config(command=lambda: self.browse_program(dialog))
-        if screenshot_button:
-            screenshot_button.config(command=lambda: self.capture_screen_area(dialog))
+        self.on_action_type_changed(dialog)    
+      
         # Đặt hành động khi lưu
         dialog.save_button.config(command=lambda: self.on_dialog_save(dialog))
 
@@ -72,8 +63,7 @@ class ActionController:
         # Gán callback trực tiếp cho nút Lưu
         dialog.save_button.config(command=lambda: self.on_dialog_save(dialog))        
     
-        # Kết nối sự kiện chọn loại hành động
-        dialog.action_type_combo.bind("<<ComboboxSelected>>", lambda e: self.on_action_type_changed(dialog))
+        # Kết nối sự kiện chọn loại hành động , edit action không cho chọn lại action nên không cần gọi lại select        
         self.on_action_type_changed(dialog)
     
         # Hiển thị dialog và đợi
@@ -103,7 +93,6 @@ class ActionController:
         
         parameters = None
       
-      
         if dialog.is_edit and dialog.current_action.action_type == action_type_display:
             parameters = dialog.current_action.parameters
             
@@ -123,13 +112,9 @@ class ActionController:
             select_area_button.config(command=lambda: self.select_screen_area(dialog))
             select_program_button.config(command=lambda: self.select_program(dialog))
             screenshot_button.config(command=lambda: self.capture_screen_area(dialog))
-            return browse_button, select_area_button, select_program_button, screenshot_button
         elif action_type_display == ActionType.DI_CHUYEN_CHUOT:
             dialog.create_mouse_move_params(parameters)
-            return None, None, None, None
-        
-        # Default return để tránh lỗi
-        return None, None, None, None
+       
 
     def browse_image(self, dialog):
         from tkinter import filedialog
