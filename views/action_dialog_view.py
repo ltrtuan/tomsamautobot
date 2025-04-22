@@ -17,7 +17,7 @@ class ActionDialogView(tk.Toplevel):
         # Pre-fill if editing an existing action
         self.is_edit = action is not None
         self.current_action = action
-    
+        
         # Create main frame
         main_frame = tk.Frame(self, bg=cfg.LIGHT_BG_COLOR, padx=cfg.LARGE_PADDING, pady=cfg.LARGE_PADDING)
         main_frame.pack(fill=tk.BOTH, expand=True)
@@ -49,8 +49,7 @@ class ActionDialogView(tk.Toplevel):
     
         # Style cho Combobox
         self.style = ttk.Style()
-        self.style.configure("TCombobox", padding=5)    
-       
+        self.style.configure("TCombobox", padding=5)   
         self.action_type_combo = ttk.Combobox(
             type_frame, 
             textvariable=self.action_type_var, 
@@ -141,7 +140,7 @@ class ActionDialogView(tk.Toplevel):
         self.save_button.pack(side=tk.RIGHT)        
         
         # Pre-fill if editing
-        if self.is_edit:
+        if self.is_edit:            
             self.action_type_var.set(self.current_action.action_type)
             # Hide the combobox
             self.action_type_combo.pack_forget()
@@ -153,10 +152,8 @@ class ActionDialogView(tk.Toplevel):
                 font=cfg.DEFAULT_FONT,
                 bg=cfg.LIGHT_BG_COLOR
             )
-            action_type_value.pack(side=tk.LEFT)
-            
-            # THÊM ĐOẠN CODE NÀY để đăng ký xử lý sau khi UI đã được tạo hoàn chỉnh
-            self.after(100, lambda: self.initialize_parameters())
+            action_type_value.pack(side=tk.LEFT)            
+         
     
         # Center dialog and make it modal
         self.transient(parent)
@@ -188,31 +185,9 @@ class ActionDialogView(tk.Toplevel):
 
     def _on_mousewheel(self, event):
         # Cuộn bằng chuột
-        self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        
-    def initialize_parameters(self):
-        """Điền các parameters từ action hiện tại vào form"""
-        if not self.is_edit or not hasattr(self.current_action, 'parameters'):
-            return
-    
-        parameters = self.current_action.parameters
-        print(f"Loading parameters: {parameters}")
-    
-        # Điền các giá trị vào biến StringVar/BooleanVar tương ứng
-        for key, value in parameters.items():
-            # Tìm biến tương ứng với key
-            var_name = f"{key}_var"
-            if hasattr(self, var_name) and value is not None:
-                var = getattr(self, var_name)
-                if isinstance(var, tk.StringVar):
-                    var.set(str(value))
-                elif isinstance(var, tk.BooleanVar) and isinstance(value, bool):
-                    var.set(value)
-    
-        print("Parameters loaded successfully")
+        self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")    
         
     def create_image_search_params(self, parameters=None):
-
         # Xóa các widget cũ
         for widget in self.param_frame.winfo_children():
             widget.destroy()

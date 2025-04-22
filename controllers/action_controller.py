@@ -97,28 +97,34 @@ class ActionController:
         # Cập nhật view
         self.update_view()
             
-    def on_action_type_changed(self, dialog):
+    def on_action_type_changed(self, dialog):       
+
         action_type_display = dialog.action_type_var.get()
         
-        # Chuyển đổi từ giá trị hiển thị sang đối tượng enum
-        try:
-            action_type = ActionType.from_display_value(action_type_display)
-        except ValueError:
-            # Xử lý nếu không tìm thấy - giá trị mặc định
-            action_type = ActionType.TIM_HINH_ANH
-    
         parameters = None
+      
+      
         if dialog.is_edit and dialog.current_action.action_type == action_type_display:
-            parameters = dialog.current_action.parameters        
-        
-        if action_type == ActionType.TIM_HINH_ANH:
+            parameters = dialog.current_action.parameters
+            
+        # print(f"dialog.current_action.action_type: '{dialog.current_action.action_type}'")
+        # print(f"action_type_display: '{action_type_display}'")
+        # print(f"Biểu diễn chính xác của dialog.current_action.action_type: {repr(dialog.current_action.action_type)}")
+        # print(f"Biểu diễn chính xác của action_type_display: {repr(action_type_display)}")
+        #         
+        # dialog.current_action.action_type: 'ActionType.TIM_HINH_ANH'
+        # action_type_display: 'ActionType.TIM_HINH_ANH'
+        # Biểu diễn chính xác của dialog.current_action.action_type: <ActionType.TIM_HINH_ANH: 'Tìm Hình Ảnh'>
+        # Biểu diễn chính xác của action_type_display: 'ActionType.TIM_HINH_ANH'
+
+        if action_type_display == ActionType.TIM_HINH_ANH:
             browse_button, select_area_button, select_program_button, screenshot_button = dialog.create_image_search_params(parameters)
             browse_button.config(command=lambda: self.browse_image(dialog))
             select_area_button.config(command=lambda: self.select_screen_area(dialog))
             select_program_button.config(command=lambda: self.select_program(dialog))
             screenshot_button.config(command=lambda: self.capture_screen_area(dialog))
             return browse_button, select_area_button, select_program_button, screenshot_button
-        elif action_type == ActionType.DI_CHUYEN_CHUOT:
+        elif action_type_display == ActionType.DI_CHUYEN_CHUOT:
             dialog.create_mouse_move_params(parameters)
             return None, None, None, None
         
