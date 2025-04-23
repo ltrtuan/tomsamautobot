@@ -140,9 +140,10 @@ class ActionItemFrame(tk.Frame):
         self.index_label.config(text=f"{new_index}.")    
         
     def _get_params_text(self, action):
-        action_type_value = ActionType.get_action_type_display(action.action_type)
-        
-        if action_type_value == ActionType.TIM_HINH_ANH.value:
+        #action_type_value = ActionType.get_action_type_display(action.action_type) #Tìm Hình Ảnh
+        action_type_display = action.action_type #ActionType.TIM_HINH_ANH
+       
+        if action_type_display == ActionType.TIM_HINH_ANH:
             path = action.parameters.get('path', '')
             accuracy = action.parameters.get('accuracy', '80')
         
@@ -162,7 +163,7 @@ class ActionItemFrame(tk.Frame):
                 accuracy_display = f"{accuracy}%"
             
             return f"Hình: {filename} | Độ chính xác: {accuracy_display}"
-        elif action_type_value == ActionType.DI_CHUYEN_CHUOT.value:
+        elif action_type_display == ActionType.DI_CHUYEN_CHUOT:
             return f"X: {action.parameters.get('x', '')}, Y: {action.parameters.get('y', '')} | Thời gian: {action.parameters.get('duration', '')}s"
         return ""
         

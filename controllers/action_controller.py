@@ -126,8 +126,7 @@ class ActionController:
             )
         )
         if filename:
-            dialog.image_path_var.set(filename)
-    
+            dialog.image_path_var.set(filename)    
         
     def select_screen_area(self, dialog):
         """Hiển thị trình chọn khu vực màn hình"""
