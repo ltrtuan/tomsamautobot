@@ -2,6 +2,8 @@
 from tkinter import ttk, filedialog, messagebox
 import config as cfg
 from constants import ActionType
+from views.action_params.image_search_params import ImageSearchParams
+from views.action_params.mouse_move_params import MouseMoveParams
 
 class ActionDialogView(tk.Toplevel):
     def __init__(self, parent, action=None):
@@ -9,7 +11,7 @@ class ActionDialogView(tk.Toplevel):
         self.title("Thêm/Sửa Hành Động")
         self.parent = parent
         self.result = None
-    
+        
         # Thiết lập style cho cửa sổ
         self.configure(bg=cfg.LIGHT_BG_COLOR)
         self.resizable(True, True)  # Cho phép thay đổi kích thước cửa sổ
@@ -17,7 +19,7 @@ class ActionDialogView(tk.Toplevel):
         # Pre-fill if editing an existing action
         self.is_edit = action is not None
         self.current_action = action
-    
+        
         # Create main frame
         main_frame = tk.Frame(self, bg=cfg.LIGHT_BG_COLOR, padx=cfg.LARGE_PADDING, pady=cfg.LARGE_PADDING)
         main_frame.pack(fill=tk.BOTH, expand=True)
@@ -49,8 +51,7 @@ class ActionDialogView(tk.Toplevel):
     
         # Style cho Combobox
         self.style = ttk.Style()
-        self.style.configure("TCombobox", padding=5)    
-       
+        self.style.configure("TCombobox", padding=5)   
         self.action_type_combo = ttk.Combobox(
             type_frame, 
             textvariable=self.action_type_var, 
@@ -141,7 +142,7 @@ class ActionDialogView(tk.Toplevel):
         self.save_button.pack(side=tk.RIGHT)        
         
         # Pre-fill if editing
-        if self.is_edit:
+        if self.is_edit:            
             self.action_type_var.set(self.current_action.action_type)
             # Hide the combobox
             self.action_type_combo.pack_forget()
@@ -153,7 +154,8 @@ class ActionDialogView(tk.Toplevel):
                 font=cfg.DEFAULT_FONT,
                 bg=cfg.LIGHT_BG_COLOR
             )
-            action_type_value.pack(side=tk.LEFT)
+            action_type_value.pack(side=tk.LEFT)            
+         
     
         # Center dialog and make it modal
         self.transient(parent)
@@ -163,7 +165,7 @@ class ActionDialogView(tk.Toplevel):
     
         # Set position relative to parent
         window_width = 500  # Tăng kích thước một chút
-        window_height = 500
+        window_height = 600
     
         # Calculate center position
         x = (parent.winfo_rootx() + (parent.winfo_width() / 2)) - (window_width / 2)
@@ -171,6 +173,20 @@ class ActionDialogView(tk.Toplevel):
     
         # Set window size and position
         self.geometry(f"{window_width}x{window_height}+{int(x)}+{int(y)}")
+        
+        ################################################################################
+        ################################################################################
+        ################################################################################
+        ################################################################################
+        ################################################################################
+        ################################################################################
+        self.current_params = None  # Biến chứa đối tượng tham số hiện tại
+        # Map các loại action với các lớp param tương ứng
+        self.param_classes = {
+            ActionType.TIM_HINH_ANH: ImageSearchParams,
+            ActionType.DI_CHUYEN_CHUOT: MouseMoveParams,
+            # Thêm các action khác trong tương lai
+        }
 
     # Thêm các phương thức hỗ trợ cho cuộn
     def _on_frame_configure(self, event):
@@ -185,321 +201,80 @@ class ActionDialogView(tk.Toplevel):
         # Cuộn bằng chuột
         self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         
-    def create_image_search_params(self, parameters=None):
+    def create_params_for_action_type(self, action_type, parameters=None):
+        """Tạo UI tham số dựa trên loại hành động"""
         # Xóa các widget cũ
         for widget in self.param_frame.winfo_children():
             widget.destroy()
-        
-        # Khởi tạo giá trị mặc định
-        if parameters is None:
-            parameters = {}
     
-        # Tạo validation function cho các trường nhập số
-        def validate_number(P):
-            if P == "":
-                return True
-            try:
-                float(P)
-                return True
-            except ValueError:
-                return False
+        # Lấy lớp tham số phù hợp từ dictionary
+        if action_type in self.param_classes:
+            param_class = self.param_classes[action_type]
+            # Khởi tạo đối tượng tham số
+            self.current_params = param_class(self.param_frame, parameters)
+            # Tạo UI và trả về các nút
+            return self.current_params.create_params()
+    
+        return None, None, None, None
+
+        
+    # Thêm vào class ActionDialogView
+    # def get_parameter_value(self, param_name):
+    #     """Lấy giá trị của tham số từ class tham số hiện tại"""
+    #     action_type_display = self.action_type_var.get()
+    #     action_type = ActionType.from_display_value(action_type_display)
+    #     # Xác định class tham số dựa trên action_type
+    #     if action_type == ActionType.TIM_HINH_ANH:
+    #         if hasattr(self, 'image_params') and self.image_params:
+    #             for key, var in self.image_params.variables.items():
+    #                 if key.replace("_var", "") == param_name:
+    #                     return var.get()
+    #     elif action_type == ActionType.DI_CHUYEN_CHUOT:
+    #         if hasattr(self, 'mouse_params') and self.mouse_params:
+    #             for key, var in self.mouse_params.variables.items():
+    #                 if key.replace("_var", "") == param_name:
+    #                     return var.get()
+    
+    #     # Trả về None nếu không tìm thấy
+        return None
+    
+    def set_parameter_value(self, param_name, value):
+        """Set a parameter value in the current parameter object"""
+        if hasattr(self, 'current_params') and self.current_params:
+            if f"{param_name}_var" in self.current_params.variables:
+                self.current_params.variables[f"{param_name}_var"].set(value)
+            else:
+                print(f"Warning: Parameter {param_name} not found in current_params")
             
-        def validate_integer(P):
-            if P == "":
-                return True
-            try:
-                int(P)
-                return True
-            except ValueError:
-                return False
-    
-        # Đăng ký hàm validation
-        validate_float_cmd = (self.register(validate_number), '%P')
-        validate_int_cmd = (self.register(validate_integer), '%P')
-    
-        # ========== PHẦN THÔNG TIN HÌNH ẢNH ==========
-        # Frame chứa đường dẫn hình ảnh
-        path_frame = tk.Frame(self.param_frame, bg=cfg.LIGHT_BG_COLOR)
-        path_frame.pack(fill=tk.X, pady=(5, 10))
-    
-        # Label và textbox đường dẫn
-        tk.Label(path_frame, text="Đường dẫn hình ảnh:", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT, padx=(0, 5))
-        self.image_path_var = tk.StringVar(value=parameters.get("path", ""))
-        path_entry = ttk.Entry(path_frame, textvariable=self.image_path_var, width=40)
-        path_entry.pack(side=tk.LEFT, padx=(0, 5), fill=tk.X, expand=True)
+    def get_all_parameters(self):
+        """Lấy tất cả tham số từ class tham số hiện tại"""
+        # action_type_display = self.action_type_var.get()
+        # action_type = ActionType.from_display_value(action_type_display)
         
-        # THÊM MỚI: Nút chụp màn hình
-        screenshot_button = ttk.Button(path_frame, text="Chụp Màn Hình")
-        screenshot_button.pack(side=tk.LEFT, padx=5)
+        # if action_type == ActionType.TIM_HINH_ANH:
+        #     if hasattr(self, 'image_params') and self.image_params:
+        #         return self.image_params.get_parameters()
+        # elif action_type == ActionType.DI_CHUYEN_CHUOT:
+        #     if hasattr(self, 'mouse_params') and self.mouse_params:
+        #         return self.mouse_params.get_parameters()
     
-        # Nút duyệt hình ảnh
-        browse_button = ttk.Button(path_frame, text="Duyệt...")
-        browse_button.pack(side=tk.RIGHT, padx=5)
-    
-        # ========== PHẦN KHU VỰC TÌM KIẾM ==========
-        region_frame = tk.LabelFrame(self.param_frame, text="Khu vực tìm kiếm", bg=cfg.LIGHT_BG_COLOR, pady=10, padx=10)
-        region_frame.pack(fill=tk.X, pady=10)
-    
-        # Frame chứa tọa độ X, Y
-        coord_frame = tk.Frame(region_frame, bg=cfg.LIGHT_BG_COLOR)
-        coord_frame.pack(fill=tk.X, pady=5)
-    
-        # Tọa độ X
-        tk.Label(coord_frame, text="X:", bg=cfg.LIGHT_BG_COLOR).grid(row=0, column=0, padx=5, sticky=tk.W)
-        self.x_var = tk.StringVar(value=parameters.get("x", "0"))
-        ttk.Entry(coord_frame, textvariable=self.x_var, width=8, validate="key", 
-                  validatecommand=validate_float_cmd).grid(row=0, column=1, padx=5)
-    
-        # Tọa độ Y
-        tk.Label(coord_frame, text="Y:", bg=cfg.LIGHT_BG_COLOR).grid(row=0, column=2, padx=5, sticky=tk.W)
-        self.y_var = tk.StringVar(value=parameters.get("y", "0"))
-        ttk.Entry(coord_frame, textvariable=self.y_var, width=8, validate="key", 
-                  validatecommand=validate_float_cmd).grid(row=0, column=3, padx=5)
-    
-        # Frame chứa Width, Height
-        size_frame = tk.Frame(region_frame, bg=cfg.LIGHT_BG_COLOR)
-        size_frame.pack(fill=tk.X, pady=5)
-    
-        # Width
-        tk.Label(size_frame, text="Width:", bg=cfg.LIGHT_BG_COLOR).grid(row=0, column=0, padx=5, sticky=tk.W)
-        self.width_var = tk.StringVar(value=parameters.get("width", "0"))
-        ttk.Entry(size_frame, textvariable=self.width_var, width=8, validate="key", 
-                  validatecommand=validate_float_cmd).grid(row=0, column=1, padx=5)
-    
-        # Height
-        tk.Label(size_frame, text="Height:", bg=cfg.LIGHT_BG_COLOR).grid(row=0, column=2, padx=5, sticky=tk.W)
-        self.height_var = tk.StringVar(value=parameters.get("height", "0"))
-        ttk.Entry(size_frame, textvariable=self.height_var, width=8, validate="key", 
-                  validatecommand=validate_float_cmd).grid(row=0, column=3, padx=5)
-    
-        # Nút chọn khu vực màn hình
-        select_area_button = ttk.Button(region_frame, text="Chọn khu vực màn hình")
-        select_area_button.pack(pady=10)
-    
-        # ========== PHẦN ĐỘ CHÍNH XÁC ==========
-        accuracy_frame = tk.Frame(self.param_frame, bg=cfg.LIGHT_BG_COLOR)
-        accuracy_frame.pack(fill=tk.X, pady=10)
-    
-        # Label độ chính xác
-        tk.Label(accuracy_frame, text="Độ chính xác (%):", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT, padx=5)
-    
-        # Giá trị và thanh trượt độ chính xác
-        self.accuracy_var = tk.StringVar(value=parameters.get("accuracy", "80"))
-        accuracy_label = tk.Label(accuracy_frame, textvariable=self.accuracy_var, width=3, bg=cfg.LIGHT_BG_COLOR)
-    
-        def update_accuracy(value):
-            self.accuracy_var.set(str(int(float(value))))
-    
-        accuracy_scale = ttk.Scale(
-            accuracy_frame, 
-            from_=0, 
-            to=100, 
-            command=update_accuracy,
-            value=int(float(self.accuracy_var.get()))
-        )
-        accuracy_scale.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
-        accuracy_label.pack(side=tk.LEFT, padx=5)
-    
-        # ========== PHẦN THAM SỐ CHUNG ==========
-        common_frame = tk.LabelFrame(self.param_frame, text="Tham số chung", bg=cfg.LIGHT_BG_COLOR, pady=10, padx=10)
-        common_frame.pack(fill=tk.X, pady=10)
-    
-        # Random Time
-        random_time_frame = tk.Frame(common_frame, bg=cfg.LIGHT_BG_COLOR)
-        random_time_frame.pack(fill=tk.X, pady=5)
-    
-        tk.Label(random_time_frame, text="Random Time:", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT, padx=5)
-        self.random_time_var = tk.StringVar(value=parameters.get("random_time", "0"))
-        ttk.Entry(
-            random_time_frame, 
-            textvariable=self.random_time_var, 
-            width=6,
-            validate="key", 
-            validatecommand=validate_int_cmd
-        ).pack(side=tk.LEFT, padx=5)
-    
-        # Double Click
-        click_frame = tk.Frame(common_frame, bg=cfg.LIGHT_BG_COLOR)
-        click_frame.pack(fill=tk.X, pady=5)
-    
-        self.double_click_var = tk.BooleanVar(value=parameters.get("double_click", False))
-        ttk.Checkbutton(
-            click_frame, 
-            text="Double Click", 
-            variable=self.double_click_var
-        ).pack(side=tk.LEFT, padx=5)
-    
-        # Random Skip Action
-        skip_frame = tk.Frame(common_frame, bg=cfg.LIGHT_BG_COLOR)
-        skip_frame.pack(fill=tk.X, pady=5)
-    
-        tk.Label(skip_frame, text="Random Skip Action:", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT, padx=5)
-        self.random_skip_var = tk.StringVar(value=parameters.get("random_skip", "0"))
-        ttk.Entry(
-            skip_frame, 
-            textvariable=self.random_skip_var, 
-            width=6,
-            validate="key", 
-            validatecommand=validate_int_cmd
-        ).pack(side=tk.LEFT, padx=5)
-    
-        # Variable
-        variable_frame = tk.Frame(common_frame, bg=cfg.LIGHT_BG_COLOR)
-        variable_frame.pack(fill=tk.X, pady=5)
-    
-        tk.Label(variable_frame, text="Variable:", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT, padx=5)
-        self.variable_var = tk.StringVar(value=parameters.get("variable", ""))
-        ttk.Entry(variable_frame, textvariable=self.variable_var, width=15).pack(side=tk.LEFT, padx=5)
-    
-        # ========== PHẦN BREAK ACTION IF ==========
-        self.break_frame = tk.LabelFrame(self.param_frame, text="Break action If", bg=cfg.LIGHT_BG_COLOR, pady=10, padx=10)
-        self.break_frame.pack(fill=tk.X, pady=10)
-    
-        # List để lưu các condition
-        self.break_conditions = []
-    
-        # Thêm condition đầu tiên hoặc nạp từ parameters
-        if "break_conditions" in parameters and parameters["break_conditions"]:
-            for condition in parameters["break_conditions"]:
-                self.add_break_condition(condition)
-        else:
-            self.add_break_condition()
-    
-        # Nút thêm condition
-        add_condition_button = ttk.Button(
-            self.break_frame, 
-            text="Add If", 
-            command=self.add_break_condition
-        )
-        add_condition_button.pack(pady=5)
-    
-        # ========== PHẦN CHỌN CHƯƠNG TRÌNH ==========
-        program_frame = tk.Frame(self.param_frame, bg=cfg.LIGHT_BG_COLOR)
-        program_frame.pack(fill=tk.X, pady=10)
-    
-        tk.Label(program_frame, text="Select Program to Action:", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT, padx=5)
-    
-        self.program_var = tk.StringVar(value=parameters.get("program", ""))
-        program_entry = ttk.Entry(program_frame, textvariable=self.program_var, width=30)
-        program_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
-    
-        select_program_button = ttk.Button(program_frame, text="Browse...")
-        select_program_button.pack(side=tk.RIGHT, padx=5)
-    
-        return browse_button, select_area_button, select_program_button, screenshot_button
+        # return {}        
+        if hasattr(self, 'current_params') and self.current_params:
+            return self.current_params.get_parameters()
+        return {}
+        
+    def create_image_search_params(self, parameters=None):
+        """Tạo UI cho tìm kiếm hình ảnh"""       
+        self.image_params = ImageSearchParams(self.param_frame, parameters)
+        return self.image_params.create_params()
 
     def create_mouse_move_params(self, parameters=None):
-        # Clear previous parameter widgets
-        for widget in self.param_frame.winfo_children():
-            widget.destroy()
-            
-        # X coordinate
-        x_label = tk.Label(
-            self.param_frame, 
-            text="Tọa độ X:", 
-            font=cfg.DEFAULT_FONT, 
-            bg=cfg.LIGHT_BG_COLOR
-        )
-        x_label.grid(row=0, column=0, sticky=tk.W, pady=(0, 10))
-        
-        self.x_coord_var = tk.StringVar(value="0")
-        if parameters and "x" in parameters:
-            self.x_coord_var.set(parameters["x"])
-            
-        x_entry = ttk.Entry(
-            self.param_frame, 
-            textvariable=self.x_coord_var, 
-            width=8,
-            font=cfg.DEFAULT_FONT
-        )
-        x_entry.grid(row=0, column=1, sticky=tk.W, pady=(0, 10))
-        
-        # Y coordinate
-        y_label = tk.Label(
-            self.param_frame, 
-            text="Tọa độ Y:", 
-            font=cfg.DEFAULT_FONT, 
-            bg=cfg.LIGHT_BG_COLOR
-        )
-        y_label.grid(row=1, column=0, sticky=tk.W, pady=(0, 10))
-        
-        self.y_coord_var = tk.StringVar(value="0")
-        if parameters and "y" in parameters:
-            self.y_coord_var.set(parameters["y"])
-            
-        y_entry = ttk.Entry(
-            self.param_frame, 
-            textvariable=self.y_coord_var, 
-            width=8,
-            font=cfg.DEFAULT_FONT
-        )
-        y_entry.grid(row=1, column=1, sticky=tk.W, pady=(0, 10))
-        
-        # Duration
-        duration_label = tk.Label(
-            self.param_frame, 
-            text="Thời gian (giây):", 
-            font=cfg.DEFAULT_FONT, 
-            bg=cfg.LIGHT_BG_COLOR
-        )
-        duration_label.grid(row=2, column=0, sticky=tk.W, pady=(0, 10))
-        
-        self.duration_var = tk.StringVar(value="0.2")
-        if parameters and "duration" in parameters:
-            self.duration_var.set(parameters["duration"])
-            
-        duration_entry = ttk.Entry(
-            self.param_frame, 
-            textvariable=self.duration_var, 
-            width=8,
-            font=cfg.DEFAULT_FONT
-        )
-        duration_entry.grid(row=2, column=1, sticky=tk.W, pady=(0, 10))
-        
-        # Duration slider
-        duration_frame = tk.Frame(self.param_frame, bg=cfg.LIGHT_BG_COLOR)
-        duration_frame.grid(row=3, column=0, columnspan=2, sticky=tk.EW, pady=(5, 0))
-        
-        # Slider labels
-        slider_label_frame = tk.Frame(duration_frame, bg=cfg.LIGHT_BG_COLOR)
-        slider_label_frame.pack(fill=tk.X)
-        
-        tk.Label(
-            slider_label_frame, 
-            text="Nhanh", 
-            font=("Segoe UI", 8), 
-            bg=cfg.LIGHT_BG_COLOR
-        ).pack(side=tk.LEFT)
-        
-        tk.Label(
-            slider_label_frame, 
-            text="Chậm", 
-            font=("Segoe UI", 8), 
-            bg=cfg.LIGHT_BG_COLOR
-        ).pack(side=tk.RIGHT)
-        
-        # Slider
-        duration_slider = ttk.Scale(
-            duration_frame, 
-            from_=0, 
-            to=2, 
-            orient="horizontal",
-            value=float(self.duration_var.get()), 
-            length=300,
-            command=self._update_duration
-        )
-        duration_slider.pack(fill=tk.X, pady=5)
+        """Tạo UI cho di chuyển chuột"""
+        self.mouse_params = MouseMoveParams(self.param_frame, parameters)
+        return self.mouse_params.create_params()
         
     def _update_duration(self, value):
         self.duration_var.set(f"{float(value):.1f}")
-        
-    def browse_image(self):
-        filename = filedialog.askopenfilename(
-            title="Chọn một hình ảnh",
-            filetypes=(("Tệp hình ảnh", "*.png;*.jpg;*.jpeg;*.bmp"), ("Tất cả tệp", "*.*"))
-        )
-        if filename:
-            self.image_path_var.set(filename)
             
     def get_mouse_move_params(self):
         try:
@@ -605,3 +380,5 @@ class ActionDialogView(tk.Toplevel):
     def show_message(self, title, message):
         from tkinter import messagebox
         messagebox.showinfo(title, message)
+        
+

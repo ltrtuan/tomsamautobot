@@ -1,7 +1,7 @@
 ﻿# constants.py
 from enum import Enum, auto
 
-class ActionType(Enum):
+class ActionType(str, Enum):
     TIM_HINH_ANH = "Tìm Hình Ảnh"
     DI_CHUYEN_CHUOT = "Di Chuyển Chuột"
     
@@ -13,9 +13,22 @@ class ActionType(Enum):
     @classmethod
     def from_display_value(cls, display_value):
         """Chuyển đổi từ giá trị hiển thị sang enum"""
+        # Kiểm tra giá trị hiển thị trực tiếp
         for member in cls:
             if member.value == display_value:
                 return member
+    
+        # Nếu display_value có dạng "ActionType.TIM_HINH_ANH"
+        if isinstance(display_value, str) and "." in display_value:
+            try:
+                # Lấy phần sau dấu chấm (TIM_HINH_ANH)
+                enum_name = display_value.split(".")[-1]
+                # Lấy Enum tương ứng
+                return getattr(cls, enum_name) #return <ActionType.TIM_HINH_ANH = "Tìm hình ảnh">
+            except (AttributeError, KeyError):
+                pass
+    
+        # Nếu không thể chuyển đổi, ném ra lỗi
         raise ValueError(f"Không tìm thấy ActionType với giá trị: {display_value}")
     
     @classmethod
@@ -40,7 +53,7 @@ class ActionType(Enum):
             return getattr(cls, action_type).value
         except (AttributeError, TypeError):
             # Trả về giá trị gốc nếu không thể chuyển đổi
-            return action_type
+            return action_type #return Tìm Hình Ảnh
 
 # Các Enum khác có thể thêm vào đây
 # class MouseButton(Enum):

@@ -3,8 +3,6 @@ APP_TITLE = "Ứng dụng Điều Khiển Máy Tính"
 APP_WIDTH = 600
 APP_HEIGHT = 500
 
-# Available action types
-ACTION_TYPES = ["Tìm Hình Ảnh", "Di Chuyển Chuột"]
 
 # Default values
 DEFAULT_CONFIDENCE = 0.8

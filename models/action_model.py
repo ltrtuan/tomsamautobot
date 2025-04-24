@@ -1,4 +1,20 @@
 ﻿from constants import ActionType
+import json
+from pathlib import Path
+import os
+
+# Định nghĩa đường dẫn lưu file - điều chỉnh theo cấu trúc dự án
+# Kiểm tra và lấy giá trị FILE_PATH từ config.py
+try:
+    from config import FILE_PATH
+    # Nếu FILE_PATH tồn tại, sử dụng nó để định nghĩa đường dẫn cho actions.json
+    ACTIONS_JSON_PATH = os.path.join(FILE_PATH, "actions.json")
+except (ImportError, AttributeError):
+    # Nếu không tìm thấy FILE_PATH, tạo thư mục mặc định ở C:/tomsamautobot/
+    default_path = "C:/tomsamautobot"
+    if not os.path.exists(default_path):
+        os.makedirs(default_path)
+    ACTIONS_JSON_PATH = os.path.join(default_path, "actions.json")
 
 class ActionItem:
     def __init__(self, action_type, parameters):
@@ -7,12 +23,19 @@ class ActionItem:
     
     def __str__(self):
         return f"{self.action_type}: {', '.join([f'{k}={v}' for k, v in self.parameters.items()])}"
+    
+    def to_dict(self):
+        return {
+            "action_type": self.action_type.value if hasattr(self.action_type, "value") else self.action_type,
+            "parameters": self.parameters
+        }
 
 class ActionModel:
     def __init__(self):
         self.actions = []
         
     def add_action(self, action):
+        
         # Kiểm tra nếu action là một đối tượng có thuộc tính action_type
         if hasattr(action, "action_type"):
             # Nếu action_type đã là một enum
@@ -69,9 +92,31 @@ class ActionModel:
             return self.actions[index]
         return None
         
-    def add_sample_actions(self):
-        self.add_action(ActionItem(ActionType.TIM_HINH_ANH.value, {"path": "C:/images/button.png", "confidence": "0.8"}))
-        self.add_action(ActionItem(ActionType.DI_CHUYEN_CHUOT.value, {"x": "500", "y": "300", "duration": "0.5"}))
+    def add_sample_actions(self):        
+        # Thêm các actions mẫu
+        self.add_action(ActionItem(ActionType.TIM_HINH_ANH, {
+            "image_path": "C:/images/button.png", 
+            "confidence": "0.8",
+            "x": "0",
+            "y": "0",
+            "width": "100",
+            "height": "100",
+            "accuracy": "80",
+            "random_time": "0",
+            "double_click": False,
+            "random_skip": "0",
+            "variable": "",
+            "program": ""
+        }))
+    
+        self.add_action(ActionItem(ActionType.DI_CHUYEN_CHUOT, {
+            "x": "500", 
+            "y": "300", 
+            "duration": "0.5"
+        }))
+    
+        # Lưu ngay sau khi thêm sample actions
+        # self.save_actions()
 
     def reorder_action(self, old_index, new_index):
         """Di chuyển hành động từ vị trí cũ đến vị trí mới"""
@@ -83,7 +128,55 @@ class ActionModel:
     def save_actions(self):
         """Lưu danh sách hành động vào storage"""
         try:
-            with open(ACTIONS_JSON_PATH, 'w') as f:
+            # Đảm bảo thư mục tồn tại
+            directory = os.path.dirname(ACTIONS_JSON_PATH)
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+        
+            # Kiểm tra xem actions có phương thức to_dict không
+            if not hasattr(ActionItem, 'to_dict'):
+                # Nếu không, thêm phương thức to_dict vào lớp ActionItem
+                def to_dict(self):
+                    return {
+                        "action_type": self.action_type.value if hasattr(self.action_type, "value") else self.action_type,
+                        "parameters": self.parameters
+                    }
+                ActionItem.to_dict = to_dict
+        
+            # Lưu danh sách hành động vào file
+            with open(ACTIONS_JSON_PATH, 'w', encoding='utf-8') as f:
                 json.dump([a.to_dict() for a in self.actions], f, indent=2)
+        
+            print(f"Đã lưu hành động vào {ACTIONS_JSON_PATH}")
+            return True
         except Exception as e:
             print(f"Lỗi khi lưu hành động: {str(e)}")
+            return False
+        
+    def load_actions(self):
+        """Tải danh sách hành động từ storage"""
+        try:
+            if os.path.exists(ACTIONS_JSON_PATH):
+                with open(ACTIONS_JSON_PATH, 'r', encoding='utf-8') as f:
+                    actions_data = json.load(f)
+                    self.actions = []
+                    if actions_data:  # Nếu file có dữ liệu
+                        for action_data in actions_data:
+                            action_type = action_data.get("action_type")
+                            parameters = action_data.get("parameters", {})
+                            self.add_action(ActionItem(action_type, parameters))
+                        return True
+                    else:  # Nếu file trống (empty array)
+                        self.add_sample_actions()
+                        return True
+            else:
+                # Tạo file trống nếu không tồn tại và thêm sample actions
+                with open(ACTIONS_JSON_PATH, 'w', encoding='utf-8') as f:
+                    json.dump([], f)
+                self.add_sample_actions()
+                return True
+        except Exception as e:
+            print(f"Lỗi khi tải hành động: {str(e)}")
+            # Nếu có lỗi, vẫn thêm sample actions
+            self.add_sample_actions()
+            return False

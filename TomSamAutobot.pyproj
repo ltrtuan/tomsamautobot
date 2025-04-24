@@ -35,6 +35,10 @@
     <Compile Include="models\__init__.py" />
     <Compile Include="views\action_dialog_view.py" />
     <Compile Include="views\action_list_view.py" />
+    <Compile Include="views\action_params\base_params.py" />
+    <Compile Include="views\action_params\image_search_params.py" />
+    <Compile Include="views\action_params\mouse_move_params.py" />
+    <Compile Include="views\action_params\__init__.py" />
     <Compile Include="views\old_code_select_area.py" />
     <Compile Include="views\screen_area_selector.py" />
     <Compile Include="views\settings_dialog.py" />
@@ -45,6 +49,7 @@
     <Folder Include="controllers\" />
     <Folder Include="core\" />
     <Folder Include="views\" />
+    <Folder Include="views\action_params\" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in
