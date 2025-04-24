@@ -144,7 +144,7 @@ class ActionItemFrame(tk.Frame):
         action_type_display = action.action_type #ActionType.TIM_HINH_ANH
        
         if action_type_display == ActionType.TIM_HINH_ANH:
-            path = action.parameters.get('path', '')
+            path = action.parameters.get('image_path', '')
             accuracy = action.parameters.get('accuracy', '80')
         
             # Hiển thị tên file thay vì đường dẫn đầy đủ

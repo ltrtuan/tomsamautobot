@@ -95,7 +95,7 @@ class ActionModel:
     def add_sample_actions(self):        
         # Thêm các actions mẫu
         self.add_action(ActionItem(ActionType.TIM_HINH_ANH, {
-            "path": "C:/images/button.png", 
+            "image_path": "C:/images/button.png", 
             "confidence": "0.8",
             "x": "0",
             "y": "0",

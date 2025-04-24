@@ -28,7 +28,7 @@ class ImageSearchParams(BaseActionParams):
         
         # Label và textbox đường dẫn
         tk.Label(path_frame, text="Đường dẫn hình ảnh:", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT, padx=(0, 5))
-        self.variables["image_path_var"] = tk.StringVar(value=self.parameters.get("path", ""))
+        self.variables["image_path_var"] = tk.StringVar(value=self.parameters.get("image_path", ""))
         path_entry = ttk.Entry(path_frame, textvariable=self.variables["image_path_var"], width=40)
         path_entry.pack(side=tk.LEFT, padx=(0, 5), fill=tk.X, expand=True)
         

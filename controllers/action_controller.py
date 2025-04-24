@@ -51,6 +51,8 @@ class ActionController:
         # Xử lý kết quả sau khi dialog đóng
         if dialog.result:
             self.model.add_action(dialog.result)
+            # Thêm dòng này để lưu vào file
+            # self.model.save_actions()
             self.update_view()
 
 
@@ -73,6 +75,8 @@ class ActionController:
         # Xử lý kết quả sau khi dialog đóng
         if dialog.result:
             self.model.update_action(index, dialog.result)
+            # Thêm dòng này để lưu vào file
+            # self.model.save_actions()
             self.update_view()   
             
     def delete_action(self, index):
@@ -100,8 +104,8 @@ class ActionController:
             return None, None, None, None
         
         if dialog.is_edit and dialog.current_action.action_type == action_type_display:
-            parameters = dialog.get_all_parameters()
-        print(parameters)
+            parameters = dialog.current_action.parameters
+        
         # print(f"dialog.current_action.action_type: '{dialog.current_action.action_type}'")
         # print(f"action_type_display: '{action_type_display}'")
         # print(f"Biểu diễn chính xác của dialog.current_action.action_type: {repr(dialog.current_action.action_type)}")
@@ -184,7 +188,7 @@ class ActionController:
             except:
                 print("Could not deiconify dialog")
 
-    def select_program(self, dialog):
+    def browse_program(self, dialog):
         from tkinter import filedialog
         filename = filedialog.askopenfilename(
             title="Select Program",
@@ -208,7 +212,6 @@ class ActionController:
     
         # Lấy tất cả tham số từ đối tượng tham số hiện tại
         parameters = dialog.get_all_parameters()
-        
         if action_type == ActionType.TIM_HINH_ANH:           
             image_path = parameters.get("image_path", "")
             if not image_path or image_path.strip() == "":
@@ -255,7 +258,7 @@ class ActionController:
         else:
             dialog.show_message("Lỗi", f"Loại hành động không được hỗ trợ: {action_type_display}")
 
-        dialog.result = ActionItem(action_type_display, parameters)
+        dialog.result = ActionItem(action_type, parameters)
         dialog.destroy()
         
 
