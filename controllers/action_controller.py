@@ -92,10 +92,16 @@ class ActionController:
         action_type_display = dialog.action_type_var.get()
         
         parameters = None
-      
+        try:
+            # Chuyển đổi từ giá trị hiển thị sang đối tượng enum
+            action_type = ActionType.from_display_value(action_type_display)
+        except ValueError:
+            print(f"Lỗi khi chuyển đổi giá trị: {action_type_display}")
+            return None, None, None, None
+        
         if dialog.is_edit and dialog.current_action.action_type == action_type_display:
-            parameters = dialog.current_action.parameters
-            
+            parameters = dialog.get_all_parameters()
+        print(parameters)
         # print(f"dialog.current_action.action_type: '{dialog.current_action.action_type}'")
         # print(f"action_type_display: '{action_type_display}'")
         # print(f"Biểu diễn chính xác của dialog.current_action.action_type: {repr(dialog.current_action.action_type)}")
@@ -106,15 +112,31 @@ class ActionController:
         # Biểu diễn chính xác của dialog.current_action.action_type: <ActionType.TIM_HINH_ANH: 'Tìm Hình Ảnh'>
         # Biểu diễn chính xác của action_type_display: 'ActionType.TIM_HINH_ANH'
 
-        if action_type_display == ActionType.TIM_HINH_ANH:
-            browse_button, select_area_button, select_program_button, screenshot_button = dialog.create_image_search_params(parameters)
+        # if action_type_display == ActionType.TIM_HINH_ANH:
+        #     browse_button, select_area_button, select_program_button, screenshot_button = dialog.create_image_search_params(parameters)
+        #     browse_button.config(command=lambda: self.browse_image(dialog))
+        #     select_area_button.config(command=lambda: self.select_screen_area(dialog))
+        #     select_program_button.config(command=lambda: self.select_program(dialog))
+        #     screenshot_button.config(command=lambda: self.capture_screen_area(dialog))
+        # elif action_type_display == ActionType.DI_CHUYEN_CHUOT:
+        #     dialog.create_mouse_move_params(parameters)
+
+        #Sử dụng factory method để tạo tham số cho loại action
+        buttons = dialog.create_params_for_action_type(action_type, parameters)
+    
+        # Cấu hình các nút (nếu có)
+        browse_button, select_area_button, select_program_button, screenshot_button = buttons
+    
+        if browse_button:
             browse_button.config(command=lambda: self.browse_image(dialog))
+        if select_area_button:
             select_area_button.config(command=lambda: self.select_screen_area(dialog))
-            select_program_button.config(command=lambda: self.select_program(dialog))
+        if select_program_button:
+            select_program_button.config(command=lambda: self.browse_program(dialog))
+        if screenshot_button:
             screenshot_button.config(command=lambda: self.capture_screen_area(dialog))
-        elif action_type_display == ActionType.DI_CHUYEN_CHUOT:
-            dialog.create_mouse_move_params(parameters)
-       
+    
+        return buttons
 
     def browse_image(self, dialog):
         from tkinter import filedialog
@@ -126,7 +148,7 @@ class ActionController:
             )
         )
         if filename:
-            dialog.image_path_var.set(filename)    
+            dialog.set_parameter_value("image_path", filename)
         
     def select_screen_area(self, dialog):
         """Hiển thị trình chọn khu vực màn hình"""
@@ -138,10 +160,10 @@ class ActionController:
             def on_area_selected(x, y, width, height):
                 try:
                     # Cập nhật giá trị trong dialog
-                    dialog.x_var.set(str(int(x)))
-                    dialog.y_var.set(str(int(y)))
-                    dialog.width_var.set(str(int(width)))
-                    dialog.height_var.set(str(int(height)))
+                    dialog.set_parameter_value("x", str(int(x)))
+                    dialog.set_parameter_value("y", str(int(y)))
+                    dialog.set_parameter_value("width", str(int(width)))
+                    dialog.set_parameter_value("height", str(int(height)))
                     print(f"Đã chọn khu vực: x={x}, y={y}, width={width}, height={height}")
                 except Exception as e:
                     print(f"Error updating dialog values: {e}")
@@ -172,7 +194,7 @@ class ActionController:
             )
         )
         if filename:
-            dialog.program_var.set(filename)
+            dialog.set_parameter_value("program", filename)
 
     def on_dialog_save(self, dialog):
         print("on_dialog_save được gọi!")
@@ -184,51 +206,58 @@ class ActionController:
     
         action_type = ActionType.from_display_value(action_type_display)
     
-        if action_type == ActionType.TIM_HINH_ANH:
-            # Kiểm tra đường dẫn
-            path = dialog.image_path_var.get()
-            if not path:
+        # Lấy tất cả tham số từ đối tượng tham số hiện tại
+        parameters = dialog.get_all_parameters()
+        
+        if action_type == ActionType.TIM_HINH_ANH:           
+            image_path = parameters.get("image_path", "")
+            if not image_path or image_path.strip() == "":
                 dialog.show_message("Lỗi", "Vui lòng chọn một file hình ảnh")
                 return
         
             # Thu thập tất cả tham số
-            parameters = {
-                "path": path,
-                "x": dialog.x_var.get() or "0",
-                "y": dialog.y_var.get() or "0",
-                "width": dialog.width_var.get() or "0",
-                "height": dialog.height_var.get() or "0",
-                "accuracy": dialog.accuracy_var.get() or "80", 
-                "random_time": dialog.random_time_var.get() or "0",
-                "double_click": dialog.double_click_var.get(),
-                "random_skip": dialog.random_skip_var.get() or "0",
-                "variable": dialog.variable_var.get(),
-                "program": dialog.program_var.get(),
-                "break_conditions": []
-            }
+            # parameters = {
+            #     "path": path,
+            #     "x": dialog.x_var.get() or "0",
+            #     "y": dialog.y_var.get() or "0",
+            #     "width": dialog.width_var.get() or "0",
+            #     "height": dialog.height_var.get() or "0",
+            #     "accuracy": dialog.accuracy_var.get() or "80", 
+            #     "random_time": dialog.random_time_var.get() or "0",
+            #     "double_click": dialog.double_click_var.get(),
+            #     "random_skip": dialog.random_skip_var.get() or "0",
+            #     "variable": dialog.variable_var.get(),
+            #     "program": dialog.program_var.get(),
+            #     "break_conditions": []
+            # }
     
-            # Thu thập các điều kiện break
-            for condition in dialog.break_conditions:
-                if condition["variable_var"].get():  # Chỉ thêm nếu biến được chỉ định
-                    parameters["break_conditions"].append({
-                        "logical_op": condition["logical_op_var"].get(),
-                        "variable": condition["variable_var"].get(),
-                        "value": condition["value_var"].get()
-                    })
+            # # Thu thập các điều kiện break
+            # for condition in dialog.break_conditions:
+            #     if condition["variable_var"].get():  # Chỉ thêm nếu biến được chỉ định
+            #         parameters["break_conditions"].append({
+            #             "logical_op": condition["logical_op_var"].get(),
+            #             "variable": condition["variable_var"].get(),
+            #             "value": condition["value_var"].get()
+            #         })
             
-            dialog.result = ActionItem(action_type_display, parameters)
-            dialog.destroy()
+            # dialog.result = ActionItem(action_type_display, parameters)
+            # dialog.destroy()
         elif action_type == ActionType.DI_CHUYEN_CHUOT:
             # Thu thập tham số cho hành động di chuyển chuột
-            parameters = {
-                "x": dialog.x_var.get() or "0",
-                "y": dialog.y_var.get() or "0",
-                "duration": dialog.duration_var.get() or "0.5"
-            }
-            dialog.result = ActionItem(action_type_display, parameters)
-            dialog.destroy()
+            # parameters = {
+            #     "x": dialog.x_var.get() or "0",
+            #     "y": dialog.y_var.get() or "0",
+            #     "duration": dialog.duration_var.get() or "0.5"
+            # }
+            # dialog.result = ActionItem(action_type_display, parameters)
+            # dialog.destroy()
+            pass
         else:
             dialog.show_message("Lỗi", f"Loại hành động không được hỗ trợ: {action_type_display}")
+
+        dialog.result = ActionItem(action_type_display, parameters)
+        dialog.destroy()
+        
 
     def run_sequence(self):
         from models.image_action import ImageAction
@@ -285,10 +314,10 @@ class ActionController:
         def update_textboxes(x, y, width, height):
             """Cập nhật textbox với giá trị tọa độ"""
             try:
-                dialog.x_var.set(str(int(x)))
-                dialog.y_var.set(str(int(y)))
-                dialog.width_var.set(str(int(width)))
-                dialog.height_var.set(str(int(height)))
+                dialog.set_parameter_value("x", str(int(x)))
+                dialog.set_parameter_value("y", str(int(y)))
+                dialog.set_parameter_value("width", str(int(width)))
+                dialog.set_parameter_value("height", str(int(height)))
             except Exception as e:
                 print(f"Lỗi khi cập nhật giá trị textbox: {e}")
     
@@ -311,7 +340,7 @@ class ActionController:
                 screenshot.save(full_path)
             
                 # Cập nhật đường dẫn hình ảnh trong dialog
-                dialog.image_path_var.set(full_path)
+                dialog.set_parameter_value("image_path", full_path)
                 print(f"Đã lưu ảnh chụp tại: {full_path}")
             except Exception as e:
                 print(f"Lỗi khi chụp màn hình: {e}")
