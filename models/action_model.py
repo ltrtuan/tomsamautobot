@@ -7,8 +7,18 @@ import os
 # Kiểm tra và lấy giá trị FILE_PATH từ config.py
 try:
     from config import FILE_PATH
-    # Nếu FILE_PATH tồn tại, sử dụng nó để định nghĩa đường dẫn cho actions.json
-    ACTIONS_JSON_PATH = os.path.join(FILE_PATH, "actions.json")
+    # Kiểm tra FILE_PATH có tồn tại và không rỗng
+    if FILE_PATH and os.path.exists(FILE_PATH):
+        # Sử dụng FILE_PATH thay vì thư mục hiện tại
+        actions_path = os.path.join(FILE_PATH, "actions.json")
+        ACTIONS_JSON_PATH = actions_path
+    else:
+        # Sử dụng thư mục mặc định nếu FILE_PATH không hợp lệ
+        default_path = "C:/tomsamautobot"
+        if not os.path.exists(default_path):
+            os.makedirs(default_path)
+        actions_path = os.path.join(default_path, "actions.json")
+        ACTIONS_JSON_PATH = actions_path
 except (ImportError, AttributeError):
     # Nếu không tìm thấy FILE_PATH, tạo thư mục mặc định ở C:/tomsamautobot/
     default_path = "C:/tomsamautobot"
@@ -16,6 +26,8 @@ except (ImportError, AttributeError):
         os.makedirs(default_path)
     ACTIONS_JSON_PATH = os.path.join(default_path, "actions.json")
 
+
+                
 class ActionItem:
     def __init__(self, action_type, parameters):
         self.action_type = action_type
@@ -33,6 +45,7 @@ class ActionItem:
 class ActionModel:
     def __init__(self):
         self.actions = []
+        self.is_modified = False  # Thêm flag theo dõi thay đổi
         
     def add_action(self, action):
         
@@ -63,17 +76,20 @@ class ActionModel:
             action = ActionItem(action["action_type"], action.get("parameters", {}))
     
         self.actions.append(action)
+        self.is_modified = True  # Đánh dấu đã thay đổi
         return len(self.actions) - 1
         
     def update_action(self, index, action):
         if 0 <= index < len(self.actions):
             self.actions[index] = action
+            self.is_modified = True  # Đánh dấu đã thay đổi
             return True
         return False
         
     def delete_action(self, index):
         if 0 <= index < len(self.actions):
             del self.actions[index]
+            self.is_modified = True  # Đánh dấu đã thay đổi
             return True
         return False
         
@@ -81,6 +97,7 @@ class ActionModel:
         if 0 <= from_index < len(self.actions) and 0 <= to_index < len(self.actions):
             action = self.actions.pop(from_index)
             self.actions.insert(to_index, action)
+            self.is_modified = True  # Đánh dấu đã thay đổi
             return True
         return False
         
@@ -124,34 +141,21 @@ class ActionModel:
             action = self.actions.pop(old_index)
             self.actions.insert(new_index, action)
             # Có thể lưu lại nếu cần
+            self.is_modified = True  # Đánh dấu đã thay đổi
 
     def save_actions(self):
         """Lưu danh sách hành động vào storage"""
         try:
-            # Đảm bảo thư mục tồn tại
-            directory = os.path.dirname(ACTIONS_JSON_PATH)
-            if not os.path.exists(directory):
-                os.makedirs(directory)
-        
-            # Kiểm tra xem actions có phương thức to_dict không
-            if not hasattr(ActionItem, 'to_dict'):
-                # Nếu không, thêm phương thức to_dict vào lớp ActionItem
-                def to_dict(self):
-                    return {
-                        "action_type": self.action_type.value if hasattr(self.action_type, "value") else self.action_type,
-                        "parameters": self.parameters
-                    }
-                ActionItem.to_dict = to_dict
-        
-            # Lưu danh sách hành động vào file
+            # Phần còn lại giữ nguyên
             with open(ACTIONS_JSON_PATH, 'w', encoding='utf-8') as f:
                 json.dump([a.to_dict() for a in self.actions], f, indent=2)
-        
             print(f"Đã lưu hành động vào {ACTIONS_JSON_PATH}")
+            self.is_modified = False  # Reset flag sau khi lưu thành công
             return True
         except Exception as e:
             print(f"Lỗi khi lưu hành động: {str(e)}")
             return False
+
         
     def load_actions(self):
         """Tải danh sách hành động từ storage"""

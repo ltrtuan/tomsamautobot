@@ -17,6 +17,10 @@ class BaseActionParams:
         self.widgets = {}
         self.variables = {}
         self.break_conditions = []
+        
+    def create_params(self):
+        """Phương thức trừu tượng, cần được override bởi lớp con"""
+        return {}
     
     def create_common_params(self):
         """Create UI for common parameters shared by all actions"""

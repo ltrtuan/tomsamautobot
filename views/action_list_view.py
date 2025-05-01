@@ -539,6 +539,22 @@ class ActionListView(ttk.Frame):
             cursor="hand2"
         )
         self.run_button.pack(side=tk.RIGHT, padx=8, pady=4)  # Giảm padding
+        
+        # Nút Lưu hành động
+        self.save_button = tk.Button(
+            button_bar,
+            text="💾 Lưu",
+            bg=cfg.PRIMARY_COLOR,
+            fg="white",
+            font=("Segoe UI", 9),
+            padx=12,
+            pady=2,
+            relief=tk.FLAT,
+            activebackground=cfg.SECONDARY_COLOR,
+            activeforeground="white",
+            cursor="hand2"
+        )
+        self.save_button.pack(side=tk.RIGHT, padx=8, pady=4)
     
         # Thêm status bar - phong cách PAD
         status_bar = tk.Label(
@@ -557,6 +573,7 @@ class ActionListView(ttk.Frame):
         self.edit_callback = None
         self.delete_callback = None
         self.drag_callback = None
+        self.save_callback = None
             
     def update_listbox(self, actions):
         # Clear existing frames
@@ -639,12 +656,14 @@ class ActionListView(ttk.Frame):
     def ask_yes_no(self, title, message):
         return messagebox.askyesno(title, message)
             
-    def set_callbacks(self, add_callback, edit_callback, delete_callback, run_callback, drag_callback):
+    def set_callbacks(self, add_callback, edit_callback, delete_callback, run_callback, drag_callback, save_callback):
         self.add_button.config(command=add_callback)
         self.run_button.config(command=run_callback)
+        self.save_button.config(command=save_callback)
         self.edit_callback = edit_callback
         self.delete_callback = delete_callback
         self.drag_callback = drag_callback
+        self.save_callback = save_callback
 
     # Thêm phương thức mở dialog
     def open_settings(self):
