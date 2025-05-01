@@ -14,7 +14,7 @@ class ImageSearchParams(BaseActionParams):
             parameters: Dictionary containing parameters (if editing an action)
         """
         super().__init__(parent_frame, parameters)
-        self.region_button = None
+        self.select_area_button = None
         
     def create_params(self):
         """Create UI for image search parameters"""
@@ -59,7 +59,12 @@ class ImageSearchParams(BaseActionParams):
         # ========== PHẦN CHỌN CHƯƠNG TRÌNH ==========
         select_program_button = self.create_program_selector()
         
-        return browse_button, self.region_button, select_program_button, screenshot_button
+        return {
+            'browse_button': browse_button,
+            'select_area_button': self.select_area_button,
+            'select_program_button': select_program_button,
+            'screenshot_button': screenshot_button
+        }
     
     def create_region_section(self):
         """Create UI for search region selection"""
@@ -115,8 +120,8 @@ class ImageSearchParams(BaseActionParams):
         ).grid(row=1, column=3, padx=5, pady=2)
         
         # Nút chọn khu vực màn hình
-        self.region_button = ttk.Button(region_frame, text="Chọn khu vực màn hình")
-        self.region_button.pack(pady=10)
+        self.select_area_button = ttk.Button(region_frame, text="Chọn khu vực màn hình")
+        self.select_area_button.pack(pady=10)
     
     def create_accuracy_section(self):
         """Create UI for accuracy settings"""

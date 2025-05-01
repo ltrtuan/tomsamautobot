@@ -26,6 +26,7 @@
     <Compile Include="controllers\action_controller.py" />
     <Compile Include="controllers\__init__.py" />
     <Compile Include="core\interfaces.py" />
+    <Compile Include="login_window.py" />
     <Compile Include="main.py" />
     <Compile Include="models\action_model.py" />
     <Compile Include="models\global_variables.py" />

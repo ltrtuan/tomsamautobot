@@ -33,10 +33,11 @@ class MouseMoveParams(BaseActionParams):
         self.create_break_conditions()
         
         # ========== PHẦN CHỌN CHƯƠNG TRÌNH ==========
-        select_program_button = self.create_program_selector()
-        
-        # Return None for buttons not used in this action type
-        return None, None, select_program_button, None
+        select_program_button = self.create_program_selector()        
+       
+        return {            
+            'select_program_button': select_program_button
+        }
     
     def create_coordinate_inputs(self):
         """Create UI for mouse coordinates"""

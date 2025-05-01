@@ -21,12 +21,14 @@ class ActionController:
             self.edit_action,
             self.delete_action,
             self.run_sequence,
-            self.move_action
+            self.move_action,
+            model.save_actions
         )
         
         # Load sample data
-        self.model.add_sample_actions()
+        self.model.load_actions()
         self.update_view()
+        self.setup_close_handler()
         
     def update_view(self):
         self.view.update_listbox(self.model.get_all_actions())
@@ -116,29 +118,31 @@ class ActionController:
         # Biểu diễn chính xác của dialog.current_action.action_type: <ActionType.TIM_HINH_ANH: 'Tìm Hình Ảnh'>
         # Biểu diễn chính xác của action_type_display: 'ActionType.TIM_HINH_ANH'
 
-        # if action_type_display == ActionType.TIM_HINH_ANH:
-        #     browse_button, select_area_button, select_program_button, screenshot_button = dialog.create_image_search_params(parameters)
-        #     browse_button.config(command=lambda: self.browse_image(dialog))
-        #     select_area_button.config(command=lambda: self.select_screen_area(dialog))
-        #     select_program_button.config(command=lambda: self.select_program(dialog))
-        #     screenshot_button.config(command=lambda: self.capture_screen_area(dialog))
-        # elif action_type_display == ActionType.DI_CHUYEN_CHUOT:
-        #     dialog.create_mouse_move_params(parameters)
-
         #Sử dụng factory method để tạo tham số cho loại action
         buttons = dialog.create_params_for_action_type(action_type, parameters)
+        
+        # Mapping giữa button key và command tương ứng
+        button_commands = {
+            'browse_button': lambda: self.browse_image(dialog),
+            'select_area_button': lambda: self.select_screen_area(dialog),
+            'select_program_button': lambda: self.browse_program(dialog),
+            'screenshot_button': lambda: self.capture_screen_area(dialog)
+        }
     
-        # Cấu hình các nút (nếu có)
-        browse_button, select_area_button, select_program_button, screenshot_button = buttons
-    
-        if browse_button:
-            browse_button.config(command=lambda: self.browse_image(dialog))
-        if select_area_button:
-            select_area_button.config(command=lambda: self.select_screen_area(dialog))
-        if select_program_button:
-            select_program_button.config(command=lambda: self.browse_program(dialog))
-        if screenshot_button:
-            screenshot_button.config(command=lambda: self.capture_screen_area(dialog))
+        # Kiểm tra nếu buttons là tuple
+        # if isinstance(buttons, tuple):
+        #     # Gán các nút dựa vào vị trí trong tuple
+        #     button_keys = ['browse_button', 'select_area_button', 'select_program_button', 'screenshot_button']
+        #     for i, button in enumerate(buttons):
+        #         if i < len(button_keys) and button is not None:
+        #             key = button_keys[i]
+        #             if key in button_commands:
+        #                 button.config(command=button_commands[key])
+        # else:
+        # Nếu buttons là dictionary, xử lý bình thường
+        for button_key, button in buttons.items():
+            if button_key in button_commands:
+                button.config(command=button_commands[button_key])
     
         return buttons
 
@@ -263,12 +267,12 @@ class ActionController:
         
 
     def run_sequence(self):
+        
         from models.image_action import ImageAction
         from models.global_variables import GlobalVariables
     
         # Lấy danh sách hành động từ model
         actions = self.model.get_all_actions()
-    
         # Lấy đối tượng quản lý biến toàn cục
         variables = GlobalVariables()
     
@@ -299,16 +303,7 @@ class ActionController:
             # Thêm các loại hành động khác...
     
         # Hiển thị thông báo hoàn thành
-        self.view.show_message("Hoàn Thành", "Chuỗi hành động đã được thực hiện")
-
-    def on_reorder_actions(self, old_index, new_index):
-        """Cập nhật model khi kéo thả"""
-        # Di chuyển item trong danh sách actions
-        action = self.model.actions.pop(old_index)
-        self.model.actions.insert(new_index, action)
-    
-        # Lưu trạng thái (nếu cần)
-        self.model.save_actions()
+        self.view.show_message("Hoàn Thành", "Chuỗi hành động đã được thực hiện")    
         
     def capture_screen_area(self, dialog):
         """Hiển thị trình chọn khu vực màn hình và chụp ảnh khi bấm ESC"""
@@ -377,3 +372,23 @@ class ActionController:
         default_path = "C:\\tomsamautobot"
         os.makedirs(default_path, exist_ok=True)
         return default_path
+    
+    def check_unsaved_changes(self, callback_function):
+        """Kiểm tra thay đổi chưa lưu và hỏi người dùng trước khi tiếp tục"""
+        if self.model.is_modified:
+            result = self.view.ask_yes_no("Lưu thay đổi", "Bạn chưa lưu actions. Bạn có muốn lưu không?")
+            if result:  # Nếu người dùng chọn Yes
+                self.model.save_actions()
+        # Dù chọn Yes hay No, đều thực hiện callback
+        callback_function()
+
+    def setup_close_handler(self):
+        """Thiết lập xử lý khi đóng ứng dụng"""
+        self.view.master.protocol("WM_DELETE_WINDOW", self.on_close)
+
+    def on_close(self):
+        """Xử lý khi đóng ứng dụng"""
+        def close_app():
+            self.view.master.destroy()
+    
+        self.check_unsaved_changes(close_app)

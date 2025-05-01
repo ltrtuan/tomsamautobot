@@ -207,36 +207,17 @@ class ActionDialogView(tk.Toplevel):
         for widget in self.param_frame.winfo_children():
             widget.destroy()
     
+        buttons = {}  # Thay vì tuple, sử dụng dictionary
+        
         # Lấy lớp tham số phù hợp từ dictionary
         if action_type in self.param_classes:
             param_class = self.param_classes[action_type]
             # Khởi tạo đối tượng tham số
             self.current_params = param_class(self.param_frame, parameters)
             # Tạo UI và trả về các nút
-            return self.current_params.create_params()
+            buttons =  self.current_params.create_params()
     
-        return None, None, None, None
-
-        
-    # Thêm vào class ActionDialogView
-    # def get_parameter_value(self, param_name):
-    #     """Lấy giá trị của tham số từ class tham số hiện tại"""
-    #     action_type_display = self.action_type_var.get()
-    #     action_type = ActionType.from_display_value(action_type_display)
-    #     # Xác định class tham số dựa trên action_type
-    #     if action_type == ActionType.TIM_HINH_ANH:
-    #         if hasattr(self, 'image_params') and self.image_params:
-    #             for key, var in self.image_params.variables.items():
-    #                 if key.replace("_var", "") == param_name:
-    #                     return var.get()
-    #     elif action_type == ActionType.DI_CHUYEN_CHUOT:
-    #         if hasattr(self, 'mouse_params') and self.mouse_params:
-    #             for key, var in self.mouse_params.variables.items():
-    #                 if key.replace("_var", "") == param_name:
-    #                     return var.get()
-    
-    #     # Trả về None nếu không tìm thấy
-        return None
+        return buttons
     
     def set_parameter_value(self, param_name, value):
         """Set a parameter value in the current parameter object"""
@@ -262,16 +243,6 @@ class ActionDialogView(tk.Toplevel):
         if hasattr(self, 'current_params') and self.current_params:
             return self.current_params.get_parameters()
         return {}
-        
-    def create_image_search_params(self, parameters=None):
-        """Tạo UI cho tìm kiếm hình ảnh"""       
-        self.image_params = ImageSearchParams(self.param_frame, parameters)
-        return self.image_params.create_params()
-
-    def create_mouse_move_params(self, parameters=None):
-        """Tạo UI cho di chuyển chuột"""
-        self.mouse_params = MouseMoveParams(self.param_frame, parameters)
-        return self.mouse_params.create_params()
         
     def _update_duration(self, value):
         self.duration_var.set(f"{float(value):.1f}")
