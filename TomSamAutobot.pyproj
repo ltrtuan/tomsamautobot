@@ -23,6 +23,10 @@
   <ItemGroup>
     <Compile Include="config.py" />
     <Compile Include="constants.py" />
+    <Compile Include="controllers\actions\action_factory.py" />
+    <Compile Include="controllers\actions\base_action.py" />
+    <Compile Include="controllers\actions\image_search_action.py" />
+    <Compile Include="controllers\actions\mouse_move_action.py" />
     <Compile Include="controllers\action_controller.py" />
     <Compile Include="controllers\__init__.py" />
     <Compile Include="core\interfaces.py" />
@@ -46,6 +50,7 @@
     <Compile Include="views\__init__.py" />
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="controllers\actions\" />
     <Folder Include="models\" />
     <Folder Include="controllers\" />
     <Folder Include="core\" />

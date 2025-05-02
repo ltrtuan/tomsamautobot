@@ -68,60 +68,14 @@ class ImageSearchParams(BaseActionParams):
     
     def create_region_section(self):
         """Create UI for search region selection"""
-        region_frame = tk.LabelFrame(self.parent_frame, text="Khu vực tìm kiếm", bg=cfg.LIGHT_BG_COLOR, pady=10, padx=10)
-        region_frame.pack(fill=tk.X, pady=10)
-        
-        # Coordinates inputs
-        coords_frame = tk.Frame(region_frame, bg=cfg.LIGHT_BG_COLOR)
-        coords_frame.pack(fill=tk.X, pady=5)
-        
-        # X coordinate
-        tk.Label(coords_frame, text="X:", bg=cfg.LIGHT_BG_COLOR).grid(row=0, column=0, padx=5, pady=2)
-        self.variables["x_var"] = tk.StringVar(value=self.parameters.get("x", "0"))
-        ttk.Entry(
-            coords_frame, 
-            textvariable=self.variables["x_var"], 
-            width=6,
-            validate="key",
-            validatecommand=self.validate_int_cmd
-        ).grid(row=0, column=1, padx=5, pady=2)
-        
-        # Y coordinate
-        tk.Label(coords_frame, text="Y:", bg=cfg.LIGHT_BG_COLOR).grid(row=0, column=2, padx=5, pady=2)
-        self.variables["y_var"] = tk.StringVar(value=self.parameters.get("y", "0"))
-        ttk.Entry(
-            coords_frame, 
-            textvariable=self.variables["y_var"], 
-            width=6,
-            validate="key",
-            validatecommand=self.validate_int_cmd
-        ).grid(row=0, column=3, padx=5, pady=2)
-        
-        # Width
-        tk.Label(coords_frame, text="Width:", bg=cfg.LIGHT_BG_COLOR).grid(row=1, column=0, padx=5, pady=2)
-        self.variables["width_var"] = tk.StringVar(value=self.parameters.get("width", "0"))
-        ttk.Entry(
-            coords_frame, 
-            textvariable=self.variables["width_var"], 
-            width=6,
-            validate="key",
-            validatecommand=self.validate_int_cmd
-        ).grid(row=1, column=1, padx=5, pady=2)
-        
-        # Height
-        tk.Label(coords_frame, text="Height:", bg=cfg.LIGHT_BG_COLOR).grid(row=1, column=2, padx=5, pady=2)
-        self.variables["height_var"] = tk.StringVar(value=self.parameters.get("height", "0"))
-        ttk.Entry(
-            coords_frame, 
-            textvariable=self.variables["height_var"], 
-            width=6,
-            validate="key",
-            validatecommand=self.validate_int_cmd
-        ).grid(row=1, column=3, padx=5, pady=2)
-        
-        # Nút chọn khu vực màn hình
-        self.select_area_button = ttk.Button(region_frame, text="Chọn khu vực màn hình")
-        self.select_area_button.pack(pady=10)
+        region_result = self.create_region_inputs(
+            self.parent_frame, 
+            title="Khu vực tìm kiếm",
+            include_select_button=True
+        )
+    
+        # Lấy button từ dictionary kết quả
+        self.select_area_button = region_result['select_area_button']
     
     def create_accuracy_section(self):
         """Create UI for accuracy settings"""

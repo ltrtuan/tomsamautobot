@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import os
+import uuid
 
 # Định nghĩa đường dẫn lưu file - điều chỉnh theo cấu trúc dự án
 # Kiểm tra và lấy giá trị FILE_PATH từ config.py
@@ -29,7 +30,10 @@ except (ImportError, AttributeError):
 
                 
 class ActionItem:
+    
     def __init__(self, action_type, parameters):
+        # Hoặc dùng UUID để đảm bảo tính duy nhất toàn cục
+        self.id = str(uuid.uuid4())
         self.action_type = action_type
         self.parameters = parameters
     

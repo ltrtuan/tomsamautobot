@@ -22,7 +22,8 @@ class ActionController:
             self.delete_action,
             self.run_sequence,
             self.move_action,
-            model.save_actions
+            model.save_actions,
+            self.play_action
         )
         
         # Load sample data
@@ -85,7 +86,30 @@ class ActionController:
         if self.view.ask_yes_no("Xác nhận", "Bạn có chắc muốn xóa hành động này?"):
             self.model.delete_action(index)
             self.update_view()
-            
+    
+    def play_action(self, index):
+        """Thực thi một hành động cụ thể khi nút play được nhấn"""
+        # Lấy action dựa theo index
+        action = self.model.get_action(index)
+        
+        # Lấy action frame tương ứng
+        action_frame = self.view.action_frames[index] if index < len(self.view.action_frames) else None
+    
+        # Sử dụng factory để lấy handler phù hợp
+        from controllers.actions.action_factory import ActionFactory
+    
+        handler = ActionFactory.get_handler(self.root, action, self.view)
+    
+        if handler:
+            # Thiết lập action frame cho handler
+            handler.action_frame = action_frame
+            # Thực thi hành động
+            handler.play()
+        else:
+            # Hiển thị thông báo trên frame thay vì dialog
+            if action_frame:
+                action_frame.show_temporary_notification(f"Chức năng '{action.action_type}' chưa được hỗ trợ")        
+        
     def move_action(self, from_index, to_index):
         # Cập nhật model
         self.model.move_action(from_index, to_index)

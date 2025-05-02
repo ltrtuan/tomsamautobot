@@ -22,6 +22,84 @@ class BaseActionParams:
         """Phương thức trừu tượng, cần được override bởi lớp con"""
         return {}
     
+    def create_region_inputs(self, parent_frame, title="Khu vực", include_select_button=True):
+        """
+        Create a common UI for region selection with X, Y, Width, Height
+    
+        Args:
+            parent_frame: The frame to add the region section to
+            title: The title for the region frame
+            include_select_button: Whether to include a button to select the region
+        
+        Returns:
+            tuple: The region frame and the select area button (if created)
+        """
+        region_frame = tk.LabelFrame(parent_frame, text=title, bg=cfg.LIGHT_BG_COLOR, pady=10, padx=10)
+        region_frame.pack(fill=tk.X, pady=10)
+
+        # Coordinates inputs
+        coords_frame = tk.Frame(region_frame, bg=cfg.LIGHT_BG_COLOR)
+        coords_frame.pack(fill=tk.X, pady=5)
+
+        # X coordinate
+        tk.Label(coords_frame, text="X:", bg=cfg.LIGHT_BG_COLOR).grid(row=0, column=0, padx=5, pady=2)
+        x_var = tk.StringVar(value=self.parameters.get("x", "0"))
+        self.variables["x_var"] = x_var
+        ttk.Entry(
+            coords_frame,
+            textvariable=x_var,
+            width=6,
+            validate="key",
+            validatecommand=self.validate_int_cmd
+        ).grid(row=0, column=1, padx=5, pady=2)
+
+        # Y coordinate
+        tk.Label(coords_frame, text="Y:", bg=cfg.LIGHT_BG_COLOR).grid(row=0, column=2, padx=5, pady=2)
+        y_var = tk.StringVar(value=self.parameters.get("y", "0"))
+        self.variables["y_var"] = y_var
+        ttk.Entry(
+            coords_frame,
+            textvariable=y_var,
+            width=6,
+            validate="key",
+            validatecommand=self.validate_int_cmd
+        ).grid(row=0, column=3, padx=5, pady=2)
+
+        # Width
+        tk.Label(coords_frame, text="Width:", bg=cfg.LIGHT_BG_COLOR).grid(row=1, column=0, padx=5, pady=2)
+        width_var = tk.StringVar(value=self.parameters.get("width", "0"))
+        self.variables["width_var"] = width_var
+        ttk.Entry(
+            coords_frame,
+            textvariable=width_var,
+            width=6,
+            validate="key",
+            validatecommand=self.validate_int_cmd
+        ).grid(row=1, column=1, padx=5, pady=2)
+
+        # Height
+        tk.Label(coords_frame, text="Height:", bg=cfg.LIGHT_BG_COLOR).grid(row=1, column=2, padx=5, pady=2)
+        height_var = tk.StringVar(value=self.parameters.get("height", "0"))
+        self.variables["height_var"] = height_var
+        ttk.Entry(
+            coords_frame,
+            textvariable=height_var,
+            width=6,
+            validate="key",
+            validatecommand=self.validate_int_cmd
+        ).grid(row=1, column=3, padx=5, pady=2)
+
+        select_area_button = None
+        # Nút chọn khu vực màn hình (optional)
+        if include_select_button:
+            select_area_button = ttk.Button(region_frame, text="Chọn khu vực màn hình")
+            select_area_button.pack(pady=10)
+
+        return {
+            'region_frame': region_frame,
+            'select_area_button': select_area_button
+        }
+    
     def create_common_params(self):
         """Create UI for common parameters shared by all actions"""
         # ========== PHẦN THAM SỐ CHUNG ==========
