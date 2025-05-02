@@ -164,8 +164,8 @@ class ActionDialogView(tk.Toplevel):
         self.wait_visibility()
     
         # Set position relative to parent
-        window_width = 500  # Tăng kích thước một chút
-        window_height = 600
+        window_width = 700  # Tăng kích thước một chút
+        window_height = 700
     
         # Calculate center position
         x = (parent.winfo_rootx() + (parent.winfo_width() / 2)) - (window_width / 2)

@@ -26,6 +26,17 @@ class BaseAction(ABC):
     
     def play(self):
         """Thực thi hành động"""
+        # Kiểm tra Random Skip Action
+        random_skip = int(self.params.get("random_skip", "0"))
+        if random_skip > 0:
+            import random
+            skip_value = random.randint(0, random_skip)
+            if skip_value == 0:
+                # Hiển thị thông báo action bị bỏ qua
+                if hasattr(self, 'action_frame') and self.action_frame:
+                    self.action_frame.show_temporary_notification("Hành động được bỏ qua (Random Skip)")
+                return  # Thoát khỏi phương thức, không thực thi action
+        
         # Lấy action frame từ ActionListView
         for frame in self.view.action_frames:
             if frame.action.id == self.action.id:  # Cần thêm id vào ActionItem để so sánh
@@ -41,7 +52,7 @@ class BaseAction(ABC):
         self.prepare_play()
         
         # Trì hoãn thực thi
-        self.delay_execution(2)
+        self.delay_execution()
     
     def prepare_play(self):
         """
@@ -54,8 +65,25 @@ class BaseAction(ABC):
         """Hiển thị thông báo qua view"""
         self.view.show_message(title, message)
     
-    def delay_execution(self, seconds=2):
-        """Trì hoãn thực thi"""
+    def delay_execution(self, default_delay=2):
+        
+        """Trì hoãn thực thi dựa trên tham số random_time"""
+        # Lấy giá trị random_time từ tham số
+        random_time = int(self.params.get("random_time", "0"))
+    
+        # Nếu random_time > 0, tạo delay ngẫu nhiên từ 1 đến random_time
+        if random_time > 0:
+            import random
+            delay_seconds = random.randint(1, random_time)
+        
+            if hasattr(self, 'action_frame') and self.action_frame:
+                self.action_frame.show_temporary_notification(
+                    f"Chờ {delay_seconds} giây trước khi thực thi..."
+                )
+        else:
+            # Nếu random_time = 0, sử dụng default_delay
+            delay_seconds = default_delay
+            
         def execute_after_delay():
             self.setup_esc_handler()  # Thiết lập bắt sự kiện ESC
             self.execute_action()
@@ -64,7 +92,7 @@ class BaseAction(ABC):
         
         self.is_running = True  # Đánh dấu đang chạy
         self.stop_requested = False  # Reset cờ dừng
-        self.root.after(int(seconds * 1000), execute_after_delay)
+        self.root.after(int(delay_seconds * 1000), execute_after_delay)
         
     def setup_esc_handler(self):
         """Thiết lập xử lý phím ESC"""
@@ -128,6 +156,28 @@ class BaseAction(ABC):
         try:
             HumanLikeMovement.move_cursor(current_x, current_y, target_x, target_y, speed_factor, 
                                         stop_check=self.should_stop)
+            
+            # Kiểm tra xem có yêu cầu double click không
+            if self.params.get("double_click", False):
+                # Thêm delay ngẫu nhiên từ 1-3 giây trước khi double click
+                if hasattr(self, 'action_frame') and self.action_frame:
+                    delay = random.uniform(1, 3)
+                    self.action_frame.show_temporary_notification(
+                        f"Chờ {delay:.1f} giây trước khi double click..."
+                    )
+                else:
+                    delay = random.uniform(1, 3)
+                
+                # Thực hiện delay
+                time.sleep(delay)
+            
+                # Kiểm tra lại nếu người dùng đã yêu cầu dừng trong thời gian delay
+                if self.should_stop():
+                    return target_x, target_y
+                
+                # Thực hiện double click
+                pyautogui.doubleClick()
+                
             return target_x, target_y
         except:
             return None, None  # Trả về None nếu di chuyển bị dừng

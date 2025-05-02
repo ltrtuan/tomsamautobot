@@ -701,12 +701,29 @@ class ActionListView(ttk.Frame):
             pady=1
         )
         status_bar.pack(fill=tk.X, side=tk.BOTTOM)
+        
+        # Nút Xóa tất cả (đặt bên trái)
+        self.delete_all_button = tk.Button(
+            button_bar,
+            text="🗑️ Xóa tất cả",
+            bg=cfg.DANGER_COLOR,
+            fg="white",
+            font=("Segoe UI", 9),
+            padx=12,
+            pady=2,
+            relief=tk.FLAT,
+            activebackground="#c62828",  # Màu đỏ đậm khi hover
+            activeforeground="white",
+            cursor="hand2"
+        )
+        self.delete_all_button.pack(side=tk.LEFT, padx=8, pady=4)
     
         # Callbacks
         self.edit_callback = None
         self.delete_callback = None
         self.drag_callback = None
         self.save_callback = None
+        self.delete_all_callback = None
             
     def update_listbox(self, actions):
         # Clear existing frames
@@ -765,7 +782,13 @@ class ActionListView(ttk.Frame):
         # Force update
         self.update_idletasks()
         
-
+    def _on_delete_all(self):
+        """Xử lý khi nút Xóa tất cả được nhấn"""
+        # Hiện hộp thoại xác nhận
+        if self.ask_yes_no("Xác nhận", "Bạn có đồng ý xóa tất cả actions không?"):
+            # Nếu người dùng đồng ý (Yes), gọi callback
+            if self.delete_all_callback:
+                self.delete_all_callback()
     
     # Thêm phương thức mới để cập nhật số thứ tự cho tất cả các frame
     def update_all_indices(self):
@@ -798,15 +821,19 @@ class ActionListView(ttk.Frame):
     def ask_yes_no(self, title, message):
         return messagebox.askyesno(title, message)
             
-    def set_callbacks(self, add_callback, edit_callback, delete_callback, run_callback, drag_callback, save_callback, play_action_callback=None):
+    def set_callbacks(self, add_callback, edit_callback, delete_callback, run_callback, drag_callback, save_callback, play_action_callback=None, delete_all_callback=None):
         self.add_button.config(command=add_callback)
         self.run_button.config(command=run_callback)
         self.save_button.config(command=save_callback)
+        self.delete_all_button.config(command=self._on_delete_all)
+
         self.edit_callback = edit_callback
         self.delete_callback = delete_callback
         self.drag_callback = drag_callback
         self.save_callback = save_callback
         self.play_action_callback = play_action_callback  # Callback cho nút Play
+        self.delete_all_callback = delete_all_callback  # Callback cho nút Xóa tất cả
+    
     # Thêm phương thức mở dialog
     def open_settings(self):
         SettingsDialog(self.master)

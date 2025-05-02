@@ -23,7 +23,8 @@ class ActionController:
             self.run_sequence,
             self.move_action,
             model.save_actions,
-            self.play_action
+            self.play_action,
+            self.delete_all_actions  # Thêm callback cho nút Xóa tất cả
         )
         
         # Load sample data
@@ -108,7 +109,15 @@ class ActionController:
         else:
             # Hiển thị thông báo trên frame thay vì dialog
             if action_frame:
-                action_frame.show_temporary_notification(f"Chức năng '{action.action_type}' chưa được hỗ trợ")        
+                action_frame.show_temporary_notification(f"Chức năng '{action.action_type}' chưa được hỗ trợ")
+                
+    def delete_all_actions(self):
+        """Xóa tất cả các hành động"""
+        # Gọi phương thức xóa trong model
+        self.model.delete_all_actions()
+    
+        # Cập nhật view sau khi xóa
+        self.update_view()
         
     def move_action(self, from_index, to_index):
         # Cập nhật model

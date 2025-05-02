@@ -114,6 +114,7 @@ class BaseActionParams:
         self.variables["random_time_var"] = tk.StringVar(value=self.parameters.get("random_time", "0"))
         ttk.Entry(
             random_time_frame, 
+            text="(Giây chờ ngẫu nhiên từ 1 đến X. Nếu = 0, hành động xảy ra ngay lập tức)",
             textvariable=self.variables["random_time_var"], 
             width=6,
             validate="key",
@@ -138,11 +139,20 @@ class BaseActionParams:
         tk.Label(skip_frame, text="Random Skip Action:", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT, padx=5)
         self.variables["random_skip_var"] = tk.StringVar(value=self.parameters.get("random_skip", "0"))
         ttk.Entry(
-            skip_frame, 
+            skip_frame,
             textvariable=self.variables["random_skip_var"], 
             width=6,
             validate="key",
             validatecommand=self.validate_int_cmd
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # Thêm label mô tả sau trường nhập liệu
+        tk.Label(
+            skip_frame,
+            text="(Random từ 0 đến X. Nếu = 0, hành động sẽ bị bỏ qua)",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 8, "italic"),
+            fg="#555555"
         ).pack(side=tk.LEFT, padx=5)
 
         # Variable

@@ -97,6 +97,12 @@ class ActionModel:
             return True
         return False
         
+    def delete_all_actions(self):
+        """Xóa tất cả các hành động"""
+        self.actions = []  # Xóa toàn bộ danh sách actions
+        self.is_modified = True  # Đánh dấu đã thay đổi
+        return True
+
     def move_action(self, from_index, to_index):
         if 0 <= from_index < len(self.actions) and 0 <= to_index < len(self.actions):
             action = self.actions.pop(from_index)
