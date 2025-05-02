@@ -61,14 +61,6 @@ class MouseMoveParams(BaseActionParams):
         )
         description.pack(pady=5)
 
-        # Tip - coordinates can be captured
-        tip = ttk.Label(
-            region_frame,
-            text="Tip: Sử dụng tọa độ tương đối so với vị trí hiện tại của chuột\nví dụ: +100, -50",
-            background=cfg.LIGHT_BG_COLOR,
-            foreground="blue"
-        )
-        tip.pack(pady=5)
     
     def create_duration_slider(self):
         """Create UI for movement duration slider"""
@@ -81,7 +73,7 @@ class MouseMoveParams(BaseActionParams):
         
         tk.Label(slider_frame, text="Thời gian (giây):", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT, padx=5)
         
-        self.variables["duration_var"] = tk.StringVar(value=self.parameters.get("duration", "0.5"))
+        self.variables["duration_var"] = tk.StringVar(value=self.parameters.get("duration", "0.1"))
         duration_scale = ttk.Scale(
             slider_frame,
             from_=0.0,
