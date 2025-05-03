@@ -4,6 +4,7 @@ import config as cfg
 from constants import ActionType
 from views.action_params.image_search_params import ImageSearchParams
 from views.action_params.mouse_move_params import MouseMoveParams
+from views.action_params.tao_bien_params import TaoBienParams
 
 class ActionDialogView(tk.Toplevel):
     def __init__(self, parent, action=None):
@@ -185,6 +186,7 @@ class ActionDialogView(tk.Toplevel):
         self.param_classes = {
             ActionType.TIM_HINH_ANH: ImageSearchParams,
             ActionType.DI_CHUYEN_CHUOT: MouseMoveParams,
+            ActionType.TAO_BIEN: TaoBienParams,
             # Thêm các action khác trong tương lai
         }
 

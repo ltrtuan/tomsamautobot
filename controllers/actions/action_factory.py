@@ -1,6 +1,7 @@
 ﻿from constants import ActionType
 from controllers.actions.mouse_move_action import MouseMoveAction
 from controllers.actions.image_search_action import ImageSearchAction
+from controllers.actions.tao_bien_action import TaoBienAction
 
 class ActionFactory:
     """Factory tạo ra play handler dựa vào loại action"""
@@ -24,6 +25,8 @@ class ActionFactory:
             return MouseMoveAction(root, action, view)
         elif action_type == ActionType.TIM_HINH_ANH:
             return ImageSearchAction(root, action, view)
+        elif action_type == ActionType.TAO_BIEN:
+            return TaoBienAction(root, action, view)
         else:
             # Trả về None nếu không tìm thấy handler phù hợp
             return None

@@ -27,6 +27,7 @@
     <Compile Include="controllers\actions\base_action.py" />
     <Compile Include="controllers\actions\image_search_action.py" />
     <Compile Include="controllers\actions\mouse_move_action.py" />
+    <Compile Include="controllers\actions\tao_bien_action.py" />
     <Compile Include="controllers\action_controller.py" />
     <Compile Include="controllers\__init__.py" />
     <Compile Include="core\interfaces.py" />
@@ -43,6 +44,7 @@
     <Compile Include="views\action_params\base_params.py" />
     <Compile Include="views\action_params\image_search_params.py" />
     <Compile Include="views\action_params\mouse_move_params.py" />
+    <Compile Include="views\action_params\tao_bien_params.py" />
     <Compile Include="views\action_params\__init__.py" />
     <Compile Include="views\old_code_select_area.py" />
     <Compile Include="views\screen_area_selector.py" />

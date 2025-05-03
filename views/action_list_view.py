@@ -257,6 +257,7 @@ class ActionItemFrame(tk.Frame):
         playable_actions = [
             "DI_CHUYEN_CHUOT",
             "TIM_HINH_ANH",
+            "TAO_BIEN",
             # Thêm các action khác nếu cần
         ]
     
@@ -298,6 +299,8 @@ class ActionItemFrame(tk.Frame):
             return f"Hình: {filename} | Độ chính xác: {accuracy_display}"
         elif action_type_display == ActionType.DI_CHUYEN_CHUOT:
             return f"X: {action.parameters.get('x', '')}, Y: {action.parameters.get('y', '')} | Thời gian: {action.parameters.get('duration', '')}s"
+        elif action_type_display == ActionType.TAO_BIEN:
+            return f"Variable {action.parameters.get('variable', '')} = {action.parameters.get('result_action', '')}"
         return ""
         
     def _on_hover(self, event):

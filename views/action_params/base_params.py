@@ -100,7 +100,7 @@ class BaseActionParams:
             'select_area_button': select_area_button
         }
     
-    def create_common_params(self):
+    def create_common_params(self, show_result_action=False):
         """Create UI for common parameters shared by all actions"""
         # ========== PHẦN THAM SỐ CHUNG ==========
         common_frame = tk.LabelFrame(self.parent_frame, text="Tham số chung", bg=cfg.LIGHT_BG_COLOR, pady=10, padx=10)
@@ -162,6 +162,15 @@ class BaseActionParams:
         tk.Label(variable_frame, text="Variable:", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT, padx=5)
         self.variables["variable_var"] = tk.StringVar(value=self.parameters.get("variable", ""))
         ttk.Entry(variable_frame, textvariable=self.variables["variable_var"], width=15).pack(side=tk.LEFT, padx=5)
+        
+        # Thêm result_action nếu cần
+        if show_result_action:
+            result_frame = tk.Frame(common_frame, bg=cfg.LIGHT_BG_COLOR)
+            result_frame.pack(fill=tk.X, pady=5)
+            tk.Label(result_frame, text="Kết quả action:", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT, padx=5)
+            self.variables["result_action_var"] = tk.StringVar(value=self.parameters.get("result_action", ""))
+            ttk.Entry(result_frame, textvariable=self.variables["result_action_var"], width=30).pack(side=tk.LEFT, padx=5)
+
 
         return common_frame
     
@@ -185,70 +194,89 @@ class BaseActionParams:
         """Create UI for break conditions"""
         break_frame = tk.LabelFrame(self.parent_frame, text="Break action If", bg=cfg.LIGHT_BG_COLOR, pady=10, padx=10)
         break_frame.pack(fill=tk.X, pady=10)
-        
+
         self.break_conditions = []
-        
+    
+        # Tạo frame container riêng cho conditions
+        self.conditions_container = tk.Frame(break_frame, bg=cfg.LIGHT_BG_COLOR)
+        self.conditions_container.pack(fill=tk.X)
+
         # Load existing conditions or add a default empty one
         if "break_conditions" in self.parameters and self.parameters["break_conditions"]:
             for condition in self.parameters["break_conditions"]:
-                self.add_break_condition(break_frame, condition)
+                self.add_break_condition(self.conditions_container, condition)
         else:
-            self.add_break_condition(break_frame)
-        
-        # Button to add more conditions
-        add_condition_button = ttk.Button(
-            break_frame, 
-            text="Add Condition", 
-            command=lambda: self.add_break_condition(break_frame)
+            self.add_break_condition(self.conditions_container)
+
+        # Button to add more conditions - tách riêng khỏi container
+        self.add_condition_button = ttk.Button(
+            break_frame,
+            text="Add Condition",
+            command=lambda: self.add_break_condition(self.conditions_container)
         )
-        add_condition_button.pack(pady=5)
-        
+        self.add_condition_button.pack(pady=5)
+
         return break_frame
     
     def add_break_condition(self, parent_frame, condition=None):
         """Add a break condition row to the UI"""
         condition_frame = tk.Frame(parent_frame, bg=cfg.LIGHT_BG_COLOR)
         condition_frame.pack(fill=tk.X, pady=5)
-        
-        # Logical operator
-        logical_op_var = tk.StringVar(value=condition.get("logical_op", "AND") if condition else "AND")
-        logical_op_combo = ttk.Combobox(condition_frame, values=["AND", "OR"], textvariable=logical_op_var, width=5)
-        logical_op_combo.pack(side=tk.LEFT, padx=5)
-        
+    
+        # Kiểm tra có phải dòng đầu tiên không
+        is_first_row = len(self.break_conditions) == 0
+    
         # Variable
         var_frame = tk.Frame(condition_frame, bg=cfg.LIGHT_BG_COLOR)
         var_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
-        
-        tk.Label(var_frame, text="Variable:", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT)
+        tk.Label(var_frame, text="Variable:", bg=cfg.LIGHT_BG_COLOR, width=8, anchor="w").pack(side=tk.LEFT)
         variable_var = tk.StringVar(value=condition.get("variable", "") if condition else "")
         ttk.Entry(var_frame, textvariable=variable_var, width=10).pack(side=tk.LEFT, padx=5)
-        
+    
         # Value
         val_frame = tk.Frame(condition_frame, bg=cfg.LIGHT_BG_COLOR)
         val_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
-        
-        tk.Label(val_frame, text="Value:", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT)
+        tk.Label(val_frame, text="Value:", bg=cfg.LIGHT_BG_COLOR, width=6, anchor="w").pack(side=tk.LEFT)
         value_var = tk.StringVar(value=condition.get("value", "") if condition else "")
         ttk.Entry(val_frame, textvariable=value_var, width=10).pack(side=tk.LEFT, padx=5)
-        
-        # Remove button
-        remove_button = ttk.Button(
-            condition_frame, 
-            text="X", 
-            command=lambda: self.remove_break_condition(condition_frame, condition_dict)
-        )
-        remove_button.pack(side=tk.RIGHT, padx=5)
-        
+    
+        # Remove button - chỉ cho dòng không phải dòng đầu tiên
+        remove_button = None
+        if not is_first_row:
+            remove_button = ttk.Button(
+                condition_frame,
+                text="X",
+                command=lambda: self.remove_break_condition(condition_frame, condition_dict)
+            )
+            remove_button.pack(side=tk.RIGHT, padx=5)
+    
+        # Logical operator đặt ở cuối dòng
+        logical_op_var = tk.StringVar(value=condition.get("logical_op", "AND") if condition else "AND")
+        logical_op_combo = None
+    
+        if not is_first_row:
+            # Thêm combobox AND/OR cho các dòng không phải dòng đầu tiên
+            logical_op_combo = ttk.Combobox(condition_frame, values=["AND", "OR"], 
+                                            textvariable=logical_op_var, width=5)
+            logical_op_combo.pack(side=tk.RIGHT, padx=5)
+        else:
+            # Thêm spacer để giữ căn chỉnh cho dòng đầu tiên
+            spacer = tk.Label(condition_frame, width=5, bg=cfg.LIGHT_BG_COLOR)
+            spacer.pack(side=tk.RIGHT, padx=5)
+    
         # Store condition variables in a dictionary
         condition_dict = {
             "frame": condition_frame,
             "logical_op_var": logical_op_var,
+            "logical_op_combo": logical_op_combo,
             "variable_var": variable_var,
-            "value_var": value_var
+            "value_var": value_var,
+            "remove_button": remove_button
         }
-        
+    
         self.break_conditions.append(condition_dict)
         return condition_dict
+
     
     def remove_break_condition(self, frame, condition_dict):
         """Remove a break condition from the UI"""
@@ -302,8 +330,8 @@ class BaseActionParams:
         # Collect break conditions
         break_conditions = []
         for condition in self.break_conditions:
-            var_value = condition["variable_var"].get()
-            if var_value:  # Only add if variable is specified
+            var_value = condition["variable_var"].get()            
+            if var_value and var_value.strip() != '':  # Kiểm tra chặt chẽ hơn
                 break_conditions.append({
                     "logical_op": condition["logical_op_var"].get(),
                     "variable": var_value,

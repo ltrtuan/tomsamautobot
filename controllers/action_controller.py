@@ -254,47 +254,9 @@ class ActionController:
             if not image_path or image_path.strip() == "":
                 dialog.show_message("Lỗi", "Vui lòng chọn một file hình ảnh")
                 return
-        
-            # Thu thập tất cả tham số
-            # parameters = {
-            #     "path": path,
-            #     "x": dialog.x_var.get() or "0",
-            #     "y": dialog.y_var.get() or "0",
-            #     "width": dialog.width_var.get() or "0",
-            #     "height": dialog.height_var.get() or "0",
-            #     "accuracy": dialog.accuracy_var.get() or "80", 
-            #     "random_time": dialog.random_time_var.get() or "0",
-            #     "double_click": dialog.double_click_var.get(),
-            #     "random_skip": dialog.random_skip_var.get() or "0",
-            #     "variable": dialog.variable_var.get(),
-            #     "program": dialog.program_var.get(),
-            #     "break_conditions": []
-            # }
-    
-            # # Thu thập các điều kiện break
-            # for condition in dialog.break_conditions:
-            #     if condition["variable_var"].get():  # Chỉ thêm nếu biến được chỉ định
-            #         parameters["break_conditions"].append({
-            #             "logical_op": condition["logical_op_var"].get(),
-            #             "variable": condition["variable_var"].get(),
-            #             "value": condition["value_var"].get()
-            #         })
-            
-            # dialog.result = ActionItem(action_type_display, parameters)
-            # dialog.destroy()
-        elif action_type == ActionType.DI_CHUYEN_CHUOT:
-            # Thu thập tham số cho hành động di chuyển chuột
-            # parameters = {
-            #     "x": dialog.x_var.get() or "0",
-            #     "y": dialog.y_var.get() or "0",
-            #     "duration": dialog.duration_var.get() or "0.5"
-            # }
-            # dialog.result = ActionItem(action_type_display, parameters)
-            # dialog.destroy()
-            pass
         else:
-            dialog.show_message("Lỗi", f"Loại hành động không được hỗ trợ: {action_type_display}")
-
+            pass
+        print(parameters)
         dialog.result = ActionItem(action_type, parameters)
         dialog.destroy()
         
