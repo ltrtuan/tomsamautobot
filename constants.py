@@ -4,6 +4,7 @@ from enum import Enum, auto
 class ActionType(str, Enum):
     TIM_HINH_ANH = "Tìm Hình Ảnh"
     DI_CHUYEN_CHUOT = "Di Chuyển Chuột"
+    TAO_BIEN = "Tạo Biến"
     
     @classmethod
     def get_display_values(cls):

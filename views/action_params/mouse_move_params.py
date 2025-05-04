@@ -36,56 +36,31 @@ class MouseMoveParams(BaseActionParams):
         select_program_button = self.create_program_selector()        
        
         return {            
-            'select_program_button': select_program_button
+            'select_program_button': select_program_button,
+            'select_area_button': self.select_area_button
         }
     
     def create_coordinate_inputs(self):
-        """Create UI for mouse coordinates"""
-        coords_frame = tk.LabelFrame(self.parent_frame, text="Tọa độ di chuyển chuột", bg=cfg.LIGHT_BG_COLOR, pady=10, padx=10)
-        coords_frame.pack(fill=tk.X, pady=10)
-        
-        # Coordinates grid
-        grid_frame = tk.Frame(coords_frame, bg=cfg.LIGHT_BG_COLOR)
-        grid_frame.pack(fill=tk.X, pady=5)
-        
-        # X coordinate
-        tk.Label(grid_frame, text="X:", bg=cfg.LIGHT_BG_COLOR).grid(row=0, column=0, padx=5, pady=5)
-        self.variables["x_var"] = tk.StringVar(value=self.parameters.get("x", "0"))
-        ttk.Entry(
-            grid_frame, 
-            textvariable=self.variables["x_var"], 
-            width=8,
-            validate="key",
-            validatecommand=self.validate_int_cmd
-        ).grid(row=0, column=1, padx=5, pady=5)
-        
-        # Y coordinate
-        tk.Label(grid_frame, text="Y:", bg=cfg.LIGHT_BG_COLOR).grid(row=0, column=2, padx=5, pady=5)
-        self.variables["y_var"] = tk.StringVar(value=self.parameters.get("y", "0"))
-        ttk.Entry(
-            grid_frame, 
-            textvariable=self.variables["y_var"], 
-            width=8,
-            validate="key",
-            validatecommand=self.validate_int_cmd
-        ).grid(row=0, column=3, padx=5, pady=5)
-        
+        """Create UI for mouse coordinates using the common region inputs"""
+        self.select_area_button = None
+        region_result = self.create_region_inputs(
+            self.parent_frame, 
+            title="Tọa độ di chuyển chuột",
+            include_select_button=True
+        )
+    
+        # Lấy các thành phần từ dictionary kết quả
+        region_frame = region_result['region_frame']
+        self.select_area_button = region_result['select_area_button']
+    
         # Description
         description = ttk.Label(
-            coords_frame,
+            region_frame,
             text="Tọa độ là vị trí trên màn hình nơi chuột sẽ di chuyển đến",
             background=cfg.LIGHT_BG_COLOR
         )
         description.pack(pady=5)
-        
-        # Tip - coordinates can be captured
-        tip = ttk.Label(
-            coords_frame,
-            text="Tip: Sử dụng tọa độ tương đối so với vị trí hiện tại của chuột\nví dụ: +100, -50",
-            background=cfg.LIGHT_BG_COLOR, 
-            foreground="blue"
-        )
-        tip.pack(pady=5)
+
     
     def create_duration_slider(self):
         """Create UI for movement duration slider"""
@@ -98,7 +73,7 @@ class MouseMoveParams(BaseActionParams):
         
         tk.Label(slider_frame, text="Thời gian (giây):", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT, padx=5)
         
-        self.variables["duration_var"] = tk.StringVar(value=self.parameters.get("duration", "0.5"))
+        self.variables["duration_var"] = tk.StringVar(value=self.parameters.get("duration", "0.1"))
         duration_scale = ttk.Scale(
             slider_frame,
             from_=0.0,

@@ -18,3 +18,7 @@ class GlobalVariables(VariableManagerInterface):
 
     def get_all(self):
         return self.variables.copy()
+    
+    def exists(self, name):
+        """Kiểm tra xem biến có tồn tại không"""
+        return name in self.variables

@@ -22,7 +22,9 @@ class ActionController:
             self.delete_action,
             self.run_sequence,
             self.move_action,
-            model.save_actions
+            model.save_actions,
+            self.play_action,
+            self.delete_all_actions  # Thêm callback cho nút Xóa tất cả
         )
         
         # Load sample data
@@ -85,7 +87,38 @@ class ActionController:
         if self.view.ask_yes_no("Xác nhận", "Bạn có chắc muốn xóa hành động này?"):
             self.model.delete_action(index)
             self.update_view()
-            
+    
+    def play_action(self, index):
+        """Thực thi một hành động cụ thể khi nút play được nhấn"""
+        # Lấy action dựa theo index
+        action = self.model.get_action(index)
+        
+        # Lấy action frame tương ứng
+        action_frame = self.view.action_frames[index] if index < len(self.view.action_frames) else None
+    
+        # Sử dụng factory để lấy handler phù hợp
+        from controllers.actions.action_factory import ActionFactory
+    
+        handler = ActionFactory.get_handler(self.root, action, self.view)
+    
+        if handler:
+            # Thiết lập action frame cho handler
+            handler.action_frame = action_frame
+            # Thực thi hành động
+            handler.play()
+        else:
+            # Hiển thị thông báo trên frame thay vì dialog
+            if action_frame:
+                action_frame.show_temporary_notification(f"Chức năng '{action.action_type}' chưa được hỗ trợ")
+                
+    def delete_all_actions(self):
+        """Xóa tất cả các hành động"""
+        # Gọi phương thức xóa trong model
+        self.model.delete_all_actions()
+    
+        # Cập nhật view sau khi xóa
+        self.update_view()
+        
     def move_action(self, from_index, to_index):
         # Cập nhật model
         self.model.move_action(from_index, to_index)
@@ -221,47 +254,9 @@ class ActionController:
             if not image_path or image_path.strip() == "":
                 dialog.show_message("Lỗi", "Vui lòng chọn một file hình ảnh")
                 return
-        
-            # Thu thập tất cả tham số
-            # parameters = {
-            #     "path": path,
-            #     "x": dialog.x_var.get() or "0",
-            #     "y": dialog.y_var.get() or "0",
-            #     "width": dialog.width_var.get() or "0",
-            #     "height": dialog.height_var.get() or "0",
-            #     "accuracy": dialog.accuracy_var.get() or "80", 
-            #     "random_time": dialog.random_time_var.get() or "0",
-            #     "double_click": dialog.double_click_var.get(),
-            #     "random_skip": dialog.random_skip_var.get() or "0",
-            #     "variable": dialog.variable_var.get(),
-            #     "program": dialog.program_var.get(),
-            #     "break_conditions": []
-            # }
-    
-            # # Thu thập các điều kiện break
-            # for condition in dialog.break_conditions:
-            #     if condition["variable_var"].get():  # Chỉ thêm nếu biến được chỉ định
-            #         parameters["break_conditions"].append({
-            #             "logical_op": condition["logical_op_var"].get(),
-            #             "variable": condition["variable_var"].get(),
-            #             "value": condition["value_var"].get()
-            #         })
-            
-            # dialog.result = ActionItem(action_type_display, parameters)
-            # dialog.destroy()
-        elif action_type == ActionType.DI_CHUYEN_CHUOT:
-            # Thu thập tham số cho hành động di chuyển chuột
-            # parameters = {
-            #     "x": dialog.x_var.get() or "0",
-            #     "y": dialog.y_var.get() or "0",
-            #     "duration": dialog.duration_var.get() or "0.5"
-            # }
-            # dialog.result = ActionItem(action_type_display, parameters)
-            # dialog.destroy()
-            pass
         else:
-            dialog.show_message("Lỗi", f"Loại hành động không được hỗ trợ: {action_type_display}")
-
+            pass
+        print(parameters)
         dialog.result = ActionItem(action_type, parameters)
         dialog.destroy()
         

@@ -109,6 +109,29 @@ class ActionItemFrame(tk.Frame):
         )
         self.edit_button.pack(side=tk.LEFT, padx=(0, 2))
         
+        # Nút Play với icon
+        self.play_button = tk.Button(
+            button_frame,
+            text="▶️",
+            bg=cfg.LIGHT_BG_COLOR,
+            fg=cfg.SUCCESS_COLOR,
+            padx=3,
+            pady=0,
+            font=("Segoe UI", 9),
+            relief=tk.FLAT,
+            bd=0,
+            cursor="hand2",
+            activebackground=cfg.HOVER_COLOR
+        )
+        self.play_button.pack(side=tk.LEFT, padx=(0, 2))
+
+        # Thêm thuộc tính để lưu trạng thái hiển thị của nút
+        self.is_playable = self.check_action_playable()
+
+        # Ẩn/hiện nút Play dựa trên loại action
+        if not self.is_playable:
+            self.play_button.pack_forget()
+        
         # Nút xóa nhỏ gọn với icon
         self.delete_button = tk.Button(
             button_frame, 
@@ -125,6 +148,23 @@ class ActionItemFrame(tk.Frame):
         )
         self.delete_button.pack(side=tk.LEFT)
         
+        # Label cho thông báo tạm thời (ẩn mặc định)
+        self.notification_label = tk.Label(
+            self,
+            text="",
+            font=("Segoe UI", 9, "italic"),
+            bg=cfg.LIGHT_BG_COLOR,
+            fg="#4CAF50",  # Màu xanh lá
+            padx=5,
+            pady=2
+        )
+        # Không hiển thị mặc định
+        # self.notification_label.grid(row=2, column=1, sticky=tk.W)
+    
+        # Biến lưu trữ các timeout IDs
+        self.notification_timeouts = []
+    
+        
         # Binding sự kiện hover
         self.bind("<Enter>", self._on_hover)
         self.bind("<Leave>", self._on_leave)
@@ -134,7 +174,101 @@ class ActionItemFrame(tk.Frame):
         self.drag_handle.bind("<B1-Motion>", self.on_drag_motion)
         self.drag_handle.bind("<ButtonRelease-1>", self.on_drag_end)
         
-     # Thêm phương thức mới để cập nhật số thứ tự
+    
+    # Thêm phương thức hiển thị thông báo và fade out
+    def show_temporary_notification(self, message, duration=3000):
+        """Hiển thị thông báo tạm thời có hiệu ứng fade out
+    
+        Args:
+            message: Nội dung thông báo
+            duration: Thời gian hiển thị (milliseconds) trước khi bắt đầu fade out
+        """
+        # Hủy các timeout hiện có nếu có
+        self.clear_notification_timeouts()
+    
+        # Cấu hình thông báo
+        self.notification_label.config(text=message, fg="#4CAF50")
+    
+        # Hiển thị thông báo
+        self.notification_label.grid(row=2, column=1, sticky=tk.W)
+        self.notification_label.update_idletasks()
+    
+        # Lên lịch fade out
+        fadeout_steps = 10  # Số bước làm mờ dần
+        fadeout_duration = 1000  # Tổng thời gian fade (milliseconds)
+        step_delay = fadeout_duration // fadeout_steps
+    
+        # Tạo timeout để bắt đầu quá trình fade sau duration
+        timeout_id = self.after(duration, 
+                               lambda: self.start_fadeout(fadeout_steps, step_delay))
+        self.notification_timeouts.append(timeout_id)
+
+    def start_fadeout(self, steps, delay):
+        """Bắt đầu quá trình fade out"""
+        # Tạo màu fade từ xanh lá (#4CAF50) sang màu nền
+        current_color = "#4CAF50"  # Màu bắt đầu - xanh lá
+    
+        for i in range(1, steps + 1):
+            # Tính toán màu cho bước này (giảm dần độ đậm)
+            opacity = 1.0 - (i / steps)
+        
+            # Lên lịch thay đổi màu
+            timeout_id = self.after(i * delay, 
+                                   lambda op=opacity: self.update_notification_opacity(op))
+            self.notification_timeouts.append(timeout_id)
+    
+        # Lên lịch ẩn label sau khi hoàn tất fade
+        final_timeout = self.after((steps + 1) * delay, self.hide_notification)
+        self.notification_timeouts.append(final_timeout)
+
+    def update_notification_opacity(self, opacity):
+        """Cập nhật độ trong suốt của thông báo"""
+        if opacity <= 0:
+            self.hide_notification()
+            return
+    
+        # Tính toán màu RGB dựa trên opacity
+        r = int(76 + (self.winfo_rgb(cfg.LIGHT_BG_COLOR)[0]/256 - 76) * (1 - opacity))
+        g = int(175 + (self.winfo_rgb(cfg.LIGHT_BG_COLOR)[1]/256 - 175) * (1 - opacity))
+        b = int(80 + (self.winfo_rgb(cfg.LIGHT_BG_COLOR)[2]/256 - 80) * (1 - opacity))
+    
+        # Chuyển đổi thành mã hex
+        color = f'#{r:02x}{g:02x}{b:02x}'
+        self.notification_label.config(fg=color)
+
+    def hide_notification(self):
+        """Ẩn thông báo"""
+        self.notification_label.grid_forget()
+
+    def clear_notification_timeouts(self):
+        """Hủy tất cả các timeout hiện có"""
+        for timeout_id in self.notification_timeouts:
+            try:
+                self.after_cancel(timeout_id)
+            except:
+                pass
+        self.notification_timeouts = []
+    
+
+    def check_action_playable(self):
+        """Kiểm tra xem action có hỗ trợ chạy riêng lẻ hay không"""
+        # Danh sách các loại action có thể chạy riêng lẻ
+        # Có thể điều chỉnh danh sách này tùy theo yêu cầu
+        playable_actions = [
+            "DI_CHUYEN_CHUOT",
+            "TIM_HINH_ANH",
+            "TAO_BIEN",
+            # Thêm các action khác nếu cần
+        ]
+    
+        # Kiểm tra loại action hiện tại
+        action_type = self.action.action_type
+    
+        # Trả về True nếu action nằm trong danh sách playable
+        return any(action_type == ActionType.__dict__.get(action_name) 
+                    for action_name in playable_actions)
+
+    # Thêm phương thức mới để cập nhật số thứ tự
     def update_index(self, new_index):
         self.index = new_index
         self.index_label.config(text=f"{new_index}.")    
@@ -165,6 +299,8 @@ class ActionItemFrame(tk.Frame):
             return f"Hình: {filename} | Độ chính xác: {accuracy_display}"
         elif action_type_display == ActionType.DI_CHUYEN_CHUOT:
             return f"X: {action.parameters.get('x', '')}, Y: {action.parameters.get('y', '')} | Thời gian: {action.parameters.get('duration', '')}s"
+        elif action_type_display == ActionType.TAO_BIEN:
+            return f"Variable {action.parameters.get('variable', '')} = {action.parameters.get('result_action', '')}"
         return ""
         
     def _on_hover(self, event):
@@ -568,12 +704,29 @@ class ActionListView(ttk.Frame):
             pady=1
         )
         status_bar.pack(fill=tk.X, side=tk.BOTTOM)
+        
+        # Nút Xóa tất cả (đặt bên trái)
+        self.delete_all_button = tk.Button(
+            button_bar,
+            text="🗑️ Xóa tất cả",
+            bg=cfg.DANGER_COLOR,
+            fg="white",
+            font=("Segoe UI", 9),
+            padx=12,
+            pady=2,
+            relief=tk.FLAT,
+            activebackground="#c62828",  # Màu đỏ đậm khi hover
+            activeforeground="white",
+            cursor="hand2"
+        )
+        self.delete_all_button.pack(side=tk.LEFT, padx=8, pady=4)
     
         # Callbacks
         self.edit_callback = None
         self.delete_callback = None
         self.drag_callback = None
         self.save_callback = None
+        self.delete_all_callback = None
             
     def update_listbox(self, actions):
         # Clear existing frames
@@ -590,6 +743,8 @@ class ActionListView(ttk.Frame):
             frame.on_reorder_callback = self._on_reorder
             frame.edit_button.config(command=lambda idx=i: self._on_edit(idx))
             frame.delete_button.config(command=lambda idx=i: self._on_delete(idx))
+            # Thêm callback cho nút Play (mặc định là hàm rỗng)
+            frame.play_button.config(command=lambda idx=i: self._on_play_action(idx))
             
             self.action_frames.append(frame)
         
@@ -630,7 +785,13 @@ class ActionListView(ttk.Frame):
         # Force update
         self.update_idletasks()
         
-
+    def _on_delete_all(self):
+        """Xử lý khi nút Xóa tất cả được nhấn"""
+        # Hiện hộp thoại xác nhận
+        if self.ask_yes_no("Xác nhận", "Bạn có đồng ý xóa tất cả actions không?"):
+            # Nếu người dùng đồng ý (Yes), gọi callback
+            if self.delete_all_callback:
+                self.delete_all_callback()
     
     # Thêm phương thức mới để cập nhật số thứ tự cho tất cả các frame
     def update_all_indices(self):
@@ -644,6 +805,13 @@ class ActionListView(ttk.Frame):
     def _on_delete(self, index):
         if self.delete_callback:
             self.delete_callback(index)
+            
+    def _on_play_action(self, index):
+        """Hàm xử lý khi nút Play được nhấn"""
+        # Gọi callback nếu đã được thiết lập
+        if hasattr(self, 'play_action_callback') and self.play_action_callback:
+            self.play_action_callback(index)
+        # Nếu không có callback thì đây sẽ là hàm rỗng
         
     def get_selected_index(self):
         # Since we're not tracking selection in this implementation,
@@ -656,15 +824,19 @@ class ActionListView(ttk.Frame):
     def ask_yes_no(self, title, message):
         return messagebox.askyesno(title, message)
             
-    def set_callbacks(self, add_callback, edit_callback, delete_callback, run_callback, drag_callback, save_callback):
+    def set_callbacks(self, add_callback, edit_callback, delete_callback, run_callback, drag_callback, save_callback, play_action_callback=None, delete_all_callback=None):
         self.add_button.config(command=add_callback)
         self.run_button.config(command=run_callback)
         self.save_button.config(command=save_callback)
+        self.delete_all_button.config(command=self._on_delete_all)
+
         self.edit_callback = edit_callback
         self.delete_callback = delete_callback
         self.drag_callback = drag_callback
         self.save_callback = save_callback
-
+        self.play_action_callback = play_action_callback  # Callback cho nút Play
+        self.delete_all_callback = delete_all_callback  # Callback cho nút Xóa tất cả
+    
     # Thêm phương thức mở dialog
     def open_settings(self):
         SettingsDialog(self.master)

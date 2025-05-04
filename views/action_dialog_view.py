@@ -4,6 +4,7 @@ import config as cfg
 from constants import ActionType
 from views.action_params.image_search_params import ImageSearchParams
 from views.action_params.mouse_move_params import MouseMoveParams
+from views.action_params.tao_bien_params import TaoBienParams
 
 class ActionDialogView(tk.Toplevel):
     def __init__(self, parent, action=None):
@@ -164,8 +165,8 @@ class ActionDialogView(tk.Toplevel):
         self.wait_visibility()
     
         # Set position relative to parent
-        window_width = 500  # Tăng kích thước một chút
-        window_height = 600
+        window_width = 700  # Tăng kích thước một chút
+        window_height = 700
     
         # Calculate center position
         x = (parent.winfo_rootx() + (parent.winfo_width() / 2)) - (window_width / 2)
@@ -185,6 +186,7 @@ class ActionDialogView(tk.Toplevel):
         self.param_classes = {
             ActionType.TIM_HINH_ANH: ImageSearchParams,
             ActionType.DI_CHUYEN_CHUOT: MouseMoveParams,
+            ActionType.TAO_BIEN: TaoBienParams,
             # Thêm các action khác trong tương lai
         }
 
