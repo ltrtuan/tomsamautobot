@@ -36,7 +36,6 @@
     <Compile Include="models\action_model.py" />
     <Compile Include="models\global_variables.py" />
     <Compile Include="models\human_like_movement.py" />
-    <Compile Include="models\image_action.py" />
     <Compile Include="models\image_search.py" />
     <Compile Include="models\__init__.py" />
     <Compile Include="views\action_dialog_view.py" />

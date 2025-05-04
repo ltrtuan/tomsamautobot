@@ -263,7 +263,6 @@ class ActionController:
 
     def run_sequence(self):
         
-        from models.image_action import ImageAction
         from models.global_variables import GlobalVariables
     
         # Lấy danh sách hành động từ model
@@ -281,19 +280,6 @@ class ActionController:
         
             print(f"Đang thực hiện hành động {i+1}: {action_type}")
         
-            if action_type == "Tìm Hình Ảnh":
-                # Khởi tạo và thực thi hành động tìm hình ảnh
-                image_action = ImageAction(parameters)
-                result = image_action.execute()
-            
-                if not result:
-                    print(f"Hành động {i+1}: Tìm hình ảnh thất bại hoặc điều kiện dừng được đáp ứng")
-                else:
-                    print(f"Hành động {i+1}: Tìm hình ảnh thành công")
-                
-            elif action_type == "Di Chuyển Chuột":
-                # Xử lý hành động di chuyển chuột
-                print(f"Hành động {i+1}: Di chuyển chuột (chưa được triển khai)")
             
             # Thêm các loại hành động khác...
     
