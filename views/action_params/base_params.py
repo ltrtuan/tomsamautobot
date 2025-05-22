@@ -36,6 +36,18 @@ class BaseActionParams:
         """
         region_frame = tk.LabelFrame(parent_frame, text=title, bg=cfg.LIGHT_BG_COLOR, pady=10, padx=10)
         region_frame.pack(fill=tk.X, pady=10)
+        
+        # Thêm checkbox Fullscreen
+        fullscreen_frame = tk.Frame(region_frame, bg=cfg.LIGHT_BG_COLOR)
+        fullscreen_frame.pack(fill=tk.X, pady=5)
+    
+        self.variables["fullscreen_var"] = tk.BooleanVar(value=self.parameters.get("fullscreen", False))
+        fullscreen_checkbox = ttk.Checkbutton(
+            fullscreen_frame, 
+            text="Fullscreen",
+            variable=self.variables["fullscreen_var"]
+        )
+        fullscreen_checkbox.pack(side=tk.LEFT, padx=5)
 
         # Coordinates inputs
         coords_frame = tk.Frame(region_frame, bg=cfg.LIGHT_BG_COLOR)
@@ -120,6 +132,29 @@ class BaseActionParams:
             validate="key",
             validatecommand=self.validate_int_cmd
         ).pack(side=tk.LEFT, padx=5)
+        
+        # Repeat Random
+        repeat_frame = tk.Frame(common_frame, bg=cfg.LIGHT_BG_COLOR)
+        repeat_frame.pack(fill=tk.X, pady=5)
+        tk.Label(repeat_frame, text="Repeat Random:", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT, padx=5)
+        self.variables["repeat_random_var"] = tk.StringVar(value=self.parameters.get("repeat_random", "0"))
+        ttk.Entry(
+            repeat_frame,
+            textvariable=self.variables["repeat_random_var"],
+            width=6,
+            validate="key",
+            validatecommand=self.validate_int_cmd
+        ).pack(side=tk.LEFT, padx=5)
+
+        # Thêm label mô tả sau trường nhập liệu
+        tk.Label(
+            repeat_frame,
+            text="(Random từ 0 đến X lần. Nếu = 0, action chỉ chạy 1 lần)",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 8, "italic"),
+            fg="#555555"
+        ).pack(side=tk.LEFT, padx=5)
+
 
         # Double Click
         click_frame = tk.Frame(common_frame, bg=cfg.LIGHT_BG_COLOR)
@@ -130,6 +165,14 @@ class BaseActionParams:
             click_frame, 
             text="Double Click", 
             variable=self.variables["double_click_var"]
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # Thêm checkbox Is Clickable
+        self.variables["is_clickable_var"] = tk.BooleanVar(value=self.parameters.get("is_clickable", False))
+        ttk.Checkbutton(
+            click_frame,
+            text="Is Clickable",
+            variable=self.variables["is_clickable_var"]
         ).pack(side=tk.LEFT, padx=5)
 
         # Random Skip Action

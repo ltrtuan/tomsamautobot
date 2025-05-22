@@ -5,6 +5,9 @@ class ActionType(str, Enum):
     TIM_HINH_ANH = "Tìm Hình Ảnh"
     DI_CHUYEN_CHUOT = "Di Chuyển Chuột"
     TAO_BIEN = "Tạo Biến"
+    IF_CONDITION = "If condition"
+    ELSE_IF_CONDITION = "Else if condition"
+    END_IF_CONDITION = "End If condition"
     
     @classmethod
     def get_display_values(cls):

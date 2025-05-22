@@ -2,12 +2,15 @@
 from controllers.actions.mouse_move_action import MouseMoveAction
 from controllers.actions.image_search_action import ImageSearchAction
 from controllers.actions.tao_bien_action import TaoBienAction
+from controllers.actions.if_condition_action import IfConditionAction
+from controllers.actions.else_if_condition_action import ElseIfConditionAction
+from controllers.actions.end_if_condition_action import EndIfConditionAction
 
 class ActionFactory:
     """Factory tạo ra play handler dựa vào loại action"""
     
     @staticmethod
-    def get_handler(root, action, view):
+    def get_handler(root, action, view, model, controller):
         """
         Trả về handler phù hợp với loại action
         
@@ -22,11 +25,17 @@ class ActionFactory:
         action_type = action.action_type
         
         if action_type == ActionType.DI_CHUYEN_CHUOT:
-            return MouseMoveAction(root, action, view)
+            return MouseMoveAction(root, action, view, model, controller)
         elif action_type == ActionType.TIM_HINH_ANH:
-            return ImageSearchAction(root, action, view)
+            return ImageSearchAction(root, action, view, model, controller)
         elif action_type == ActionType.TAO_BIEN:
-            return TaoBienAction(root, action, view)
+            return TaoBienAction(root, action, view, model, controller)
+        elif action_type == ActionType.IF_CONDITION:
+            return IfConditionAction(root, action, view, model, controller)
+        elif action_type == ActionType.ELSE_IF_CONDITION:
+            return ElseIfConditionAction(root, action, view, model, controller)
+        elif action_type == ActionType.END_IF_CONDITION:
+            return EndIfConditionAction(root, action, view, model, controller)
         else:
             # Trả về None nếu không tìm thấy handler phù hợp
             return None

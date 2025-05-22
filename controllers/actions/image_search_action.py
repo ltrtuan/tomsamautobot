@@ -4,20 +4,15 @@ from models.image_search import ImageSearcher
 import os
 
 class ImageSearchAction(BaseAction):
-    """Handler để thực thi hành động tìm hình ảnh"""
+    """Handler để thực thi hành động tìm hình ảnh"""    
     
     def prepare_play(self):
-        """Thực thi hành động tìm hình ảnh"""
-        pass
-    
-    def execute_action(self):
         """Thực hiện tìm hình ảnh sau khi trì hoãn"""
         # Lấy các tham số cần thiết
         image_path = self.params.get("image_path", "")
-        x = int(float(self.params.get("x", 0)))
-        y = int(float(self.params.get("y", 0)))
-        width = int(float(self.params.get("width", 0)))
-        height = int(float(self.params.get("height", 0)))
+        # Lấy thông tin vùng quét sử dụng phương thức từ BaseAction
+        region = self.get_region()
+        x, y, width, height = region
         accuracy = int(self.params.get("accuracy", 80))
         
         # Kiểm tra nếu không có đường dẫn hình ảnh hoặc file không tồn tại
