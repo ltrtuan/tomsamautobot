@@ -78,7 +78,11 @@ class BaseAction(ABC):
 
         # Đánh dấu condition đã được đánh giá và là true
         self.condition_evaluated = True
-
+        
+        # Kiểm tra nếu đã được thực thi rồi thì skip
+        if hasattr(self, '_already_executed') and self._already_executed:
+            return self._cached_result
+    
         final_result = None  # Lưu kết quả cuối cùng
         for i in range(repeat_count):
             # Hook cho các lớp con có thể thêm logic trước khi thực thi
@@ -90,10 +94,19 @@ class BaseAction(ABC):
             if self.stop_requested:
                 return final_result  # Exit loop if stop requested
 
+        # Đánh dấu đã thực thi và cache kết quả
+        self._already_executed = True
+        self._cached_result = final_result
+    
         return final_result  # Return SAU KHI hoàn thành vòng lặp
 
 
-
+    def reset_execution_state(self):
+        """Reset execution state để có thể chạy lại"""
+        if hasattr(self, '_already_executed'):
+            delattr(self, '_already_executed')
+        if hasattr(self, '_cached_result'):
+            delattr(self, '_cached_result')
     
     
     def prepare_play(self):
@@ -481,121 +494,3 @@ class BaseAction(ABC):
             
                 # Tăng chỉ số
                 next_index += 1
-
-        def _execute_condition_block(self, condition_id):
-            """Thực thi các action trong khối điều kiện"""
-            from controllers.actions.action_factory import ActionFactory
-            from constants import ActionType
-            from models.global_variables import GlobalVariables
-            
-            all_actions = self.model.get_all_actions()
-            current_index = next((i for i, a in enumerate(all_actions) if a.id == self.action.id), -1)
-            if current_index < 0:
-                return
-    
-            # Lấy cấp độ lồng hiện tại
-            globals_var = GlobalVariables()
-            current_level = globals_var.get("__condition_stack_size", 0) - 1
-    
-            # Debug thông tin
-            if hasattr(self, 'action_frame') and self.action_frame:
-                self.action_frame.show_temporary_notification(
-                    f"Thực thi khối IF-{condition_id[:8]} (cấp {current_level})"
-                )
-    
-            # Biến theo dõi số lượng IF/ELSE_IF/END_IF đã gặp
-            block_level = 0
-    
-            # Duyệt và thực thi các action trong khối
-            i = current_index + 1
-            while i < len(all_actions):
-                action = all_actions[i]
-        
-                # Kiểm tra loại action để điều chỉnh block_level
-                if action.action_type == ActionType.IF_CONDITION:
-                    block_level += 1
-                elif action.action_type == ActionType.ELSE_IF_CONDITION:
-                    if block_level == 0:
-                        # Gặp ELSE IF cùng cấp, dừng lại vì IF đã đúng
-                        break
-                elif action.action_type == ActionType.END_IF_CONDITION:
-                    if block_level == 0:
-                        # Đã tìm thấy END IF của IF hiện tại
-                        break
-                    block_level -= 1
-        
-                # Chỉ thực thi action nếu đang ở trong khối điều kiện (block_level >= 0)
-                if block_level >= 0:
-                    # Lấy handler và thực thi
-                    handler = ActionFactory.get_handler(
-                        self.controller.root, action, self.view, self.model, self.controller
-                    )
-            
-                    if handler:
-                        # Thiết lập action frame
-                        action_frame = next((f for f in self.view.action_frames
-                                           if f.action.id == action.id), None)
-                        if action_frame:
-                            handler.action_frame = action_frame
-                            action_frame.show_temporary_notification(
-                                f"Đang thực thi trong IF-{condition_id[:8]}"
-                            )
-                
-                        # Thực thi action với xử lý đặc biệt cho IF lồng
-                        if action.action_type == ActionType.IF_CONDITION:
-                            # QUAN TRỌNG: Thêm thuộc tính để theo dõi
-                            handler.parent_condition_id = condition_id
-                            # Thực thi IF lồng
-                            result = handler.play()
-                    
-                            # THÊM: Kiểm tra nếu condition bị skip do should_break_action
-                            if hasattr(handler, 'condition_evaluated') and handler.condition_evaluated == False:
-                                # IF đã bị bỏ qua do điều kiện sai
-                                if action_frame:
-                                    action_frame.show_temporary_notification(
-                                        f"IF lồng điều kiện sai, nhảy đến cuối khối"
-                                    )
-                        
-                                # Tìm đến END_IF tương ứng và nhảy qua
-                                inner_level = block_level
-                                for j in range(i + 1, len(all_actions)):
-                                    inner_action = all_actions[j]
-                                    if inner_action.action_type == ActionType.IF_CONDITION:
-                                        inner_level += 1
-                                    elif inner_action.action_type == ActionType.END_IF_CONDITION:
-                                        inner_level -= 1
-                                        if inner_level < block_level:
-                                            i = j  # Nhảy đến END_IF
-                                            break
-                                # Bỏ qua phần còn lại của vòng lặp hiện tại
-                                continue
-                    
-                            if result:  # IF lồng sai
-                                # QUAN TRỌNG: Gọi _find_matching_else_if khi IF lồng sai
-                                handler._find_matching_else_if(condition_id)
-                        
-                                # Nhảy đến END_IF của IF lồng
-                                inner_level = block_level
-                                for j in range(i + 1, len(all_actions)):
-                                    inner_action = all_actions[j]
-                                    if inner_action.action_type == ActionType.IF_CONDITION:
-                                        inner_level += 1
-                                    elif inner_action.action_type == ActionType.END_IF_CONDITION:
-                                        inner_level -= 1
-                                        if inner_level < block_level:
-                                            i = j  # Nhảy đến END_IF
-                                            break
-                        
-                                # QUAN TRỌNG: Bỏ qua tất cả các action trong IF lồng sai
-                                continue
-                        else:  # Các loại action khác
-                            handler.play()
-        
-                # Tăng chỉ số để xử lý action tiếp theo
-                i += 1
-
-
-
-
-
-

@@ -10,6 +10,7 @@ class ActionController:
         self.root = root
         self.model = None
         self.view = None
+        self._is_in_nested_execution = False
         
     def setup(self, model, view):
         self.model = model
@@ -116,49 +117,64 @@ class ActionController:
             # Hiển thị thông báo thành công
             action_frame = self.view.action_frames[index + 1] if index + 1 < len(self.view.action_frames) else None
             if action_frame:
-                action_frame.show_temporary_notification("Đã nhân bản thành công")
-
-    
+                action_frame.show_temporary_notification("Đã nhân bản thành công")    
+                
     def play_action(self, index):
         """Thực thi một hành động cụ thể khi nút play được nhấn"""
-        # Lấy action và frame
         action = self.model.get_action(index)
         action_frame = self.view.action_frames[index] if index < len(self.view.action_frames) else None
 
-        # Tạo handler
         from controllers.actions.action_factory import ActionFactory
         handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
 
         if handler:
-            # THÊM: Gọi prepare_play() trước khi play()
-            handler.prepare_play()
-
-            # Thiết lập action frame
             handler.action_frame = action_frame
-
-            # Thực thi và lấy kết quả
-            result = handler.play()
-
-            # XỬ LÝ ĐẶC BIỆT: Nếu là IF condition và kết quả sai (result=True), tìm ELSE IF
-            if action.action_type == ActionType.IF_CONDITION and result:
-                # ĐỢI THÔNG BÁO IF HIỂN THỊ (giảm delay để cải thiện UX)
-                self.root.after(500, lambda: self.find_and_execute_else_if(handler))  # Thay đổi
+        
+            # THÊM: Xử lý đặc biệt cho IF condition độc lập
+            if action.action_type == ActionType.IF_CONDITION:
+                result = handler.play()
+                # Nếu IF sai (result = True), tìm ELSE IF
+                if result:
+                    self._find_and_execute_else_if_for_standalone(index)
+            else:
+                handler.play()
         else:
-            # Thông báo không hỗ trợ
             if action_frame:
                 action_frame.show_temporary_notification(f"Chức năng '{action.action_type}' chưa được hỗ trợ")
-            
-    def find_and_execute_else_if(self, if_handler):
-        """Tìm và thực thi ELSE IF tương ứng cho một IF handler cụ thể."""
-        if hasattr(if_handler, 'current_internal_condition_id'):
-            if_handler._find_matching_else_if(if_handler.current_internal_condition_id)
-        else:
-            # Fallback nếu IF handler không có current_internal_condition_id
-            # Điều này không nên xảy ra nếu prepare_play của IfConditionAction được gọi đúng
-            if_handler._find_matching_else_if() 
-            if hasattr(if_handler, 'action_frame') and if_handler.action_frame:
-                 if_handler.action_frame.show_temporary_notification("CẢNH BÁO: IF handler thiếu ID nội bộ!")
                 
+
+    def _find_and_execute_else_if_for_standalone(self, if_index):
+        """Tìm và thực thi ELSE IF cho IF độc lập"""
+        all_actions = self.model.get_all_actions()
+    
+        # Tìm ELSE IF đầu tiên cùng cấp với IF này
+        i = if_index + 1
+        nesting_level = 0
+    
+        while i < len(all_actions):
+            action = all_actions[i]
+        
+            if action.action_type == ActionType.IF_CONDITION:
+                nesting_level += 1
+            elif action.action_type == ActionType.END_IF_CONDITION:
+                if nesting_level == 0:
+                    break  # Hết khối IF, không có ELSE IF
+                nesting_level -= 1
+            elif action.action_type == ActionType.ELSE_IF_CONDITION and nesting_level == 0:
+                # Tìm thấy ELSE IF cùng cấp, thực thi nó
+                from controllers.actions.action_factory import ActionFactory
+                else_if_handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
+            
+                if else_if_handler:
+                    action_frame = self.view.action_frames[i] if i < len(self.view.action_frames) else None
+                    if action_frame:
+                        else_if_handler.action_frame = action_frame
+                    else_if_handler.play()
+                return
+        
+            i += 1
+
+            
     def delete_all_actions(self):
         """Xóa tất cả các hành động"""
         # Gọi phương thức xóa trong model
