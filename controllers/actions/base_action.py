@@ -7,7 +7,7 @@ import keyboard
 class BaseAction(ABC):
     """Lớp cơ sở cho tất cả các play handler"""
 
-    def __init__(self, root, action, view):
+    def __init__(self, root, action, view, model, controller):
         """
         Khởi tạo handler
         
@@ -19,6 +19,8 @@ class BaseAction(ABC):
         self.root = root
         self.action = action
         self.view = view
+        self.model = model
+        self.controller = controller
         self.params = action.parameters
         self.is_running = False  # Trạng thái đang chạy
         self.stop_requested = False  # Cờ báo hiệu dừng
@@ -26,40 +28,86 @@ class BaseAction(ABC):
     
     def play(self):
         """Thực thi hành động"""
+        import random as rand  # Import với tên khác để tránh xung đột
+
         # Kiểm tra Random Skip Action
         random_skip = int(self.params.get("random_skip", "0"))
         if random_skip > 0:
-            import random
-            skip_value = random.randint(0, random_skip)
+            skip_value = rand.randint(0, random_skip)
             if skip_value == 0:
                 # Hiển thị thông báo action bị bỏ qua
-                if hasattr(self, 'action_frame') and self.action_frame:
+                if self.is_running and hasattr(self, 'action_frame') and self.action_frame:
                     self.action_frame.show_temporary_notification("Hành động được bỏ qua (Random Skip)")
-                return  # Thoát khỏi phương thức, không thực thi action
-            
+                return True  # Trả về True để biểu thị điều kiện sai
+
         # Kiểm tra điều kiện break
         if self.should_break_action():
             # Hiển thị thông báo hành động bị bỏ qua do điều kiện break
-            if hasattr(self, 'action_frame') and self.action_frame:
+            if self.is_running and hasattr(self, 'action_frame') and self.action_frame:
                 self.action_frame.show_temporary_notification("Hành động được bỏ qua (Điều kiện Break)")
-            return
-        
+                # Đánh dấu đã đánh giá condition để phân biệt với else
+                self.condition_evaluated = False
+            return True  # Trả về True để biểu thị điều kiện sai
+
         # Lấy action frame từ ActionListView
         for frame in self.view.action_frames:
             if frame.action.id == self.action.id:  # Cần thêm id vào ActionItem để so sánh
                 # Hiển thị thông báo trên frame thay vì dialog
-                frame.show_temporary_notification("Hành động đang được thực thi")
+                if self.is_running :
+                    frame.show_temporary_notification("Hành động đang được thực thi")
                 break
-    
+
         # Hiển thị thông báo trên action frame
-        if hasattr(self, 'action_frame') and self.action_frame:
+        if self.is_running and hasattr(self, 'action_frame') and self.action_frame:
             self.action_frame.show_temporary_notification("Hành động đang được thực thi")
-          
-        # Hook cho các lớp con có thể thêm logic trước khi thực thi
-        self.prepare_play()
+
+        # Lấy giá trị repeat_random
+        repeat_random = int(self.params.get("repeat_random", "0"))
+        try:
+            repeat_random = int(repeat_random)
+        except (ValueError, TypeError):
+            repeat_random = 0
+
+        # Xác định số lần lặp lại
+        if repeat_random <= 1:
+            # Nếu <= 0, chạy một lần
+            repeat_count = 1
+        else:
+            # Nếu > 0, random từ 0 đến repeat_random
+            repeat_count = rand.randint(2, repeat_random)
+
+        # Đánh dấu condition đã được đánh giá và là true
+        self.condition_evaluated = True
         
-        # Trì hoãn thực thi
-        self.delay_execution()
+        # Kiểm tra nếu đã được thực thi rồi thì skip
+        if hasattr(self, '_already_executed') and self._already_executed:
+            return self._cached_result
+    
+        final_result = None  # Lưu kết quả cuối cùng
+        for i in range(repeat_count):
+            # Hook cho các lớp con có thể thêm logic trước khi thực thi
+            result = self.prepare_play()
+            final_result = result  # Lưu kết quả mỗi lần lặp
+
+            # Trì hoãn thực thi
+            self.delay_execution()
+            if self.stop_requested:
+                return final_result  # Exit loop if stop requested
+
+        # Đánh dấu đã thực thi và cache kết quả
+        self._already_executed = True
+        self._cached_result = final_result
+    
+        return final_result  # Return SAU KHI hoàn thành vòng lặp
+
+
+    def reset_execution_state(self):
+        """Reset execution state để có thể chạy lại"""
+        if hasattr(self, '_already_executed'):
+            delattr(self, '_already_executed')
+        if hasattr(self, '_cached_result'):
+            delattr(self, '_cached_result')
+    
     
     def prepare_play(self):
         """
@@ -95,8 +143,7 @@ class BaseAction(ABC):
             self.setup_esc_handler()  # Thiết lập bắt sự kiện ESC
              # Kiểm tra và chuyển đổi chương trình trước khi thực thi action
             if self.check_and_switch_to_program():
-                # Nếu chuyển đổi thành công hoặc không cần chuyển đổi, thực thi action
-                self.execute_action()
+                pass
             
             self.is_running = False  # Đặt lại trạng thái sau khi chạy xong
             self.cleanup_esc_handler()  # Hủy bắt sự kiện ESC
@@ -109,13 +156,12 @@ class BaseAction(ABC):
     def should_break_action(self):
         """
         Đánh giá các điều kiện break để xác định có nên dừng hành động hay không
-    
         Returns:
             bool: True nếu action nên bị dừng, False nếu nên tiếp tục thực thi
         """
         # Lấy danh sách điều kiện break từ parameters
         break_conditions = self.params.get("break_conditions", [])
-        
+    
         # Nếu không có điều kiện nào, hành động sẽ được thực thi (không break)
         if not break_conditions:
             return False
@@ -123,19 +169,21 @@ class BaseAction(ABC):
         # Khởi tạo các biến
         from models.global_variables import GlobalVariables
         globals_var = GlobalVariables()
-        
+    
         # Trường hợp đặc biệt: chỉ có một điều kiện
         if len(break_conditions) == 1:
             condition = break_conditions[0]
             variable_name = condition["variable"]
             expected_value = condition["value"]
         
-            # Nếu biến không tồn tại, điều kiện là False
+            # Nếu biến không tồn tại, điều kiện không thỏa mãn (break action)
             if not hasattr(globals_var, 'exists') or not globals_var.exists(variable_name):
-                return False
+                return True # Thay đổi: Trả về True nếu biến không tồn tại
         
             # So sánh giá trị
             actual_value = globals_var.get(variable_name)
+            print(variable_name+' - '+actual_value)
+        
             # Trả về True nếu giá trị không khớp (break action)
             return str(actual_value) != str(expected_value)
     
@@ -145,17 +193,17 @@ class BaseAction(ABC):
         for idx, condition in enumerate(break_conditions):
             variable_name = condition["variable"]
             expected_value = condition["value"]
+        
             # Dòng đầu tiên không có logical_op
             logical_op = condition.get("logical_op", "AND") if idx > 0 else None
-            print(globals_var.get_all())
+        
             # Kiểm tra biến có tồn tại trong GlobalVariables không
             if hasattr(globals_var, 'exists') and globals_var.exists(variable_name):
                 actual_value = globals_var.get(variable_name)
-                print(actual_value)
                 # So sánh giá trị (chuyển sang chuỗi để so sánh)
                 condition_result = str(actual_value) == str(expected_value)
             else:
-                # Nếu biến không tồn tại, điều kiện là False
+                # Thay đổi: Nếu biến không tồn tại, condition_result = False
                 condition_result = False
         
             # Kết hợp với kết quả trước đó dựa trên toán tử logic
@@ -168,8 +216,9 @@ class BaseAction(ABC):
                 result = result or condition_result
     
         # Đảo ngược kết quả: True = break action, False = continue
-        # Nếu kết quả cuối cùng là False, tức điều kiện không thoả mãn, thì break action
         return not result
+
+
 
 
         
@@ -191,18 +240,6 @@ class BaseAction(ABC):
     def should_stop(self):
         """Kiểm tra xem có cần dừng không"""
         return self.stop_requested
-    
-    def execute_action(self):      
-        
-        """Thực hiện tạo biến"""
-        variable = self.params.get("variable", "")
-        result_action = self.params.get("result_action", "")
-        
-        # Thêm logic xử lý tạo biến ở đây
-        # Ví dụ: lưu vào GlobalVariables
-        from models.global_variables import GlobalVariables
-        GlobalVariables().set(variable, result_action)
-        
     
     def check_and_switch_to_program(self):
         """
@@ -294,6 +331,24 @@ class BaseAction(ABC):
     
         return False
 
+    def get_region(self):
+        """Lấy vùng quét dựa trên tham số"""
+        # Kiểm tra xem có sử dụng fullscreen không
+        if self.params.get("fullscreen", False):
+            # Sử dụng PyAutoGUI để lấy kích thước màn hình
+            import pyautogui
+            screen_width, screen_height = pyautogui.size()
+        
+            # Trả về toàn bộ màn hình làm vùng quét
+            return (0, 0, screen_width, screen_height)
+        else:
+            # Sử dụng giá trị x, y, width, height đã cung cấp
+            x = int(self.params.get("x", 0))
+            y = int(self.params.get("y", 0))
+            width = int(self.params.get("width", 0)) 
+            height = int(self.params.get("height", 0))
+        
+            return (x, y, width, height)
         
 
     def move_mouse(self, x, y, width=0, height=0, duration=0.5, random_in_region=False):
@@ -337,24 +392,105 @@ class BaseAction(ABC):
             # Kiểm tra xem có yêu cầu double click không
             if self.params.get("double_click", False):
                 # Thêm delay ngẫu nhiên từ 1-3 giây trước khi double click
+                delay = random.uniform(1, 3)
+    
                 if hasattr(self, 'action_frame') and self.action_frame:
-                    delay = random.uniform(1, 3)
                     self.action_frame.show_temporary_notification(
                         f"Chờ {delay:.1f} giây trước khi double click..."
                     )
-                else:
-                    delay = random.uniform(1, 3)
-                
+    
                 # Thực hiện delay
                 time.sleep(delay)
-            
+    
                 # Kiểm tra lại nếu người dùng đã yêu cầu dừng trong thời gian delay
                 if self.should_stop():
                     return target_x, target_y
-                
+    
+                # Kiểm tra điều kiện Is Clickable nếu được chọn
+                if self.params.get("is_clickable", False):
+                    # Kiểm tra xem cursor có phải là hand không
+                    if not self.is_hand_cursor():
+                        if hasattr(self, 'action_frame') and self.action_frame:
+                            self.action_frame.show_temporary_notification(
+                                "Bỏ qua double click vì cursor không phải là hand"
+                            )
+                        return target_x, target_y
+                    
                 # Thực hiện double click
                 pyautogui.doubleClick()
-                
-            return target_x, target_y
+
+                return target_x, target_y
         except:
             return None, None  # Trả về None nếu di chuyển bị dừng
+        
+    def is_hand_cursor(self):
+        """Kiểm tra xem cursor hiện tại có phải là hand cursor hay không"""
+        import win32gui
+        
+        time.sleep(0.5)
+        try:
+            # Lấy thông tin cursor
+            cursor_info = win32gui.GetCursorInfo()
+            hand_cursor_handles = [32649, 65567, 65563, 65561, 60171, 60169, 32513]
+            if cursor_info[1] in hand_cursor_handles:
+                return True
+        except Exception as e:
+            if hasattr(self, 'action_frame') and self.action_frame:
+                self.action_frame.show_temporary_notification(f"Lỗi kiểm tra cursor: {e}")
+            return False
+
+
+    def _execute_nested_actions(self):
+        """Thực hiện các actions lồng trong điều kiện - Phương thức này đã lỗi thời, giữ lại để tương thích"""
+        # Tạo ID ngẫu nhiên để tương thích với thiết kế mới
+        import uuid
+        condition_id = str(uuid.uuid4())
+    
+        # Kiểm tra nếu phương thức _execute_condition_block tồn tại trước khi gọi
+        if hasattr(self, '_execute_condition_block'):
+            self._execute_condition_block(condition_id)
+        else:
+            # Phương pháp cũ nếu không có phương thức mới
+            from constants import ActionType
+            from controllers.actions.action_factory import ActionFactory
+        
+            all_actions = self.model.get_all_actions()
+            current_index = next((i for i, a in enumerate(all_actions) if a.id == self.action.id), -1)
+            if current_index < 0:
+                return
+            
+            # Biến theo dõi cấp độ lồng
+            nested_level = 0
+        
+            # Duyệt qua các action sau action hiện tại
+            next_index = current_index + 1
+            while next_index < len(all_actions):
+                action = all_actions[next_index]
+            
+                # Cập nhật nested_level dựa trên loại action
+                if action.action_type == ActionType.IF_CONDITION:
+                    nested_level += 1
+                elif action.action_type == ActionType.END_IF_CONDITION:
+                    nested_level -= 1
+                    # Kết thúc khi nested_level < 0 (đã tìm thấy END_IF tương ứng)
+                    if nested_level < 0:
+                        break
+                    
+                # Tạo handler và thực thi action
+                if nested_level >= 0:
+                    handler = ActionFactory.get_handler(
+                        self.controller.root, action, self.view, self.model, self.controller
+                    )
+                
+                    if handler:
+                        # Thiết lập action frame
+                        action_frame = next((f for f in self.view.action_frames
+                                           if f.action.id == action.id), None)
+                        if action_frame:
+                            handler.action_frame = action_frame
+                    
+                        # Thực thi action
+                        handler.play()
+            
+                # Tăng chỉ số
+                next_index += 1

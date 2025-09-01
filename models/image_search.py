@@ -6,8 +6,6 @@ import time
 import os
 from PIL import ImageGrab
 
-from global_variables import GlobalVariables
-from human_like_movement import HumanLikeMovement
 
 class ImageSearcher:
     """Class thực hiện tìm kiếm hình ảnh trên màn hình"""

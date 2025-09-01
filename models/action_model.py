@@ -83,6 +83,14 @@ class ActionModel:
         self.is_modified = True  # Đánh dấu đã thay đổi
         return len(self.actions) - 1
         
+    def add_action_at(self, index, action):
+        """Thêm một action vào vị trí cụ thể"""
+        if 0 <= index <= len(self.actions):
+            self.actions.insert(index, action)
+            self.is_modified = True
+            return True
+        return False
+
     def update_action(self, index, action):
         if 0 <= index < len(self.actions):
             self.actions[index] = action

@@ -4,7 +4,7 @@ from controllers.actions.base_action import BaseAction
 class TaoBienAction(BaseAction):
     """Handler để thực thi hành động tạo biến"""
     
-    def execute_action(self):
+    def prepare_play(self):
         """Thực hiện tạo biến sau khi trì hoãn"""
         if self.should_stop():
             return

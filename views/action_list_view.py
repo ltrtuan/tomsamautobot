@@ -5,7 +5,7 @@ from views.settings_dialog import SettingsDialog
 from constants import ActionType
 
 class ActionItemFrame(tk.Frame):
-    def __init__(self, parent, action, index, **kwargs):
+    def __init__(self, parent, action, index, nesting_level=0, **kwargs):
         super().__init__(parent, **kwargs)
         
         # Thiết lập style cho frame
@@ -23,7 +23,9 @@ class ActionItemFrame(tk.Frame):
         # Lưu trữ các thuộc tính quan trọng
         self.action = action
         self.index = index
+        self.nesting_level = nesting_level
         self.on_reorder_callback = None
+        action_type = action.action_type
         
         # Tạo layout với Grid để kiểm soát vị trí các phần tử
         self.columnconfigure(1, weight=1)
@@ -55,9 +57,9 @@ class ActionItemFrame(tk.Frame):
         )
         self.index_label.pack(side=tk.LEFT)
         
+        action_icon = self._get_action_icon(action_type)
         action_type_value = ActionType.get_action_type_display(action.action_type)
-        # Thêm icon hành động - giống Power Automate
-        action_icon = "🔍" if action_type_value == ActionType.TIM_HINH_ANH.value else "🖱️"
+        # Thêm icon hành động - giống Power Automate       
         icon_label = tk.Label(
             header_frame, 
             text=action_icon, 
@@ -96,41 +98,61 @@ class ActionItemFrame(tk.Frame):
         # Nút chỉnh sửa nhỏ gọn với icon
         self.edit_button = tk.Button(
             button_frame, 
-            text="✏️", 
+            text="✎", 
             bg=cfg.LIGHT_BG_COLOR, 
             fg=cfg.SECONDARY_COLOR,
-            padx=3,
-            pady=0,
-            font=("Segoe UI", 9),
+            padx=4,  # Tăng padding
+            pady=1,  # Tăng padding
+            font=("Segoe UI", 10),  # Tăng kích thước font
             relief=tk.FLAT,
             bd=0,
             cursor="hand2",
             activebackground=cfg.HOVER_COLOR
         )
         self.edit_button.pack(side=tk.LEFT, padx=(0, 2))
-        
+        # Thêm tooltip
+        ToolTip(self.edit_button, "Chỉnh sửa")
+
         # Nút Play với icon
         self.play_button = tk.Button(
             button_frame,
-            text="▶️",
+            text="➤",
             bg=cfg.LIGHT_BG_COLOR,
             fg=cfg.SUCCESS_COLOR,
-            padx=3,
-            pady=0,
-            font=("Segoe UI", 9),
+            padx=4,  # Tăng padding
+            pady=1,  # Tăng padding
+            font=("Segoe UI", 10),  # Tăng kích thước font
             relief=tk.FLAT,
             bd=0,
             cursor="hand2",
             activebackground=cfg.HOVER_COLOR
         )
         self.play_button.pack(side=tk.LEFT, padx=(0, 2))
-
+        # Thêm tooltip
+        ToolTip(self.play_button, "Chạy action")
         # Thêm thuộc tính để lưu trạng thái hiển thị của nút
         self.is_playable = self.check_action_playable()
 
         # Ẩn/hiện nút Play dựa trên loại action
         if not self.is_playable:
             self.play_button.pack_forget()
+            
+        self.duplicate_button = tk.Button(
+            button_frame,
+            text="📑",  # Icon duplicate
+            bg=cfg.LIGHT_BG_COLOR,
+            fg=cfg.PRIMARY_COLOR,
+            padx=4,  # Tăng padding
+            pady=1,  # Tăng padding
+            font=("Segoe UI", 10),  # Tăng kích thước font
+            relief=tk.FLAT,
+            bd=0,
+            cursor="hand2",
+            activebackground=cfg.HOVER_COLOR
+        )
+        self.duplicate_button.pack(side=tk.LEFT, padx=(0, 2))
+        # Thêm tooltip
+        ToolTip(self.duplicate_button, "Nhân bản")
         
         # Nút xóa nhỏ gọn với icon
         self.delete_button = tk.Button(
@@ -138,15 +160,17 @@ class ActionItemFrame(tk.Frame):
             text="🗑️", 
             bg=cfg.LIGHT_BG_COLOR, 
             fg=cfg.DANGER_COLOR,
-            padx=3,
-            pady=0,
-            font=("Segoe UI", 9),
+            padx=4,  # Tăng padding
+            pady=1,  # Tăng padding
+            font=("Segoe UI", 10),  # Tăng kích thước font
             relief=tk.FLAT,
             bd=0,
             cursor="hand2",
             activebackground=cfg.HOVER_COLOR
         )
         self.delete_button.pack(side=tk.LEFT)
+        # Thêm tooltip
+        ToolTip(self.delete_button, "Xóa")
         
         # Label cho thông báo tạm thời (ẩn mặc định)
         self.notification_label = tk.Label(
@@ -160,6 +184,16 @@ class ActionItemFrame(tk.Frame):
         )
         # Không hiển thị mặc định
         # self.notification_label.grid(row=2, column=1, sticky=tk.W)
+
+        # Thêm dòng sau để vô hiệu hóa sự tự động thay đổi kích thước
+        self.grid_propagate(False)
+    
+        # Khai báo biến cho animation
+        self.notification_visible = False
+        self.target_height = 60  # Chiều cao mặc định
+        self.expanded_height = 85  # Chiều cao khi có thông báo
+        self.current_height = self.target_height
+        self.animation_speed = 3  # Tốc độ animation
     
         # Biến lưu trữ các timeout IDs
         self.notification_timeouts = []
@@ -173,35 +207,79 @@ class ActionItemFrame(tk.Frame):
         self.drag_handle.bind("<ButtonPress-1>", self.on_drag_start)
         self.drag_handle.bind("<B1-Motion>", self.on_drag_motion)
         self.drag_handle.bind("<ButtonRelease-1>", self.on_drag_end)
+      
         
+    def _get_action_icon(self, action_type):
+        """Trả về icon phù hợp với loại action"""
+        if action_type == ActionType.TIM_HINH_ANH:
+            return "🔍"
+        elif action_type == ActionType.DI_CHUYEN_CHUOT:
+            return "🖱️"
+        elif action_type == ActionType.IF_CONDITION:
+            return "⚙️"  # Icon bánh răng cho "Nếu"
+        elif action_type == ActionType.ELSE_IF_CONDITION:
+            return "🔀"  # Icon chuyển hướng cho "Ngược lại nếu"
+        elif action_type == ActionType.END_IF_CONDITION:
+            return "🔚"  # Icon kết thúc cho "Kết thúc Nếu"
+        elif action_type == ActionType.TAO_BIEN:
+            return "🔢"  # Icon số hoặc biến tính toán
+        else:
+            return "📋"  # Icon mặc định cho các loại khác
     
     # Thêm phương thức hiển thị thông báo và fade out
     def show_temporary_notification(self, message, duration=3000):
-        """Hiển thị thông báo tạm thời có hiệu ứng fade out
-    
-        Args:
-            message: Nội dung thông báo
-            duration: Thời gian hiển thị (milliseconds) trước khi bắt đầu fade out
-        """
-        # Hủy các timeout hiện có nếu có
+        """Hiển thị thông báo tạm thời có hiệu ứng fade out"""
+        # Hủy các timeout hiện có
         self.clear_notification_timeouts()
     
+        # Tạo timeout để hiển thị thông báo sau 1 giây
+        timeout_id = self.after(1000, lambda: self._display_notification(message, duration))
+        self.notification_timeouts.append(timeout_id)
+
+    def _display_notification(self, message, duration):
+        """Hiển thị thông báo sau 1 giây"""
         # Cấu hình thông báo
         self.notification_label.config(text=message, fg="#4CAF50")
     
         # Hiển thị thông báo
         self.notification_label.grid(row=2, column=1, sticky=tk.W)
-        self.notification_label.update_idletasks()
+    
+        # Thiết lập animation mở rộng
+        self.notification_visible = True
+        self.target_height = self.expanded_height
+        self.animate_height()
     
         # Lên lịch fade out
-        fadeout_steps = 10  # Số bước làm mờ dần
-        fadeout_duration = 1000  # Tổng thời gian fade (milliseconds)
+        fadeout_steps = 10
+        fadeout_duration = 1000
         step_delay = fadeout_duration // fadeout_steps
     
         # Tạo timeout để bắt đầu quá trình fade sau duration
-        timeout_id = self.after(duration, 
-                               lambda: self.start_fadeout(fadeout_steps, step_delay))
+        timeout_id = self.after(duration,
+                              lambda: self.start_fadeout(fadeout_steps, step_delay))
         self.notification_timeouts.append(timeout_id)
+
+        
+    def animate_height(self):
+        """Tạo animation mượt mà khi thay đổi chiều cao"""
+        if abs(self.current_height - self.target_height) <= self.animation_speed:
+            # Đã đạt đến mục tiêu, cập nhật chiều cao chính xác
+            self.current_height = self.target_height
+            self.config(height=self.current_height)
+            return
+    
+        # Tính toán chiều cao mới dựa trên tốc độ animation
+        if self.current_height < self.target_height:
+            self.current_height += self.animation_speed
+        else:
+            self.current_height -= self.animation_speed
+    
+        # Cập nhật chiều cao
+        self.config(height=self.current_height)
+    
+        # Lên lịch frame tiếp theo của animation
+        self.after(16, self.animate_height)  # Khoảng 60fps
+
 
     def start_fadeout(self, steps, delay):
         """Bắt đầu quá trình fade out"""
@@ -237,8 +315,11 @@ class ActionItemFrame(tk.Frame):
         self.notification_label.config(fg=color)
 
     def hide_notification(self):
-        """Ẩn thông báo"""
+        """Ẩn thông báo và thu gọn chiều cao"""
         self.notification_label.grid_forget()
+        self.notification_visible = False
+        self.target_height = 60  # Chiều cao mặc định
+        self.animate_height()
 
     def clear_notification_timeouts(self):
         """Hủy tất cả các timeout hiện có"""
@@ -258,6 +339,7 @@ class ActionItemFrame(tk.Frame):
             "DI_CHUYEN_CHUOT",
             "TIM_HINH_ANH",
             "TAO_BIEN",
+            'IF_CONDITION'
             # Thêm các action khác nếu cần
         ]
     
@@ -266,7 +348,7 @@ class ActionItemFrame(tk.Frame):
     
         # Trả về True nếu action nằm trong danh sách playable
         return any(action_type == ActionType.__dict__.get(action_name) 
-                    for action_name in playable_actions)
+                    for action_name in playable_actions)    
 
     # Thêm phương thức mới để cập nhật số thứ tự
     def update_index(self, new_index):
@@ -274,20 +356,30 @@ class ActionItemFrame(tk.Frame):
         self.index_label.config(text=f"{new_index}.")    
         
     def _get_params_text(self, action):
-        #action_type_value = ActionType.get_action_type_display(action.action_type) #Tìm Hình Ảnh
-        action_type_display = action.action_type #ActionType.TIM_HINH_ANH
-       
-        if action_type_display == ActionType.TIM_HINH_ANH:
+        # Tạo indent dựa trên cấp độ lồng
+        indent = "          " * self.nesting_level
+    
+        action_type_display = action.action_type
+    
+        # Thêm biểu tượng trực quan cho IF và END_IF
+        if action_type_display == ActionType.IF_CONDITION:
+            condition = action.parameters.get('condition', '')
+            return f"{indent}▼ Nếu {condition}"
+        
+        elif action_type_display == ActionType.ELSE_IF_CONDITION:
+            condition = action.parameters.get('condition', '')
+            return f"{indent}▼ Ngược lại nếu {condition}"
+        
+        elif action_type_display == ActionType.END_IF_CONDITION:
+            return f"{indent}▲ Kết thúc Nếu"
+    
+        elif action_type_display == ActionType.TIM_HINH_ANH:
             path = action.parameters.get('image_path', '')
             accuracy = action.parameters.get('accuracy', '80')
-        
-            # Hiển thị tên file thay vì đường dẫn đầy đủ
             import os
             filename = os.path.basename(path) if path else "Không có hình"
-        
-            # Đảm bảo hiển thị giá trị % đúng
+            # Xử lý accuracy
             try:
-                # Nếu accuracy được lưu dưới dạng thập phân (0-1)
                 acc_value = float(accuracy)
                 if acc_value <= 1.0:
                     accuracy_display = f"{acc_value * 100:.0f}%"
@@ -295,13 +387,15 @@ class ActionItemFrame(tk.Frame):
                     accuracy_display = f"{acc_value:.0f}%"
             except ValueError:
                 accuracy_display = f"{accuracy}%"
-            
-            return f"Hình: {filename} | Độ chính xác: {accuracy_display}"
+            return f"{indent}Hình: {filename} | Độ chính xác: {accuracy_display}"
+    
         elif action_type_display == ActionType.DI_CHUYEN_CHUOT:
-            return f"X: {action.parameters.get('x', '')}, Y: {action.parameters.get('y', '')} | Thời gian: {action.parameters.get('duration', '')}s"
+            return f"{indent}X: {action.parameters.get('x', '')}, Y: {action.parameters.get('y', '')} | Thời gian: {action.parameters.get('duration', '')}s"
+    
         elif action_type_display == ActionType.TAO_BIEN:
-            return f"Variable {action.parameters.get('variable', '')} = {action.parameters.get('result_action', '')}"
-        return ""
+            return f"{indent}Variable {action.parameters.get('variable', '')} = {action.parameters.get('result_action', '')}"
+    
+        return indent  # Trả về ít nhất là indent
         
     def _on_hover(self, event):
         if hasattr(self, '_dragging') and self._dragging:
@@ -358,74 +452,57 @@ class ActionItemFrame(tk.Frame):
         
         # Cập nhật UI thường xuyên để tránh giật lag
         self.update_idletasks()
-        
+    
 
     def on_drag_motion(self, event):
         """Xử lý sự kiện đang kéo"""
         if not hasattr(self, '_drag_data') or not self.is_dragging:
             return
-        
+
         # Tính vị trí mới
         delta_y = event.y - self._drag_data["y_start"]
         new_y = self.winfo_y() + delta_y
     
         # Di chuyển widget theo chuột
         self.place(x=0, y=new_y, relwidth=1)
-        self.lift()  # Đảm bảo widget hiển thị trên cùng
+        self.lift()
     
         # Hiệu ứng visual
-        self.config(bg="#e3f2fd")  # Giữ nguyên màu nền khi kéo
+        self.config(bg="#e3f2fd")
     
-        # Xử lý placeholder và cập nhật index
+        # Lấy danh sách các frames đã được pack
         parent = self.master
-       
         visible_frames = []
+    
         for child in parent.winfo_children():
             if isinstance(child, ActionItemFrame) and child != self:
-                # Thêm điều kiện để đảm bảo chỉ xem xét các frame đã được pack
                 try:
-                    child.pack_info()  # Kiểm tra xem widget đã được pack chưa
+                    child.pack_info()
                     visible_frames.append(child)
                 except:
-                    pass  # Bỏ qua các widget chưa được pack
-
-        # Đảm bảo sắp xếp theo vị trí y để xác định đúng vị trí
-        visible_frames.sort(key=lambda f: f.winfo_y())
-        
-
-        # Mặc định là vị trí cuối cùng
-        new_index = len(visible_frames)
-        current_index = self._drag_data["index"]
-
-        # Lấy vị trí chuột tuyệt đối
-        mouse_abs_y = event.y_root        
-      
-        is_moving_down = self.winfo_y() > self._drag_data.get("original_y", 0)
-
-        # Thiết lập ngưỡng thả - 30% cho kéo từ trên xuống, 50% cho kéo từ dưới lên
-        threshold_percent = 0.3 if is_moving_down else 0.5
-        if is_moving_down:
-            # Giảm ngưỡng cho Tìm Hình Ảnh khi kéo xuống để dễ thả hơn
-            threshold_percent = 0.2
-
-        for i, frame in enumerate(visible_frames):
-            # Tính toán vị trí ngưỡng trong frame dựa trên % chiều cao
-            frame_abs_top = frame.winfo_rooty()
-            frame_height = frame.winfo_height()
-            threshold_point = frame_abs_top + (frame_height * threshold_percent)
+                    pass
     
-            # Nếu chuột nằm trên ngưỡng của frame
-            if mouse_abs_y < threshold_point:
-                new_index = i
+        # Lưu trữ thứ tự ban đầu của các frames
+        original_order = [frame.index - 1 for frame in visible_frames]
+    
+        # Sắp xếp frames theo vị trí y
+        visible_frames.sort(key=lambda f: f.winfo_y())
+    
+        # Xác định vị trí mục tiêu dựa trên vị trí con trỏ
+        mouse_y = event.y_root
+        target_index = len(visible_frames)  # Mặc định cuối cùng
+    
+        for i, frame in enumerate(visible_frames):
+            frame_mid_y = frame.winfo_rooty() + frame.winfo_height() / 2
+            if mouse_y < frame_mid_y:
+                target_index = i
                 break
-            # Xử lý trường hợp frame cuối cùng
-            elif i == len(visible_frames) - 1:
-                # Ngưỡng phía dưới của frame cuối
-                bottom_threshold = frame_abs_top + frame_height * (1 - threshold_percent)
-                if mouse_abs_y > bottom_threshold:
-                    # Nếu chuột dưới ngưỡng của frame cuối, đặt sau frame đó
-                    new_index = len(visible_frames)
-                
+    
+        # Ánh xạ vị trí trong danh sách đã sắp xếp về vị trí ban đầu
+        if target_index < len(original_order):
+            new_index = original_order[target_index]
+        else:
+            new_index = len(visible_frames)
     
         # Cập nhật placeholder
         if hasattr(parent, '_placeholder'):
@@ -438,32 +515,21 @@ class ActionItemFrame(tk.Frame):
             highlightthickness=0
         )
     
-        # Chèn placeholder vào vị trí chính xác
+        # Đặt placeholder vào vị trí chính xác
         try:
-            if new_index < len(visible_frames):
-                # Kiểm tra trạng thái pack trước khi sử dụng before
-                try:
-                    visible_frames[new_index].pack_info()  # Kiểm tra xem widget đã được pack chưa
-                    parent._placeholder.pack(before=visible_frames[new_index], fill=tk.X, pady=2)
-                except:
-                    # Nếu widget chưa được pack, đặt placeholder ở cuối
-                    parent._placeholder.pack(fill=tk.X, pady=2)
+            if target_index < len(visible_frames):
+                parent._placeholder.pack(before=visible_frames[target_index], fill=tk.X, pady=2)
             else:
                 parent._placeholder.pack(fill=tk.X, pady=2)
-        
-            # Đảm bảo item đang kéo nằm trên placeholder
-            self.lift()  # Đưa item đang kéo lên trên cùng sau khi đặt placeholder
+            self.lift()
         except Exception as e:
             print(f"Lỗi khi đặt placeholder: {e}")
-            # Nếu vẫn gặp lỗi, thử cách khác - đặt placeholder ở cuối
-            try:
-                parent._placeholder.pack(fill=tk.X, pady=2)
-                self.lift()
-            except:
-                pass
-
-        # Cập nhật placeholder và lưu new_index
+            parent._placeholder.pack(fill=tk.X, pady=2)
+            self.lift()
+    
+        # Lưu lại new_index
         self._drag_data["new_index"] = new_index
+
 
 
     def on_drag_end(self, event):
@@ -501,6 +567,43 @@ class ActionItemFrame(tk.Frame):
         self.is_dragging = False
         delattr(self, '_drag_data')
 
+class ToolTip:
+    """Hiển thị tooltip khi di chuột qua widget"""
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tooltip = None
+        
+        # Bind events
+        widget.bind("<Enter>", self.show_tooltip)
+        widget.bind("<Leave>", self.hide_tooltip)
+        
+    def show_tooltip(self, event=None):
+        x = self.widget.winfo_rootx() + self.widget.winfo_width() // 2
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
+        
+        # Tạo window popup
+        self.tooltip = tk.Toplevel(self.widget)
+        self.tooltip.wm_overrideredirect(True)  # Loại bỏ viền window
+        self.tooltip.wm_geometry(f"+{x}+{y}")
+        
+        # Tạo label trong tooltip
+        label = tk.Label(
+            self.tooltip, 
+            text=self.text, 
+            background="#ffffcc", 
+            relief="solid", 
+            borderwidth=1,
+            font=("Segoe UI", 9),
+            padx=5,
+            pady=2
+        )
+        label.pack()
+        
+    def hide_tooltip(self, event=None):
+        if self.tooltip:
+            self.tooltip.destroy()
+            self.tooltip = None
 
 
 class ActionListView(ttk.Frame):
@@ -657,7 +760,6 @@ class ActionListView(ttk.Frame):
         # Button bar dưới cùng - nhỏ gọn hơn
         button_bar = tk.Frame(content, bg="#f0f0f0", height=36)  # Giảm chiều cao
         button_bar.pack(fill=tk.X, side=tk.BOTTOM)
-    
        
     
         # Run button - nhỏ gọn hơn
@@ -728,63 +830,86 @@ class ActionListView(ttk.Frame):
         self.save_callback = None
         self.delete_all_callback = None
             
-    def update_listbox(self, actions):
+    def update_listbox(self, actions, nesting_levels=None):
         # Clear existing frames
         for frame in self.action_frames:
             frame.destroy()
         self.action_frames = []
-        
+    
         # Add new action frames với spacing nhỏ hơn
         for i, action in enumerate(actions):
-            frame = ActionItemFrame(self.action_list_frame, action, i+1)
-            frame.pack(fill=tk.X, pady=(0, 3), padx=2)  # Giảm padding
-            
+            # Gán cấp độ lồng (mặc định là 0 nếu không được cung cấp)
+            nesting_level = nesting_levels[i] if nesting_levels else 0
+        
+            frame = ActionItemFrame(self.action_list_frame, action, i+1, nesting_level=nesting_level)
+            frame.pack(fill=tk.X, pady=(0, 3), padx=2)
+        
             # Set callbacks for action frame
             frame.on_reorder_callback = self._on_reorder
             frame.edit_button.config(command=lambda idx=i: self._on_edit(idx))
             frame.delete_button.config(command=lambda idx=i: self._on_delete(idx))
-            # Thêm callback cho nút Play (mặc định là hàm rỗng)
-            frame.play_button.config(command=lambda idx=i: self._on_play_action(idx))
+            frame.duplicate_button.config(command=lambda idx=i: self._on_duplicate(idx))
             
+            # Thêm callback cho nút Play
+            if hasattr(self, 'play_action_callback'):
+                frame.play_button.config(command=lambda idx=i: self._on_play_action(idx))
+        
             self.action_frames.append(frame)
+            
         
     def _on_canvas_resize(self, event):
         # Resize canvas window to fill available space
         canvas_width = event.width
         self.canvas.itemconfig(self.canvas_frame, width=canvas_width)   
-        
-    
+
+    def _on_duplicate(self, index):
+        """Hàm xử lý khi nút Duplicate được nhấn"""
+        if hasattr(self, 'duplicate_callback') and self.duplicate_callback:
+            self.duplicate_callback(index)
+            
     def _on_reorder(self, from_index, to_index):
         if from_index == to_index:
             return
-        
-        # Điều chỉnh to_index nếu cần
-        if from_index < to_index:
-            to_index -= 1
-        
+    
         # Gọi callback để cập nhật model
         if self.drag_callback:
             self.drag_callback(from_index, to_index)
     
-        # Cập nhật UI và số thứ tự
-        # Di chuyển item trong danh sách action_frames
-        item = self.action_frames.pop(from_index)
-        self.action_frames.insert(to_index, item)
+        # Lấy đối tượng controller từ callback
+        controller = self.drag_callback.__self__
     
-        # Hiển thị lại các frame theo thứ tự mới
-        for i, frame in enumerate(self.action_frames):
-            frame.pack_forget()  # Xóa khỏi UI
+        # Lấy danh sách actions mới từ model và tính toán lại cấp độ lồng
+        actions = controller.model.get_all_actions()
+        nesting_levels = controller.calculate_nesting_levels()
     
-        # Thêm lại vào UI với số thứ tự đã cập nhật
-        for i, frame in enumerate(self.action_frames):
-            frame.index = i + 1
-            if hasattr(frame, 'index_label'):
-                frame.index_label.config(text=f"{i+1}.")
+        # Xóa tất cả frames khỏi UI
+        for frame in self.action_frames:
+            frame.pack_forget()
+    
+        # Tạo lại frames theo thứ tự mới với nesting levels đã cập nhật
+        self.action_frames = []
+    
+        for i, action in enumerate(actions):
+            nesting_level = nesting_levels[i]
+            frame = ActionItemFrame(self.action_list_frame, action, i+1, nesting_level=nesting_level)
             frame.pack(fill=tk.X, pady=2, padx=2)
+        
+            # Thiết lập callbacks
+            frame.on_reorder_callback = self._on_reorder
+            frame.edit_button.config(command=lambda idx=i: self._on_edit(idx))
+            frame.delete_button.config(command=lambda idx=i: self._on_delete(idx))
+            frame.duplicate_button.config(command=lambda idx=i: self._on_duplicate(idx))
+            
+            # Thiết lập callback cho nút Play
+            if hasattr(self, 'play_action_callback'):
+                frame.play_button.config(command=lambda idx=i: self._on_play_action(idx))
+        
+            self.action_frames.append(frame)
     
         # Force update
         self.update_idletasks()
-        
+
+
     def _on_delete_all(self):
         """Xử lý khi nút Xóa tất cả được nhấn"""
         # Hiện hộp thoại xác nhận
@@ -824,7 +949,7 @@ class ActionListView(ttk.Frame):
     def ask_yes_no(self, title, message):
         return messagebox.askyesno(title, message)
             
-    def set_callbacks(self, add_callback, edit_callback, delete_callback, run_callback, drag_callback, save_callback, play_action_callback=None, delete_all_callback=None):
+    def set_callbacks(self, add_callback, edit_callback, delete_callback, run_callback, drag_callback, save_callback, play_action_callback=None, delete_all_callback=None, duplicate_callback=None):
         self.add_button.config(command=add_callback)
         self.run_button.config(command=run_callback)
         self.save_button.config(command=save_callback)
@@ -836,6 +961,7 @@ class ActionListView(ttk.Frame):
         self.save_callback = save_callback
         self.play_action_callback = play_action_callback  # Callback cho nút Play
         self.delete_all_callback = delete_all_callback  # Callback cho nút Xóa tất cả
+        self.duplicate_callback = duplicate_callback
     
     # Thêm phương thức mở dialog
     def open_settings(self):

@@ -5,6 +5,9 @@ from constants import ActionType
 from views.action_params.image_search_params import ImageSearchParams
 from views.action_params.mouse_move_params import MouseMoveParams
 from views.action_params.tao_bien_params import TaoBienParams
+from views.action_params.if_condition_params import IfConditionParams
+from views.action_params.end_if_condition_params import EndIfConditionParams
+from views.action_params.else_if_condition_params import ElseIfConditionParams
 
 class ActionDialogView(tk.Toplevel):
     def __init__(self, parent, action=None):
@@ -103,7 +106,7 @@ class ActionDialogView(tk.Toplevel):
         self.canvas.bind("<Configure>", self._on_canvas_resize)
     
         # Hỗ trợ cuộn bằng chuột
-        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        self.canvas.bind("<MouseWheel>", self._on_mousewheel)
     
         # Button frame
         button_frame = tk.Frame(main_frame, bg=cfg.LIGHT_BG_COLOR)
@@ -187,6 +190,9 @@ class ActionDialogView(tk.Toplevel):
             ActionType.TIM_HINH_ANH: ImageSearchParams,
             ActionType.DI_CHUYEN_CHUOT: MouseMoveParams,
             ActionType.TAO_BIEN: TaoBienParams,
+            ActionType.IF_CONDITION: IfConditionParams,
+            ActionType.ELSE_IF_CONDITION: ElseIfConditionParams,
+            ActionType.END_IF_CONDITION: EndIfConditionParams,
             # Thêm các action khác trong tương lai
         }
 
@@ -200,8 +206,15 @@ class ActionDialogView(tk.Toplevel):
         self.canvas.itemconfig(self.canvas_window, width=event.width)
 
     def _on_mousewheel(self, event):
-        # Cuộn bằng chuột
-        self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        """Cuộn bằng chuột"""
+        try:
+            self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        except Exception:
+            # Canvas không còn tồn tại, tự động unbind sự kiện
+            try:
+                self.canvas.unbind_all("<MouseWheel>")
+            except:
+                pass  # Bỏ qua lỗi nếu không thể unbind
         
     def create_params_for_action_type(self, action_type, parameters=None):
         """Tạo UI tham số dựa trên loại hành động"""
@@ -355,3 +368,12 @@ class ActionDialogView(tk.Toplevel):
         messagebox.showinfo(title, message)
         
 
+    def destroy(self):
+        try:
+            # Unbind sự kiện chuột trước khi đóng dialog
+            self.canvas.unbind_all("<MouseWheel>")
+        except Exception:
+            pass  # Bỏ qua lỗi nếu có
+    
+        # Gọi phương thức destroy của lớp cha
+        super().destroy()
