@@ -35,31 +35,21 @@ class BaseAction(ABC):
         if random_skip > 0:
             skip_value = rand.randint(0, random_skip)
             if skip_value == 0:
-                # Hiển thị thông báo action bị bỏ qua
-                if self.is_running and hasattr(self, 'action_frame') and self.action_frame:
-                    self.action_frame.show_temporary_notification("Hành động được bỏ qua (Random Skip)")
+               
                 return True  # Trả về True để biểu thị điều kiện sai
 
         # Kiểm tra điều kiện break
         if self.should_break_action():
             # Hiển thị thông báo hành động bị bỏ qua do điều kiện break
             if self.is_running and hasattr(self, 'action_frame') and self.action_frame:
-                self.action_frame.show_temporary_notification("Hành động được bỏ qua (Điều kiện Break)")
                 # Đánh dấu đã đánh giá condition để phân biệt với else
                 self.condition_evaluated = False
             return True  # Trả về True để biểu thị điều kiện sai
 
         # Lấy action frame từ ActionListView
         for frame in self.view.action_frames:
-            if frame.action.id == self.action.id:  # Cần thêm id vào ActionItem để so sánh
-                # Hiển thị thông báo trên frame thay vì dialog
-                if self.is_running :
-                    frame.show_temporary_notification("Hành động đang được thực thi")
-                break
-
-        # Hiển thị thông báo trên action frame
-        if self.is_running and hasattr(self, 'action_frame') and self.action_frame:
-            self.action_frame.show_temporary_notification("Hành động đang được thực thi")
+            if frame.action.id == self.action.id:  # Cần thêm id vào ActionItem để so sánh             
+                break    
 
         # Lấy giá trị repeat_random
         repeat_random = int(self.params.get("repeat_random", "0"))
@@ -131,10 +121,6 @@ class BaseAction(ABC):
             import random
             delay_seconds = random.randint(1, random_time)
         
-            if hasattr(self, 'action_frame') and self.action_frame:
-                self.action_frame.show_temporary_notification(
-                    f"Chờ {delay_seconds} giây trước khi thực thi..."
-                )
         else:
             # Nếu random_time = 0, sử dụng default_delay
             delay_seconds = default_delay
@@ -316,18 +302,8 @@ class BaseAction(ABC):
             
             # Delay 3 giây để đợi phần mềm load
             time.sleep(3)
-            return True
-    
-        # Nếu không tìm thấy cửa sổ nào, cố gắng khởi động chương trình
-        # if os.path.exists(program_path):
-        #     import subprocess
-        #     try:
-        #         subprocess.Popen([program_path])
-        #         return True
-        #     except:
-        #         if hasattr(self, 'action_frame') and self.action_frame:
-        #             self.action_frame.show_temporary_notification(f"Không thể khởi động: {program_name}")
-        #         return False
+            return True   
+        
     
         return False
 
@@ -392,12 +368,8 @@ class BaseAction(ABC):
             # Kiểm tra xem có yêu cầu double click không
             if self.params.get("double_click", False):
                 # Thêm delay ngẫu nhiên từ 1-3 giây trước khi double click
-                delay = random.uniform(1, 3)
-    
-                if hasattr(self, 'action_frame') and self.action_frame:
-                    self.action_frame.show_temporary_notification(
-                        f"Chờ {delay:.1f} giây trước khi double click..."
-                    )
+                delay = random.uniform(1, 3)   
+            
     
                 # Thực hiện delay
                 time.sleep(delay)
@@ -409,11 +381,7 @@ class BaseAction(ABC):
                 # Kiểm tra điều kiện Is Clickable nếu được chọn
                 if self.params.get("is_clickable", False):
                     # Kiểm tra xem cursor có phải là hand không
-                    if not self.is_hand_cursor():
-                        if hasattr(self, 'action_frame') and self.action_frame:
-                            self.action_frame.show_temporary_notification(
-                                "Bỏ qua double click vì cursor không phải là hand"
-                            )
+                    if not self.is_hand_cursor():                    
                         return target_x, target_y
                     
                 # Thực hiện double click
@@ -434,9 +402,7 @@ class BaseAction(ABC):
             hand_cursor_handles = [32649, 65567, 65563, 65561, 60171, 60169, 32513]
             if cursor_info[1] in hand_cursor_handles:
                 return True
-        except Exception as e:
-            if hasattr(self, 'action_frame') and self.action_frame:
-                self.action_frame.show_temporary_notification(f"Lỗi kiểm tra cursor: {e}")
+        except Exception as e:           
             return False
 
 

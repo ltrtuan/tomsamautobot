@@ -2,6 +2,7 @@
 from tkinter import ttk, messagebox
 import config as cfg
 from views.settings_dialog import SettingsDialog
+from views.move_index_dialog import MoveIndexDialog
 from constants import ActionType
 
 class ActionItemFrame(tk.Frame):
@@ -227,14 +228,14 @@ class ActionItemFrame(tk.Frame):
             return "📋"  # Icon mặc định cho các loại khác
     
     # Thêm phương thức hiển thị thông báo và fade out
-    def show_temporary_notification(self, message, duration=3000):
-        """Hiển thị thông báo tạm thời có hiệu ứng fade out"""
-        # Hủy các timeout hiện có
-        self.clear_notification_timeouts()
+    # def show_temporary_notification(self, message, duration=3000):
+    #     """Hiển thị thông báo tạm thời có hiệu ứng fade out"""
+    #     # Hủy các timeout hiện có
+    #     self.clear_notification_timeouts()
     
-        # Tạo timeout để hiển thị thông báo sau 1 giây
-        timeout_id = self.after(1000, lambda: self._display_notification(message, duration))
-        self.notification_timeouts.append(timeout_id)
+    #     # Tạo timeout để hiển thị thông báo sau 1 giây
+    #     timeout_id = self.after(1000, lambda: self._display_notification(message, duration))
+    #     self.notification_timeouts.append(timeout_id)
 
     def _display_notification(self, message, duration):
         """Hiển thị thông báo sau 1 giây"""
@@ -357,19 +358,71 @@ class ActionItemFrame(tk.Frame):
         
     def _get_params_text(self, action):
         # Tạo indent dựa trên cấp độ lồng
-        indent = "          " * self.nesting_level
-    
+        indent = "  " * self.nesting_level
         action_type_display = action.action_type
-    
-        # Thêm biểu tượng trực quan cho IF và END_IF
+
         if action_type_display == ActionType.IF_CONDITION:
-            condition = action.parameters.get('condition', '')
-            return f"{indent}▼ Nếu {condition}"
+            # Lấy break_conditions từ parameters
+            break_conditions = action.parameters.get('break_conditions', [])
         
+            if break_conditions:
+                condition_parts = []
+                for i, condition in enumerate(break_conditions):
+                    variable = condition.get('variable', '')
+                    value = condition.get('value', '')
+                    logical_op = condition.get('logical_op', '')
+                
+                    # Bỏ qua điều kiện rỗng
+                    if not variable.strip():
+                        continue
+                
+                    condition_str = f"{variable} = {value}"
+                
+                    # Thêm logical operator cho điều kiện thứ 2 trở đi
+                    if i > 0 and logical_op:
+                        condition_str = f"{logical_op} {condition_str}"
+                
+                    condition_parts.append(condition_str)
+            
+                if condition_parts:
+                    conditions_text = " ".join(condition_parts)
+                    return f"{indent}▼ Nếu: {conditions_text}"
+                else:
+                    return f"{indent}▼ Nếu: (chưa có điều kiện)"
+            else:
+                return f"{indent}▼ Nếu: (chưa có điều kiện)"
+    
         elif action_type_display == ActionType.ELSE_IF_CONDITION:
-            condition = action.parameters.get('condition', '')
-            return f"{indent}▼ Ngược lại nếu {condition}"
+            # **THAY ĐỔI: ELSE IF không hiển thị gì nếu chưa có điều kiện**
+            break_conditions = action.parameters.get('break_conditions', [])
         
+            if break_conditions:
+                condition_parts = []
+                for i, condition in enumerate(break_conditions):
+                    variable = condition.get('variable', '')
+                    value = condition.get('value', '')
+                    logical_op = condition.get('logical_op', '')
+                
+                    if not variable.strip():
+                        continue
+                
+                    condition_str = f"{variable} = {value}"
+                
+                    if i > 0 and logical_op:
+                        condition_str = f"{logical_op} {condition_str}"
+                
+                    condition_parts.append(condition_str)
+            
+                if condition_parts:
+                    conditions_text = " ".join(condition_parts)
+                    return f"{indent}▼ Ngược lại nếu: {conditions_text}"
+                else:
+                    # **KHÔNG hiển thị gì nếu chưa có điều kiện**
+                    return f"{indent}▼ Ngược lại nếu"
+            else:
+                # **KHÔNG hiển thị gì nếu chưa có điều kiện**
+                return f"{indent}▼ Ngược lại nếu"
+    
         elif action_type_display == ActionType.END_IF_CONDITION:
             return f"{indent}▲ Kết thúc Nếu"
     
@@ -378,6 +431,7 @@ class ActionItemFrame(tk.Frame):
             accuracy = action.parameters.get('accuracy', '80')
             import os
             filename = os.path.basename(path) if path else "Không có hình"
+
             # Xử lý accuracy
             try:
                 acc_value = float(accuracy)
@@ -387,6 +441,7 @@ class ActionItemFrame(tk.Frame):
                     accuracy_display = f"{acc_value:.0f}%"
             except ValueError:
                 accuracy_display = f"{accuracy}%"
+
             return f"{indent}Hình: {filename} | Độ chính xác: {accuracy_display}"
     
         elif action_type_display == ActionType.DI_CHUYEN_CHUOT:
@@ -394,8 +449,10 @@ class ActionItemFrame(tk.Frame):
     
         elif action_type_display == ActionType.TAO_BIEN:
             return f"{indent}Variable {action.parameters.get('variable', '')} = {action.parameters.get('result_action', '')}"
-    
+
         return indent  # Trả về ít nhất là indent
+
+
         
     def _on_hover(self, event):
         if hasattr(self, '_dragging') and self._dragging:
@@ -822,6 +879,22 @@ class ActionListView(ttk.Frame):
             cursor="hand2"
         )
         self.delete_all_button.pack(side=tk.LEFT, padx=8, pady=4)
+        
+        # Nút Di chuyển
+        self.move_button = tk.Button(
+            button_bar,
+            text="🔄 Di chuyển",
+            bg=cfg.PRIMARY_COLOR,
+            fg="white",
+            font=("Segoe UI", 9),
+            padx=12,
+            pady=2,
+            relief=tk.FLAT,
+            activebackground=cfg.SECONDARY_COLOR,
+            activeforeground="white",
+            cursor="hand2"
+        )
+        self.move_button.pack(side=tk.RIGHT, padx=8, pady=4)
     
         # Callbacks
         self.edit_callback = None
@@ -829,32 +902,43 @@ class ActionListView(ttk.Frame):
         self.drag_callback = None
         self.save_callback = None
         self.delete_all_callback = None
+        self.selected_action_index = None  # Track selected action
+
             
     def update_listbox(self, actions, nesting_levels=None):
+        # Lưu selection hiện tại
+        current_selection = self.selected_action_index
+    
         # Clear existing frames
         for frame in self.action_frames:
             frame.destroy()
         self.action_frames = []
-    
-        # Add new action frames với spacing nhỏ hơn
+
+        # Add new action frames
         for i, action in enumerate(actions):
-            # Gán cấp độ lồng (mặc định là 0 nếu không được cung cấp)
             nesting_level = nesting_levels[i] if nesting_levels else 0
-        
             frame = ActionItemFrame(self.action_list_frame, action, i+1, nesting_level=nesting_level)
             frame.pack(fill=tk.X, pady=(0, 3), padx=2)
-        
-            # Set callbacks for action frame
+
+            # **THÊM MỚI: Bind click vào frame để chọn action**
+            frame.bind("<Button-1>", lambda e, idx=i: self.set_selected_action(idx))
+
+            # Set callbacks for action frame (giữ nguyên)
             frame.on_reorder_callback = self._on_reorder
             frame.edit_button.config(command=lambda idx=i: self._on_edit(idx))
             frame.delete_button.config(command=lambda idx=i: self._on_delete(idx))
             frame.duplicate_button.config(command=lambda idx=i: self._on_duplicate(idx))
-            
-            # Thêm callback cho nút Play
+
             if hasattr(self, 'play_action_callback'):
                 frame.play_button.config(command=lambda idx=i: self._on_play_action(idx))
-        
+
             self.action_frames.append(frame)
+    
+        # Khôi phục selection nếu vẫn còn hợp lệ
+        if current_selection is not None and current_selection < len(actions):
+            self.set_selected_action(current_selection)
+
+
             
         
     def _on_canvas_resize(self, event):
@@ -923,10 +1007,25 @@ class ActionListView(ttk.Frame):
         for i, frame in enumerate(self.action_frames):
             frame.update_index(i+1)
         
-    def _on_edit(self, index):
+    def _on_edit(self, index):        
         if self.edit_callback:
             self.edit_callback(index)
             
+    def clear_selected_action(self):
+        """Clear current selection"""
+        if self.selected_action_index is not None:
+            # Reset màu của frame được chọn về bình thường
+            if self.selected_action_index < len(self.action_frames):
+                frame = self.action_frames[self.selected_action_index]
+                frame.config(
+                    bg=cfg.LIGHT_BG_COLOR,
+                    highlightbackground=cfg.BORDER_COLOR,
+                    highlightthickness=1
+                )
+                self._update_frame_colors(frame, cfg.LIGHT_BG_COLOR, "#333333")
+    
+        self.selected_action_index = None
+    
     def _on_delete(self, index):
         if self.delete_callback:
             self.delete_callback(index)
@@ -949,11 +1048,12 @@ class ActionListView(ttk.Frame):
     def ask_yes_no(self, title, message):
         return messagebox.askyesno(title, message)
             
-    def set_callbacks(self, add_callback, edit_callback, delete_callback, run_callback, drag_callback, save_callback, play_action_callback=None, delete_all_callback=None, duplicate_callback=None):
+    def set_callbacks(self, add_callback, edit_callback, delete_callback, run_callback, drag_callback, save_callback, play_action_callback=None, delete_all_callback=None, duplicate_callback=None, move_callback=None):
         self.add_button.config(command=add_callback)
         self.run_button.config(command=run_callback)
         self.save_button.config(command=save_callback)
-        self.delete_all_button.config(command=self._on_delete_all)
+        self.delete_all_button.config(command=self._on_delete_all)       
+        self.move_button.config(command=self._on_move_clicked)
 
         self.edit_callback = edit_callback
         self.delete_callback = delete_callback
@@ -962,7 +1062,60 @@ class ActionListView(ttk.Frame):
         self.play_action_callback = play_action_callback  # Callback cho nút Play
         self.delete_all_callback = delete_all_callback  # Callback cho nút Xóa tất cả
         self.duplicate_callback = duplicate_callback
+        self.move_callback = move_callback
     
     # Thêm phương thức mở dialog
     def open_settings(self):
         SettingsDialog(self.master)
+        
+    def set_selected_action(self, index):
+        """Set the currently selected action index với màu đậm"""
+        self.selected_action_index = index
+    
+        for i, frame in enumerate(self.action_frames):
+            if i == index:
+                # Màu được chọn - xanh đậm với viền
+                frame.config(
+                    bg="#c4d7f2",
+                    highlightbackground="#0d6efd", 
+                    highlightthickness=2
+                )
+            else:
+                # Màu bình thường
+                frame.config(
+                    bg=cfg.LIGHT_BG_COLOR,
+                    highlightbackground=cfg.BORDER_COLOR,
+                    highlightthickness=1
+                )
+
+
+    def _update_frame_colors(self, frame, bg_color, text_color):
+        """Cập nhật màu nền cho tất cả widget trong frame"""
+        for widget in frame.winfo_children():
+            if isinstance(widget, tk.Frame):
+                widget.config(bg=bg_color)
+                # Đệ quy cho các widget con trong frame con
+                self._update_frame_colors(widget, bg_color, text_color)
+            elif isinstance(widget, tk.Label):
+                widget.config(bg=bg_color)
+                # Chỉ thay đổi màu text cho label không phải là index hoặc action type
+                if hasattr(widget, 'cget') and 'index_label' not in str(widget):
+                    try:
+                        current_fg = widget.cget('fg')
+                        if current_fg not in [cfg.PRIMARY_COLOR, cfg.SUCCESS_COLOR, cfg.DANGER_COLOR]:
+                            widget.config(fg=text_color)
+                    except:
+                        pass
+            elif isinstance(widget, tk.Button):
+                # Giữ nguyên màu của các nút
+                pass
+
+
+    def get_selected_index(self):
+        """Get currently selected action index"""
+        return self.selected_action_index
+
+    def _on_move_clicked(self):
+        """Handle move button click"""
+        if hasattr(self, 'move_callback') and self.move_callback:
+            self.move_callback()

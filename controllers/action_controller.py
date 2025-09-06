@@ -4,6 +4,7 @@ import time
 import pyautogui
 from PIL import Image
 from constants import ActionType
+from views.move_index_dialog import MoveIndexDialog
 
 class ActionController:
     def __init__(self, root):
@@ -26,7 +27,8 @@ class ActionController:
             model.save_actions,
             self.play_action,
             self.delete_all_actions,
-            self.duplicate_action
+            self.duplicate_action,
+            self.show_move_dialog  # Thêm callback cho nút Di chuyển
         )
         
         # Load sample data
@@ -112,35 +114,35 @@ class ActionController:
             self.model.add_action_at(index + 1, new_action)
         
             # Cập nhật view
-            self.update_view()
-        
-            # Hiển thị thông báo thành công
-            action_frame = self.view.action_frames[index + 1] if index + 1 < len(self.view.action_frames) else None
-            if action_frame:
-                action_frame.show_temporary_notification("Đã nhân bản thành công")    
+            self.update_view()        
+            
                 
     def play_action(self, index):
         """Thực thi một hành động cụ thể khi nút play được nhấn"""
         action = self.model.get_action(index)
         action_frame = self.view.action_frames[index] if index < len(self.view.action_frames) else None
-
+    
         from controllers.actions.action_factory import ActionFactory
         handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
-
+    
         if handler:
             handler.action_frame = action_frame
         
-            # THÊM: Xử lý đặc biệt cho IF condition độc lập
+            # Xử lý đặc biệt cho các loại condition
             if action.action_type == ActionType.IF_CONDITION:
                 result = handler.play()
                 # Nếu IF sai (result = True), tìm ELSE IF
                 if result:
                     self._find_and_execute_else_if_for_standalone(index)
+        
+            elif action.action_type == ActionType.ELSE_IF_CONDITION:
+                # THÊM: Xử lý ELSE_IF khi chạy standalone
+                print(f"[STANDALONE DEBUG] Chạy ELSE_IF tại index {index}")
+                handler.play()
+            
             else:
                 handler.play()
-        else:
-            if action_frame:
-                action_frame.show_temporary_notification(f"Chức năng '{action.action_type}' chưa được hỗ trợ")
+
                 
 
     def _find_and_execute_else_if_for_standalone(self, if_index):
@@ -346,6 +348,12 @@ class ActionController:
         while i < len(actions):
             action = actions[i]
             action_type = action.action_type
+            
+            # === DEBUG LOG ===
+            print(f"[CONTROLLER DEBUG] Index {i}: {action_type}")
+            print(f"[CONTROLLER DEBUG] if_stack: {[s['condition_met'] for s in if_stack]}")
+            print(f"[CONTROLLER DEBUG] skip_blocks: {skip_blocks}")
+            # === END DEBUG ===
         
             # Kiểm tra xem action hiện tại có nằm trong khối cần bỏ qua không
             should_skip = False
@@ -354,112 +362,69 @@ class ActionController:
                     should_skip = True
                     break
                 
-            if should_skip:
-                # Thông báo bỏ qua action này (debug)
-                action_frame = next((f for f in self.view.action_frames 
-                                   if f.action.id == action.id), None)
-                if action_frame:
-                    action_frame.show_temporary_notification("Bỏ qua action này")
+            if should_skip:              
                 i += 1
                 continue
             
-            # Nếu đang ở trong if stack và điều kiện không thỏa mãn, bỏ qua
+            # KHÔNG bỏ qua ELSE_IF khi IF sai - để IfConditionAction tự xử lý
             if if_stack and not if_stack[-1]['condition_met']:
-                # Thông báo bỏ qua vì if không thỏa mãn (debug)
-                action_frame = next((f for f in self.view.action_frames 
-                                   if f.action.id == action.id), None)
-                if action_frame:
-                    action_frame.show_temporary_notification("Bỏ qua vì if điều kiện sai")
-                i += 1
-                continue
+                # CHỈ bỏ qua action thông thường, KHÔNG bỏ qua ELSE_IF
+                if action_type != ActionType.ELSE_IF_CONDITION and action_type != ActionType.END_IF_CONDITION:                   
+                    i += 1
+                    continue
             
             # Xử lý IF condition
             if action_type == ActionType.IF_CONDITION:
                 # Tạo handler và thực thi condition
                 handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
                 if handler:
-                    result = handler.play()  # Lưu kết quả từ handler.play()
-                    condition_result = not result  # True nếu điều kiện đúng
-                
+                    result = handler.play() # Lưu kết quả từ handler.play()
+                    condition_result = not result # True nếu điều kiện đúng
+        
                     # Tạo một ID duy nhất cho khối IF này
                     import uuid
                     if_id = str(uuid.uuid4())
-                
+        
                     # Lưu trạng thái điều kiện IF
                     global_vars.set(f"__if_condition_{if_id}", condition_result)
-                
+        
                     # Lưu cấp độ lồng hiện tại
                     current_if_level = len(if_stack)
                     global_vars.set("__if_nesting_level", current_if_level + 1)
                     global_vars.set(f"__if_level_{current_if_level}", if_id)
-                
+        
                     # Đẩy thông tin vào stack
                     if_stack.append({
                         'id': if_id,
                         'condition_met': condition_result,
                         'level': current_if_level
                     })
-                
-                    # Thêm vào đây: nếu condition false, bỏ qua đến ELSE IF hoặc END IF
-                    if not condition_result:
-                        # Tìm ELSE_IF hoặc END_IF gần nhất
-                        current_level = 1
-                        skip_to = -1
-                    
-                        for j in range(i + 1, len(actions)):
-                            if actions[j].action_type == ActionType.IF_CONDITION:
-                                current_level += 1
-                            elif actions[j].action_type == ActionType.ELSE_IF_CONDITION and current_level == 1:
-                                # Tìm thấy ELSE_IF, không skip vượt qua nó
-                                break
-                            elif actions[j].action_type == ActionType.END_IF_CONDITION:
-                                current_level -= 1
-                                if current_level == 0:
-                                    # Tìm thấy END_IF tương ứng
-                                    skip_to = j
-                                    break
-                    
-                        # Nếu không có ELSE_IF, bỏ qua đến END_IF
-                        if skip_to > -1:
-                            skip_blocks.append({
-                                'start': i + 1,  # Start từ action ngay sau if
-                                'end': skip_to  # End ở action End If
-                            })
+        
+                    # THAY ĐỔI: Không tạo skip_blocks, để IfConditionAction tự xử lý
+                    if condition_result:
+                        # IF đúng: IfConditionAction đã xử lý
+                        pass
+                    else:
+                        # IF sai: IfConditionAction đã tìm và thực thi ELSE IF
+                        pass
         
             # Xử lý ELSE IF condition
             elif action_type == ActionType.ELSE_IF_CONDITION:
-                # Kiểm tra xem có nằm trong block if không
-                if not if_stack:
-                    # Bỏ qua nếu không nằm trong if
-                    pass
-                else:
-                    # Lấy thông tin if gần nhất
-                    current_if = if_stack[-1]
+                print(f"[CONTROLLER DEBUG] *** BẮT ĐẦU XỬ LÝ ELSE_IF tại index {i} ***")
+                print(f"[CONTROLLER DEBUG] if_stack state: {if_stack}")
+    
+                handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
+                if handler:
+                    action_frame = next((f for f in self.view.action_frames 
+                                        if f.action.id == action.id), None)
+                    if action_frame:
+                        handler.action_frame = action_frame
         
-                    # Kiểm tra riêng và hiển thị rõ lý do bỏ qua
-                    if current_if['condition_met']:
-                        # Debug: nếu if đã true, bỏ qua else if này
-                        action_frame = next((f for f in self.view.action_frames
-                                           if f.action.id == action.id), None)
-                        if action_frame:
-                            action_frame.show_temporary_notification(
-                                "Bỏ qua Else If vì If trước đã True"
-                            )
-                        i += 1
-                        continue
-            
-                    # Chỉ đánh giá nếu các điều kiện trước đó đều không thỏa mãn
-                    if not current_if['condition_met']:
-                        # Tạo handler và thực thi
-                        handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
-                        if handler:
-                            handler.play()
-                            condition_result = not handler.should_break_action()
-                
-                            # Cập nhật trạng thái khối if hiện tại
-                            if condition_result:
-                                current_if['condition_met'] = True
-                                global_vars.set(f"__if_condition_{current_if['id']}", True)
+                    print(f"[CONTROLLER DEBUG] Gọi handler.play() cho ELSE_IF")
+                    result = handler.play()
+                    print(f"[CONTROLLER DEBUG] ELSE_IF trả về: {result}")
+                else:
+                    print(f"[CONTROLLER DEBUG] KHÔNG thể tạo handler cho ELSE_IF!")
         
             # Xử lý END IF condition
             elif action_type == ActionType.END_IF_CONDITION:
@@ -474,15 +439,21 @@ class ActionController:
             else:
                 # Kiểm tra xem có nên bỏ qua action này không
                 should_skip = False
-            
                 # Nếu đang trong if và điều kiện không thỏa mãn thì bỏ qua
+                # NHƯNG KHÔNG bỏ qua ELSE_IF và END_IF
                 if if_stack and not if_stack[-1]['condition_met']:
-                    should_skip = True
-            
+                    if action_type != ActionType.ELSE_IF_CONDITION and action_type != ActionType.END_IF_CONDITION:
+                        should_skip = True
+    
                 if not should_skip:
                     # Tạo handler và thực thi
                     handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
                     if handler:
+                        # Thiết lập action frame
+                        action_frame = next((f for f in self.view.action_frames 
+                                            if f.action.id == action.id), None)
+                        if action_frame:
+                            handler.action_frame = action_frame
                         handler.play()
         
             # Di chuyển đến action tiếp theo
@@ -611,3 +582,48 @@ class ActionController:
     
         return nesting_levels
 
+    def _skip_to_else_if_or_end_if(self, current_if_index, actions, if_stack):
+        """Tìm ELSE IF hoặc END IF tương ứng với IF hiện tại"""
+        level = 1
+        i = current_if_index + 1
+    
+        while i < len(actions):
+            action = actions[i]
+        
+            if action.action_type == ActionType.IF_CONDITION:
+                level += 1
+            elif action.action_type == ActionType.ELSE_IF_CONDITION and level == 1:
+                # Tìm thấy ELSE IF cùng cấp
+                return i
+            elif action.action_type == ActionType.END_IF_CONDITION:
+                level -= 1
+                if level == 0:
+                    # Tìm thấy END IF tương ứng
+                    return i
+        
+            i += 1
+    
+        return len(actions)  # Không tìm thấy, kết thúc sequence
+
+    def show_move_dialog(self):
+        """Hiển thị dialog di chuyển hành động"""
+        selected_index = self.view.get_selected_index()
+    
+        if selected_index is None:
+            self.view.show_message("Lỗi", "Vui lòng chọn một hành động bằng cách click vào vùng action trước.")
+            return
+        
+        max_index = len(self.model.get_all_actions())
+        if max_index <= 1:
+            self.view.show_message("Lỗi", "Không đủ hành động để di chuyển.")
+            return
+    
+        dialog = MoveIndexDialog(self.root, selected_index, max_index)
+        self.root.wait_window(dialog)
+    
+        if dialog.result_index is not None:
+            target_index = dialog.result_index
+            if target_index != selected_index:
+                self.move_action(selected_index, target_index)
+                self.update_view()
+                self.view.set_selected_action(target_index)

@@ -24,6 +24,8 @@ class ActionFactory:
         """
         action_type = action.action_type
         
+        print(f"[FACTORY DEBUG] Creating handler for: {action_type}")
+        
         if action_type == ActionType.DI_CHUYEN_CHUOT:
             return MouseMoveAction(root, action, view, model, controller)
         elif action_type == ActionType.TIM_HINH_ANH:
@@ -33,7 +35,9 @@ class ActionFactory:
         elif action_type == ActionType.IF_CONDITION:
             return IfConditionAction(root, action, view, model, controller)
         elif action_type == ActionType.ELSE_IF_CONDITION:
-            return ElseIfConditionAction(root, action, view, model, controller)
+            handler = ElseIfConditionAction(root, action, view, model, controller)
+            print(f"[FACTORY DEBUG] Created ElseIfConditionAction: {handler}")
+            return handler
         elif action_type == ActionType.END_IF_CONDITION:
             return EndIfConditionAction(root, action, view, model, controller)
         else:

@@ -51,6 +51,7 @@
     <Compile Include="views\action_params\mouse_move_params.py" />
     <Compile Include="views\action_params\tao_bien_params.py" />
     <Compile Include="views\action_params\__init__.py" />
+    <Compile Include="views\move_index_dialog.py" />
     <Compile Include="views\screen_area_selector.py" />
     <Compile Include="views\settings_dialog.py" />
     <Compile Include="views\__init__.py" />

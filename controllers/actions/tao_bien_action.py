@@ -14,18 +14,10 @@ class TaoBienAction(BaseAction):
         variable_value = self.params.get("result_action", "")
         
         # Nếu không có tên biến thì không làm gì
-        if not variable_name:
-            if hasattr(self, 'action_frame') and self.action_frame:
-                self.action_frame.show_temporary_notification("Tên biến không được để trống")
+        if not variable_name:          
             return
         
         # Tạo biến trong GlobalVariables
         from models.global_variables import GlobalVariables
         globals_var = GlobalVariables()
         globals_var.set(variable_name, variable_value)
-        
-        # Hiển thị thông báo thành công
-        if hasattr(self, 'action_frame') and self.action_frame:
-            self.action_frame.show_temporary_notification(
-                f"Đã tạo biến: {variable_name} = {variable_value}"
-            )

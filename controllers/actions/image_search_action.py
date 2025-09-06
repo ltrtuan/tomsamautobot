@@ -17,8 +17,6 @@ class ImageSearchAction(BaseAction):
         
         # Kiểm tra nếu không có đường dẫn hình ảnh hoặc file không tồn tại
         if not image_path or not os.path.exists(image_path):
-            if hasattr(self, 'action_frame') and self.action_frame:
-                self.action_frame.show_temporary_notification("Không tìm thấy file hình ảnh")
             
             # Đặt variable = false nếu có
             variable = self.params.get("variable", "")
@@ -32,11 +30,7 @@ class ImageSearchAction(BaseAction):
             region = (x, y, width, height)
         
         # Tìm kiếm hình ảnh
-        try:         
-            
-            # Thông báo đang tìm kiếm
-            if hasattr(self, 'action_frame') and self.action_frame:
-                self.action_frame.show_temporary_notification("Đang tìm kiếm hình ảnh...")
+        try:
             
             # Tạo instance của ImageSearcher
             image_searcher = ImageSearcher(image_path, region, accuracy)
@@ -46,12 +40,7 @@ class ImageSearchAction(BaseAction):
             
             if found and result:
                 center_x, center_y, confidence = result
-                
-                # Hiển thị thông báo tìm thấy
-                if hasattr(self, 'action_frame') and self.action_frame:
-                    self.action_frame.show_temporary_notification(
-                        f"Tìm thấy hình ảnh với độ tin cậy {confidence:.2f}"
-                    )
+            
                 
                 # Di chuyển chuột đến vị trí tìm thấy
                 # move_mouse sẽ tự động xử lý double_click từ self.params
@@ -62,9 +51,6 @@ class ImageSearchAction(BaseAction):
                 if variable:                    
                     GlobalVariables().set(variable, "true")
             else:
-                # Hiển thị thông báo không tìm thấy
-                if hasattr(self, 'action_frame') and self.action_frame:
-                    self.action_frame.show_temporary_notification("Không tìm thấy hình ảnh")
                 
                 # Đặt variable = false nếu có
                 variable = self.params.get("variable", "")
@@ -72,9 +58,6 @@ class ImageSearchAction(BaseAction):
                     
                     GlobalVariables().set(variable, "false")
         except Exception as e:
-            # Hiển thị thông báo lỗi
-            if hasattr(self, 'action_frame') and self.action_frame:
-                self.action_frame.show_temporary_notification(f"Lỗi: {str(e)}")
                 
             # Đặt variable = false nếu có
             variable = self.params.get("variable", "")
