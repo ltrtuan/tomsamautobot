@@ -4,14 +4,12 @@ from constants import ActionType
 class ElseIfConditionAction(BaseAction):
     
     def prepare_play(self):
+        print(f"[ELSE_IF DEBUG] ElseIfConditionAction.prepare_play() được gọi!")
+        print(f"[ELSE_IF DEBUG] Action ID: {self.action.id}")
         """Xử lý điều kiện ELSE IF với logic đơn giản"""
         # Đánh giá điều kiện
-        condition_result = not self.should_break_action()
-        
-        # Hiển thị kết quả
-        if hasattr(self, 'action_frame') and self.action_frame:
-            result_text = "Đúng" if condition_result else "Sai"
-            self.action_frame.show_temporary_notification(f"ELSE IF điều kiện: {result_text}")
+        condition_result = not self.should_break_action()       
+       
         
         if condition_result:
             # ELSE IF đúng: thực thi khối ELSE IF

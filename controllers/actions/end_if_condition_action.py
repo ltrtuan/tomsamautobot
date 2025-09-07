@@ -13,13 +13,8 @@ class EndIfConditionAction(BaseAction):
         
         # Đảm bảo không âm
         current_level = max(0, current_level)
-        globals_var.set("__condition_stack_size", current_level)
-        
-        # Debug thông tin
-        if hasattr(self, 'action_frame') and self.action_frame:
-            self.action_frame.show_temporary_notification(
-                f"Kết thúc khối IF/ELSE IF (cấp {current_level})"
-            )
+        globals_var.set("__condition_stack_size", current_level)        
+       
         
         return False
     
@@ -29,10 +24,7 @@ class EndIfConditionAction(BaseAction):
         nhưng END_IF không cần thực thi các action lồng
         """
         # END_IF không cần thực thi các action lồng
-        if hasattr(self, 'action_frame') and self.action_frame:
-            self.action_frame.show_temporary_notification(
-                "END_IF không cần thực thi các action lồng"
-            )
+      
         return
 
 
