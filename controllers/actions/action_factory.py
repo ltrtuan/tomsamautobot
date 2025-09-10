@@ -5,6 +5,10 @@ from controllers.actions.tao_bien_action import TaoBienAction
 from controllers.actions.if_condition_action import IfConditionAction
 from controllers.actions.else_if_condition_action import ElseIfConditionAction
 from controllers.actions.end_if_condition_action import EndIfConditionAction
+from controllers.actions.for_action import ForAction
+from controllers.actions.end_for_action import EndForAction
+from controllers.actions.break_for_action import BreakForAction
+from controllers.actions.skip_for_action import SkipForAction
 
 class ActionFactory:
     """Factory tạo ra play handler dựa vào loại action"""
@@ -40,6 +44,14 @@ class ActionFactory:
             return handler
         elif action_type == ActionType.END_IF_CONDITION:
             return EndIfConditionAction(root, action, view, model, controller)
+        elif action_type == ActionType.FOR_LOOP:
+            return ForAction(root, action, view, model, controller)
+        elif action_type == ActionType.END_FOR_LOOP:
+            return EndForAction(root, action, view, model, controller)
+        elif action_type == ActionType.BREAK_FOR_LOOP:
+            return BreakForAction(root, action, view, model, controller)
+        elif action_type == ActionType.SKIP_FOR_LOOP:
+            return SkipForAction(root, action, view, model, controller)
         else:
             # Trả về None nếu không tìm thấy handler phù hợp
             return None

@@ -434,6 +434,176 @@ class ActionController:
                 
                     # Cập nhật cấp độ lồng hiện tại
                     global_vars.set("__if_nesting_level", len(if_stack))
+                    
+            # Xử lý FOR LOOP
+            elif action_type == ActionType.FOR_LOOP:
+                import random
+                # Lấy số vòng lặp từ parameters
+                repeat_loop = int(action.parameters.get("repeat_loop", 1))
+                random_repeat_loop = int(action.parameters.get("random_repeat_loop", 0))
+    
+                # Sinh số random thêm nếu > 0
+                extra_loop = random.randint(0, random_repeat_loop) if random_repeat_loop > 0 else 0
+                total_loops = repeat_loop + extra_loop
+    
+                print(f"[CONTROLLER DEBUG] Bắt đầu For Loop với {total_loops} lần")
+    
+                # Tìm vị trí End For tương ứng
+                nesting_level = 0
+                end_for_index = i
+                while end_for_index + 1 < len(actions):
+                    end_for_index += 1
+                    check_action = actions[end_for_index]
+                    if check_action.action_type == ActionType.FOR_LOOP:
+                        nesting_level += 1
+                    elif check_action.action_type == ActionType.END_FOR_LOOP:
+                        if nesting_level == 0:
+                            break
+                        nesting_level -= 1
+    
+                # Kiểm tra tính hợp lệ của For Loop
+                if end_for_index >= len(actions) or actions[end_for_index].action_type != ActionType.END_FOR_LOOP:
+                    print("[CONTROLLER ERROR] Không tìm thấy End For Loop tương ứng!")
+                    i += 1
+                    continue
+    
+                # Thực thi vòng lặp For
+                break_current_loop = False  # Flag để break loop
+    
+                for loop_count in range(total_loops):
+                    if break_current_loop:
+                        print(f"[CONTROLLER DEBUG] For Loop bị break sớm tại iteration {loop_count + 1}")
+                        break
+            
+                    print(f"[CONTROLLER DEBUG] For Loop - Iteration {loop_count + 1}/{total_loops}")
+        
+                    # Thực thi các action lồng từ i+1 đến end_for_index-1
+                    nested_i = i + 1
+                    skip_current_iteration = False  # Flag để skip iteration
+        
+                    while nested_i < end_for_index:
+                        if skip_current_iteration:
+                            print(f"[CONTROLLER DEBUG] Skip iteration {loop_count + 1}, chuyển sang iteration tiếp theo")
+                            break
+                
+                        if break_current_loop:
+                            print(f"[CONTROLLER DEBUG] Break For Loop được kích hoạt")
+                            break
+                
+                        nested_action = actions[nested_i]
+                        nested_action_type = nested_action.action_type
+            
+                        # Xử lý Skip For Loop trong vòng lặp
+                        if nested_action_type == ActionType.SKIP_FOR_LOOP:
+                            handler_nested = ActionFactory.get_handler(self.root, nested_action, self.view, self.model, self)
+                            if handler_nested and handler_nested.prepare_play():
+                                print(f"[CONTROLLER DEBUG] Skip For được kích hoạt tại iteration {loop_count + 1}")
+                                skip_current_iteration = True
+                                break
+            
+                        # Xử lý Break For Loop trong vòng lặp
+                        elif nested_action_type == ActionType.BREAK_FOR_LOOP:
+                            handler_nested = ActionFactory.get_handler(self.root, nested_action, self.view, self.model, self)
+                            if handler_nested and handler_nested.prepare_play():
+                                print(f"[CONTROLLER DEBUG] Break For được kích hoạt tại iteration {loop_count + 1}")
+                                break_current_loop = True
+                                break
+            
+                        # Kiểm tra điều kiện skip từ if_stack
+                        should_skip_nested = False
+                        if if_stack and not if_stack[-1]['condition_met']:
+                            if nested_action_type not in [ActionType.ELSE_IF_CONDITION, ActionType.END_IF_CONDITION]:
+                                should_skip_nested = True
+            
+                        if should_skip_nested:
+                            nested_i += 1
+                            continue
+            
+                        # Xử lý các action lồng khác
+                        if nested_action_type == ActionType.IF_CONDITION:
+                            handler_nested = ActionFactory.get_handler(self.root, nested_action, self.view, self.model, self)
+                            if handler_nested:
+                                result = handler_nested.play()
+                                condition_result = not result
+                    
+                                # Cập nhật if_stack cho nested IF
+                                import uuid
+                                nested_if_id = str(uuid.uuid4())
+                                if_stack.append({
+                                    'id': nested_if_id,
+                                    'condition_met': condition_result,
+                                    'level': len(if_stack)
+                                })
+            
+                        elif nested_action_type == ActionType.ELSE_IF_CONDITION:
+                            handler_nested = ActionFactory.get_handler(self.root, nested_action, self.view, self.model, self)
+                            if handler_nested:
+                                handler_nested.play()
+            
+                        elif nested_action_type == ActionType.END_IF_CONDITION:
+                            if if_stack:
+                                if_stack.pop()
+            
+                        else:
+                            # Thực thi action bình thường
+                            handler_nested = ActionFactory.get_handler(self.root, nested_action, self.view, self.model, self)
+                            if handler_nested:
+                                action_frame = next((f for f in self.view.action_frames
+                                                   if f.action.id == nested_action.id), None)
+                                if action_frame:
+                                    handler_nested.action_frame = action_frame
+                                handler_nested.play()
+            
+                        nested_i += 1
+    
+                # Sau khi hoàn thành vòng lặp, nhảy đến action sau End For
+                i = end_for_index + 1
+                continue
+
+
+            # Xử lý END FOR LOOP
+            elif action_type == ActionType.END_FOR_LOOP:
+                # End For được xử lý trong logic For Loop, chỉ cần bỏ qua
+                print("[CONTROLLER DEBUG] Gặp End For Loop (đã được xử lý trong For Loop)")
+
+            # Xử lý SKIP FOR LOOP
+            elif action_type == ActionType.SKIP_FOR_LOOP:
+                handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
+                if handler and handler.prepare_play():
+                    print(f"[CONTROLLER DEBUG] Skip For được kích hoạt tại index {i}")
+                    # Tìm End For tương ứng để skip đến iteration tiếp theo
+                    nesting_level = 0
+                    skip_to_idx = i + 1
+        
+                    while skip_to_idx < len(actions):
+                        check_action = actions[skip_to_idx]
+                        if check_action.action_type == ActionType.FOR_LOOP:
+                            nesting_level += 1
+                        elif check_action.action_type == ActionType.END_FOR_LOOP:
+                            if nesting_level == 0:
+                                # Tìm thấy End For cùng level, skip đến đây để iteration tiếp theo
+                                break
+                            nesting_level -= 1
+                        skip_to_idx += 1
+        
+                    # Set flag để báo hiệu skip iteration trong For Loop
+                    skip_current_iteration = True
+                    break  # Thoát khỏi nested loop hiện tại
+                else:
+                    print(f"[CONTROLLER DEBUG] Skip For điều kiện không thỏa, tiếp tục bình thường")
+
+            # Xử lý BREAK FOR LOOP  
+            elif action_type == ActionType.BREAK_FOR_LOOP:
+                handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
+                if handler and handler.prepare_play():
+                    print(f"[CONTROLLER DEBUG] Break For được kích hoạt tại index {i}")
+                    # Set flag để báo hiệu break For Loop
+                    break_current_loop = True
+                    break  # Thoát khỏi nested loop hiện tại
+                else:
+                    print(f"[CONTROLLER DEBUG] Break For điều kiện không thỏa, tiếp tục bình thường")
+
+
         
             # Xử lý các loại action khác
             else:
@@ -566,6 +736,10 @@ class ActionController:
                 nesting_levels[i] = current_level
                 # Tăng cấp độ cho các action sau IF
                 current_level += 1
+            elif action.action_type == ActionType.FOR_LOOP:
+                # For có cùng logic với IF
+                nesting_levels[i] = current_level
+                current_level += 1
             elif action.action_type == ActionType.ELSE_IF_CONDITION:
                 # Else If có cùng cấp độ với If tương ứng
                 # Giảm level trước (để cùng level với IF) rồi tăng lại sau
@@ -575,6 +749,10 @@ class ActionController:
                 # Giảm cấp độ trước khi gán cho END IF
                 current_level = max(0, current_level - 1)
                 # Lưu cấp độ hiện tại cho action END IF
+                nesting_levels[i] = current_level
+            elif action.action_type == ActionType.END_FOR_LOOP:
+                # End For có cùng logic với End If
+                current_level = max(0, current_level - 1)
                 nesting_levels[i] = current_level
             else:
                 # Các action thông thường lấy cấp độ hiện tại

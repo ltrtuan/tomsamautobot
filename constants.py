@@ -8,6 +8,10 @@ class ActionType(str, Enum):
     IF_CONDITION = "If condition"
     ELSE_IF_CONDITION = "Else if condition"
     END_IF_CONDITION = "End If condition"
+    FOR_LOOP = "For loop"
+    END_FOR_LOOP = "End For loop"
+    BREAK_FOR_LOOP = "Break For loop"
+    SKIP_FOR_LOOP = "Skip For loop"
     
     @classmethod
     def get_display_values(cls):

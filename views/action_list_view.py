@@ -222,6 +222,14 @@ class ActionItemFrame(tk.Frame):
             return "🔀"  # Icon chuyển hướng cho "Ngược lại nếu"
         elif action_type == ActionType.END_IF_CONDITION:
             return "🔚"  # Icon kết thúc cho "Kết thúc Nếu"
+        elif action_type == ActionType.FOR_LOOP:
+            return "🔄" # Icon vòng lặp cho "For" 
+        elif action_type == ActionType.END_FOR_LOOP:
+            return "⏹️" # Icon dừng cho "End For"     
+        elif action_type == ActionType.BREAK_FOR_LOOP:
+            return "🚫"    # THÊM MỚI - Icon cấm/dừng
+        elif action_type == ActionType.SKIP_FOR_LOOP:
+            return "⏭️"    # THÊM MỚI - Icon skip/next
         elif action_type == ActionType.TAO_BIEN:
             return "🔢"  # Icon số hoặc biến tính toán
         else:
@@ -340,7 +348,8 @@ class ActionItemFrame(tk.Frame):
             "DI_CHUYEN_CHUOT",
             "TIM_HINH_ANH",
             "TAO_BIEN",
-            'IF_CONDITION'
+            'IF_CONDITION',
+            'FOR_LOOP'
             # Thêm các action khác nếu cần
         ]
     
@@ -449,6 +458,96 @@ class ActionItemFrame(tk.Frame):
     
         elif action_type_display == ActionType.TAO_BIEN:
             return f"{indent}Variable {action.parameters.get('variable', '')} = {action.parameters.get('result_action', '')}"
+        
+        elif action_type_display == ActionType.FOR_LOOP:
+            # Lấy thông tin từ parameters
+            repeat_loop = action.parameters.get('repeat_loop', 1)
+            random_repeat_loop = action.parameters.get('random_repeat_loop', 0)
+    
+            # Tính toán số lần chạy hiển thị
+            if random_repeat_loop > 0:
+                loop_text = f"Lặp {repeat_loop} + (0-{random_repeat_loop}) lần"
+            else:
+                loop_text = f"Lặp {repeat_loop} lần"
+    
+            # Lấy break_conditions để hiển thị
+            break_conditions = action.parameters.get('break_conditions', [])
+    
+            if break_conditions:
+                condition_parts = []
+                for i, condition in enumerate(break_conditions):
+                    variable = condition.get('variable', '')
+                    value = condition.get('value', '')
+                    logical_op = condition.get('logical_op', '')
+            
+                    if not variable.strip():
+                        continue
+            
+                    condition_str = f"{variable} = {value}"
+                    if i > 0 and logical_op:
+                        condition_str = f"{logical_op} {condition_str}"
+            
+                    condition_parts.append(condition_str)
+        
+                if condition_parts:
+                    conditions_text = " ".join(condition_parts)
+                    return f"{indent}🔄 For: {loop_text}, Điều kiện: {conditions_text}"
+                else:
+                    return f"{indent}🔄 For: {loop_text}"
+            else:
+                return f"{indent}🔄 For: {loop_text}"
+
+        elif action_type_display == ActionType.END_FOR_LOOP:
+            return f"{indent}⏹️ Kết thúc For"
+        
+        elif action_type_display == ActionType.BREAK_FOR_LOOP:
+            # Lấy break_conditions để hiển thị
+            break_conditions = action.parameters.get('break_conditions', [])
+            if break_conditions:
+                condition_parts = []
+                for i, condition in enumerate(break_conditions):
+                    variable = condition.get('variable', '')
+                    value = condition.get('value', '')
+                    logical_op = condition.get('logical_op', '')
+            
+                    if not variable.strip():
+                        continue
+                
+                    condition_str = f"{variable} = {value}"
+                    if i > 0 and logical_op:
+                        condition_str = f"{logical_op} {condition_str}"
+                    condition_parts.append(condition_str)
+        
+                if condition_parts:
+                    conditions_text = " ".join(condition_parts)
+                    return f"{indent}🚫 Break For nếu: {conditions_text}"
+    
+            return f"{indent}🚫 Thoát khỏi vòng lặp For"
+
+        elif action_type_display == ActionType.SKIP_FOR_LOOP:
+            # Lấy break_conditions để hiển thị
+            break_conditions = action.parameters.get('break_conditions', [])
+            if break_conditions:
+                condition_parts = []
+                for i, condition in enumerate(break_conditions):
+                    variable = condition.get('variable', '')
+                    value = condition.get('value', '')
+                    logical_op = condition.get('logical_op', '')
+            
+                    if not variable.strip():
+                        continue
+                
+                    condition_str = f"{variable} = {value}"
+                    if i > 0 and logical_op:
+                        condition_str = f"{logical_op} {condition_str}"
+                    condition_parts.append(condition_str)
+        
+                if condition_parts:
+                    conditions_text = " ".join(condition_parts)
+                    return f"{indent}⏭️ Skip For nếu: {conditions_text}"
+    
+            return f"{indent}⏭️ Bỏ qua iteration hiện tại"
+
 
         return indent  # Trả về ít nhất là indent
 
