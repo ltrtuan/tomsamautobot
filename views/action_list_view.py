@@ -949,6 +949,21 @@ class ActionListView(ttk.Frame):
             cursor="hand2"
         )
         self.save_button.pack(side=tk.RIGHT, padx=8, pady=4)
+        
+        self.load_button = tk.Button(
+            button_bar,
+            text="📂 Tải",
+            bg=cfg.SECONDARY_COLOR,  # Màu khác với Save
+            fg="white",
+            font=("Segoe UI", 9),
+            padx=12,
+            pady=2,
+            relief=tk.FLAT,
+            activebackground="#0d5aa7",
+            activeforeground="white",
+            cursor="hand2"
+        )
+        self.load_button.pack(side=tk.RIGHT, padx=8, pady=4)
     
         # Thêm status bar - phong cách PAD
         status_bar = tk.Label(
@@ -1147,10 +1162,11 @@ class ActionListView(ttk.Frame):
     def ask_yes_no(self, title, message):
         return messagebox.askyesno(title, message)
             
-    def set_callbacks(self, add_callback, edit_callback, delete_callback, run_callback, drag_callback, save_callback, play_action_callback=None, delete_all_callback=None, duplicate_callback=None, move_callback=None):
+    def set_callbacks(self, add_callback, edit_callback, delete_callback, run_callback, drag_callback, save_callback, play_action_callback=None, delete_all_callback=None, duplicate_callback=None, move_callback=None, load_callback=None):
         self.add_button.config(command=add_callback)
         self.run_button.config(command=run_callback)
         self.save_button.config(command=save_callback)
+        self.load_button.config(command=load_callback)
         self.delete_all_button.config(command=self._on_delete_all)       
         self.move_button.config(command=self._on_move_clicked)
 

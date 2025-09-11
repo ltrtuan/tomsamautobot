@@ -1,7 +1,9 @@
 ﻿from controllers.actions.base_action import BaseAction
 from models.global_variables import GlobalVariables
+from exceptions.loop_exceptions import LoopSkipException
 
 class SkipForAction(BaseAction):
+
     def prepare_play(self):
         """Kiểm tra điều kiện Skip For action"""
         print(f"[SKIP FOR ACTION] Kiểm tra điều kiện Skip For")
@@ -24,7 +26,7 @@ class SkipForAction(BaseAction):
             
             if not variable:
                 continue
-                
+            
             # Lấy giá trị hiện tại của biến
             current_value = str(global_vars.get(variable, "")).strip()
             
@@ -39,6 +41,14 @@ class SkipForAction(BaseAction):
         
         # Tất cả điều kiện phải đúng (AND logic)
         all_conditions_met = all(condition_results)
-        
         print(f"[SKIP FOR ACTION] Tất cả điều kiện: {all_conditions_met}")
+        
         return all_conditions_met
+
+    def play(self):
+        """QUAN TRỌNG: Throw exception để skip iteration hiện tại"""
+        if self.prepare_play():
+            print(f"[SKIP FOR ACTION] ⏭️ THROWING LoopSkipException - Skip iteration ngay lập tức!")
+            raise LoopSkipException("Skip For condition met - skipping current iteration")
+        
+        return False

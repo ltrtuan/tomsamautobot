@@ -1,7 +1,9 @@
 ﻿from controllers.actions.base_action import BaseAction
 from models.global_variables import GlobalVariables
+from exceptions.loop_exceptions import LoopBreakException
 
 class BreakForAction(BaseAction):
+
     def prepare_play(self):
         """Kiểm tra điều kiện Break For action"""
         print(f"[BREAK FOR ACTION] Kiểm tra điều kiện Break For")
@@ -24,7 +26,7 @@ class BreakForAction(BaseAction):
             
             if not variable:
                 continue
-                
+            
             # Lấy giá trị hiện tại của biến
             current_value = str(global_vars.get(variable, "")).strip()
             
@@ -39,6 +41,14 @@ class BreakForAction(BaseAction):
         
         # Tất cả điều kiện phải đúng (AND logic)
         all_conditions_met = all(condition_results)
-        
         print(f"[BREAK FOR ACTION] Tất cả điều kiện: {all_conditions_met}")
+        
         return all_conditions_met
+
+    def play(self):
+        """QUAN TRỌNG: Throw exception để thoát ngay lập tức"""
+        if self.prepare_play():
+            print(f"[BREAK FOR ACTION] 🚫 THROWING LoopBreakException - Thoát tất cả vòng lặp ngay lập tức!")
+            raise LoopBreakException("Break For condition met - exiting all loops immediately")
+        
+        return False

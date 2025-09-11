@@ -38,6 +38,8 @@
     <Compile Include="controllers\action_controller.py" />
     <Compile Include="controllers\__init__.py" />
     <Compile Include="core\interfaces.py" />
+    <Compile Include="exceptions\loop_exceptions.py" />
+    <Compile Include="exceptions\__init__.py" />
     <Compile Include="login_window.py" />
     <Compile Include="main.py" />
     <Compile Include="models\action_model.py" />
@@ -69,6 +71,7 @@
     <Folder Include="models\" />
     <Folder Include="controllers\" />
     <Folder Include="core\" />
+    <Folder Include="exceptions\" />
     <Folder Include="views\" />
     <Folder Include="views\action_params\" />
   </ItemGroup>
