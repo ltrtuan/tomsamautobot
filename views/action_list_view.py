@@ -232,6 +232,8 @@ class ActionItemFrame(tk.Frame):
             return "⏭️"    # THÊM MỚI - Icon skip/next
         elif action_type == ActionType.TAO_BIEN:
             return "🔢"  # Icon số hoặc biến tính toán
+        elif action_type == ActionType.BANPHIM:  # ➋ THÊM ICON MỚI 
+            return "⌨️"
         else:
             return "📋"  # Icon mặc định cho các loại khác
     
@@ -349,7 +351,8 @@ class ActionItemFrame(tk.Frame):
             "TIM_HINH_ANH",
             "TAO_BIEN",
             'IF_CONDITION',
-            'FOR_LOOP'
+            'FOR_LOOP',
+            'BANPHIM'
             # Thêm các action khác nếu cần
         ]
     
@@ -547,7 +550,12 @@ class ActionItemFrame(tk.Frame):
                     return f"{indent}⏭️ Skip For nếu: {conditions_text}"
     
             return f"{indent}⏭️ Bỏ qua iteration hiện tại"
-
+        elif action_type_display == ActionType.BANPHIM:
+            key_sequence = action.parameters.get("key_sequence", "")
+            if key_sequence:
+                return f"{indent}{key_sequence}"
+            else:
+                return f"{indent}Chưa cấu hình phím"
 
         return indent  # Trả về ít nhất là indent
 

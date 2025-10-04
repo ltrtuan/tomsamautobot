@@ -9,6 +9,7 @@ from controllers.actions.for_action import ForAction
 from controllers.actions.end_for_action import EndForAction
 from controllers.actions.break_for_action import BreakForAction
 from controllers.actions.skip_for_action import SkipForAction
+from controllers.actions.keyboard_action import KeyboardAction
 
 class ActionFactory:
     """Factory tạo ra play handler dựa vào loại action"""
@@ -27,8 +28,10 @@ class ActionFactory:
             BasePlayHandler: Handler phù hợp
         """
         action_type = action.action_type
-        
+   
         print(f"[FACTORY DEBUG] Creating handler for: {action_type}")
+        print(f"[FACTORY DEBUG] ActionType.BANPHIM = {ActionType.BANPHIM}")
+        print(f"[FACTORY DEBUG] Match BANPHIM? {action_type == ActionType.BANPHIM}")
         
         if action_type == ActionType.DI_CHUYEN_CHUOT:
             return MouseMoveAction(root, action, view, model, controller)
@@ -52,6 +55,15 @@ class ActionFactory:
             return BreakForAction(root, action, view, model, controller)
         elif action_type == ActionType.SKIP_FOR_LOOP:
             return SkipForAction(root, action, view, model, controller)
+        elif action_type == ActionType.BANPHIM:
+            print("[FACTORY DEBUG] Creating KeyboardAction...")
+            try:
+                handler = KeyboardAction(root, action, view, model, controller)
+                print(f"[FACTORY DEBUG] KeyboardAction created: {handler}")
+                return handler
+            except Exception as e:
+                print(f"[FACTORY DEBUG] Error creating KeyboardAction: {e}")
+                return None
         else:
             # Trả về None nếu không tìm thấy handler phù hợp
             return None
