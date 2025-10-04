@@ -25,15 +25,22 @@
     <Compile Include="constants.py" />
     <Compile Include="controllers\actions\action_factory.py" />
     <Compile Include="controllers\actions\base_action.py" />
+    <Compile Include="controllers\actions\break_for_action.py" />
     <Compile Include="controllers\actions\else_if_condition_action.py" />
+    <Compile Include="controllers\actions\end_for_action.py" />
     <Compile Include="controllers\actions\end_if_condition_action.py" />
+    <Compile Include="controllers\actions\for_action.py" />
     <Compile Include="controllers\actions\if_condition_action.py" />
     <Compile Include="controllers\actions\image_search_action.py" />
+    <Compile Include="controllers\actions\keyboard_action.py" />
     <Compile Include="controllers\actions\mouse_move_action.py" />
+    <Compile Include="controllers\actions\skip_for_action.py" />
     <Compile Include="controllers\actions\tao_bien_action.py" />
     <Compile Include="controllers\action_controller.py" />
     <Compile Include="controllers\__init__.py" />
     <Compile Include="core\interfaces.py" />
+    <Compile Include="exceptions\loop_exceptions.py" />
+    <Compile Include="exceptions\__init__.py" />
     <Compile Include="login_window.py" />
     <Compile Include="main.py" />
     <Compile Include="models\action_model.py" />
@@ -44,11 +51,16 @@
     <Compile Include="views\action_dialog_view.py" />
     <Compile Include="views\action_list_view.py" />
     <Compile Include="views\action_params\base_params.py" />
+    <Compile Include="views\action_params\break_for_params.py" />
     <Compile Include="views\action_params\else_if_condition_params.py" />
+    <Compile Include="views\action_params\end_for_params.py" />
     <Compile Include="views\action_params\end_if_condition_params.py" />
+    <Compile Include="views\action_params\for_params.py" />
     <Compile Include="views\action_params\if_condition_params.py" />
     <Compile Include="views\action_params\image_search_params.py" />
+    <Compile Include="views\action_params\keyboard_params.py" />
     <Compile Include="views\action_params\mouse_move_params.py" />
+    <Compile Include="views\action_params\skip_for_params.py" />
     <Compile Include="views\action_params\tao_bien_params.py" />
     <Compile Include="views\action_params\__init__.py" />
     <Compile Include="views\move_index_dialog.py" />
@@ -61,6 +73,7 @@
     <Folder Include="models\" />
     <Folder Include="controllers\" />
     <Folder Include="core\" />
+    <Folder Include="exceptions\" />
     <Folder Include="views\" />
     <Folder Include="views\action_params\" />
   </ItemGroup>

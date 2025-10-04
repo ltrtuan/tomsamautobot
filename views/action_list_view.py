@@ -222,8 +222,18 @@ class ActionItemFrame(tk.Frame):
             return "🔀"  # Icon chuyển hướng cho "Ngược lại nếu"
         elif action_type == ActionType.END_IF_CONDITION:
             return "🔚"  # Icon kết thúc cho "Kết thúc Nếu"
+        elif action_type == ActionType.FOR_LOOP:
+            return "🔄" # Icon vòng lặp cho "For" 
+        elif action_type == ActionType.END_FOR_LOOP:
+            return "⏹️" # Icon dừng cho "End For"     
+        elif action_type == ActionType.BREAK_FOR_LOOP:
+            return "🚫"    # THÊM MỚI - Icon cấm/dừng
+        elif action_type == ActionType.SKIP_FOR_LOOP:
+            return "⏭️"    # THÊM MỚI - Icon skip/next
         elif action_type == ActionType.TAO_BIEN:
             return "🔢"  # Icon số hoặc biến tính toán
+        elif action_type == ActionType.BANPHIM:  # ➋ THÊM ICON MỚI 
+            return "⌨️"
         else:
             return "📋"  # Icon mặc định cho các loại khác
     
@@ -340,7 +350,9 @@ class ActionItemFrame(tk.Frame):
             "DI_CHUYEN_CHUOT",
             "TIM_HINH_ANH",
             "TAO_BIEN",
-            'IF_CONDITION'
+            'IF_CONDITION',
+            'FOR_LOOP',
+            'BANPHIM'
             # Thêm các action khác nếu cần
         ]
     
@@ -449,6 +461,101 @@ class ActionItemFrame(tk.Frame):
     
         elif action_type_display == ActionType.TAO_BIEN:
             return f"{indent}Variable {action.parameters.get('variable', '')} = {action.parameters.get('result_action', '')}"
+        
+        elif action_type_display == ActionType.FOR_LOOP:
+            # Lấy thông tin từ parameters
+            repeat_loop = action.parameters.get('repeat_loop', 1)
+            random_repeat_loop = action.parameters.get('random_repeat_loop', 0)
+    
+            # Tính toán số lần chạy hiển thị
+            if random_repeat_loop > 0:
+                loop_text = f"Lặp {repeat_loop} + (0-{random_repeat_loop}) lần"
+            else:
+                loop_text = f"Lặp {repeat_loop} lần"
+    
+            # Lấy break_conditions để hiển thị
+            break_conditions = action.parameters.get('break_conditions', [])
+    
+            if break_conditions:
+                condition_parts = []
+                for i, condition in enumerate(break_conditions):
+                    variable = condition.get('variable', '')
+                    value = condition.get('value', '')
+                    logical_op = condition.get('logical_op', '')
+            
+                    if not variable.strip():
+                        continue
+            
+                    condition_str = f"{variable} = {value}"
+                    if i > 0 and logical_op:
+                        condition_str = f"{logical_op} {condition_str}"
+            
+                    condition_parts.append(condition_str)
+        
+                if condition_parts:
+                    conditions_text = " ".join(condition_parts)
+                    return f"{indent}🔄 For: {loop_text}, Điều kiện: {conditions_text}"
+                else:
+                    return f"{indent}🔄 For: {loop_text}"
+            else:
+                return f"{indent}🔄 For: {loop_text}"
+
+        elif action_type_display == ActionType.END_FOR_LOOP:
+            return f"{indent}⏹️ Kết thúc For"
+        
+        elif action_type_display == ActionType.BREAK_FOR_LOOP:
+            # Lấy break_conditions để hiển thị
+            break_conditions = action.parameters.get('break_conditions', [])
+            if break_conditions:
+                condition_parts = []
+                for i, condition in enumerate(break_conditions):
+                    variable = condition.get('variable', '')
+                    value = condition.get('value', '')
+                    logical_op = condition.get('logical_op', '')
+            
+                    if not variable.strip():
+                        continue
+                
+                    condition_str = f"{variable} = {value}"
+                    if i > 0 and logical_op:
+                        condition_str = f"{logical_op} {condition_str}"
+                    condition_parts.append(condition_str)
+        
+                if condition_parts:
+                    conditions_text = " ".join(condition_parts)
+                    return f"{indent}🚫 Break For nếu: {conditions_text}"
+    
+            return f"{indent}🚫 Thoát khỏi vòng lặp For"
+
+        elif action_type_display == ActionType.SKIP_FOR_LOOP:
+            # Lấy break_conditions để hiển thị
+            break_conditions = action.parameters.get('break_conditions', [])
+            if break_conditions:
+                condition_parts = []
+                for i, condition in enumerate(break_conditions):
+                    variable = condition.get('variable', '')
+                    value = condition.get('value', '')
+                    logical_op = condition.get('logical_op', '')
+            
+                    if not variable.strip():
+                        continue
+                
+                    condition_str = f"{variable} = {value}"
+                    if i > 0 and logical_op:
+                        condition_str = f"{logical_op} {condition_str}"
+                    condition_parts.append(condition_str)
+        
+                if condition_parts:
+                    conditions_text = " ".join(condition_parts)
+                    return f"{indent}⏭️ Skip For nếu: {conditions_text}"
+    
+            return f"{indent}⏭️ Bỏ qua iteration hiện tại"
+        elif action_type_display == ActionType.BANPHIM:
+            key_sequence = action.parameters.get("key_sequence", "")
+            if key_sequence:
+                return f"{indent}{key_sequence}"
+            else:
+                return f"{indent}Chưa cấu hình phím"
 
         return indent  # Trả về ít nhất là indent
 
@@ -850,6 +957,21 @@ class ActionListView(ttk.Frame):
             cursor="hand2"
         )
         self.save_button.pack(side=tk.RIGHT, padx=8, pady=4)
+        
+        self.load_button = tk.Button(
+            button_bar,
+            text="📂 Tải",
+            bg=cfg.SECONDARY_COLOR,  # Màu khác với Save
+            fg="white",
+            font=("Segoe UI", 9),
+            padx=12,
+            pady=2,
+            relief=tk.FLAT,
+            activebackground="#0d5aa7",
+            activeforeground="white",
+            cursor="hand2"
+        )
+        self.load_button.pack(side=tk.RIGHT, padx=8, pady=4)
     
         # Thêm status bar - phong cách PAD
         status_bar = tk.Label(
@@ -1048,10 +1170,11 @@ class ActionListView(ttk.Frame):
     def ask_yes_no(self, title, message):
         return messagebox.askyesno(title, message)
             
-    def set_callbacks(self, add_callback, edit_callback, delete_callback, run_callback, drag_callback, save_callback, play_action_callback=None, delete_all_callback=None, duplicate_callback=None, move_callback=None):
+    def set_callbacks(self, add_callback, edit_callback, delete_callback, run_callback, drag_callback, save_callback, play_action_callback=None, delete_all_callback=None, duplicate_callback=None, move_callback=None, load_callback=None):
         self.add_button.config(command=add_callback)
         self.run_button.config(command=run_callback)
         self.save_button.config(command=save_callback)
+        self.load_button.config(command=load_callback)
         self.delete_all_button.config(command=self._on_delete_all)       
         self.move_button.config(command=self._on_move_clicked)
 

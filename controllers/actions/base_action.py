@@ -75,14 +75,16 @@ class BaseAction(ABC):
     
         final_result = None  # Lưu kết quả cuối cùng
         for i in range(repeat_count):
+            # Trì hoãn thực thi
+            self.delay_execution()
+             
+            if self.stop_requested:
+                return final_result  # Exit loop if stop requested
+            
             # Hook cho các lớp con có thể thêm logic trước khi thực thi
             result = self.prepare_play()
             final_result = result  # Lưu kết quả mỗi lần lặp
-
-            # Trì hoãn thực thi
-            self.delay_execution()
-            if self.stop_requested:
-                return final_result  # Exit loop if stop requested
+           
 
         # Đánh dấu đã thực thi và cache kết quả
         self._already_executed = True
@@ -124,7 +126,7 @@ class BaseAction(ABC):
         else:
             # Nếu random_time = 0, sử dụng default_delay
             delay_seconds = default_delay
-            
+        print(f"[FACTORY DEBUG] delay_seconds: {delay_seconds}");   
         def execute_after_delay():
             self.setup_esc_handler()  # Thiết lập bắt sự kiện ESC
              # Kiểm tra và chuyển đổi chương trình trước khi thực thi action

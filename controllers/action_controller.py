@@ -5,6 +5,8 @@ import pyautogui
 from PIL import Image
 from constants import ActionType
 from views.move_index_dialog import MoveIndexDialog
+import json
+from tkinter import filedialog, messagebox
 
 class ActionController:
     def __init__(self, root):
@@ -12,6 +14,9 @@ class ActionController:
         self.model = None
         self.view = None
         self._is_in_nested_execution = False
+        self.is_execution_stopped = False
+        self._keyboard_listener = None
+        self.is_actions_running = False
         
     def setup(self, model, view):
         self.model = model
@@ -24,12 +29,16 @@ class ActionController:
             self.delete_action,
             self.run_sequence,
             self.move_action,
-            model.save_actions,
+            self.save_actions_to_file,
             self.play_action,
             self.delete_all_actions,
             self.duplicate_action,
-            self.show_move_dialog  # Thêm callback cho nút Di chuyển
+            self.show_move_dialog,
+            self.load_actions_from_file
         )
+        
+        # ✅ KHỞI ĐỘNG LISTENER NGAY KHI APP START
+        self.start_conditional_keyboard_listener()
         
         # Load sample data
         self.model.load_actions()
@@ -124,13 +133,18 @@ class ActionController:
     
         from controllers.actions.action_factory import ActionFactory
         handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
+
+        print(f"[CONTROLLER DEBUG] play_action called for index {index}")
+        print(f"[CONTROLLER DEBUG] Handler created: {handler}")        
+       
     
         if handler:
             handler.action_frame = action_frame
-        
+            print(f"[CONTROLLER DEBUG] Calling handler.play()...")
             # Xử lý đặc biệt cho các loại condition
             if action.action_type == ActionType.IF_CONDITION:
                 result = handler.play()
+                print(f"[CONTROLLER DEBUG] handler.play() result: {result}")
                 # Nếu IF sai (result = True), tìm ELSE IF
                 if result:
                     self._find_and_execute_else_if_for_standalone(index)
@@ -327,142 +341,368 @@ class ActionController:
         from models.global_variables import GlobalVariables
         from constants import ActionType
         from controllers.actions.action_factory import ActionFactory
-
-        # Lấy danh sách hành động từ model
-        actions = self.model.get_all_actions()
-    
-        # Khởi tạo đối tượng quản lý biến toàn cục
-        global_vars = GlobalVariables()
-    
-        # Khởi tạo stack để theo dõi các If condition lồng nhau
-        if_stack = []
-    
-        # Thêm biến để theo dõi các khối cần bỏ qua
-        skip_blocks = []
-    
-        # Hiển thị thông báo đang thực thi
-        self.view.show_message("Thực thi", "Đang thực thi chuỗi hành động...")
-    
-        # Thực thi từng hành động theo thứ tự
-        i = 0
-        while i < len(actions):
-            action = actions[i]
-            action_type = action.action_type
-            
-            # === DEBUG LOG ===
-            print(f"[CONTROLLER DEBUG] Index {i}: {action_type}")
-            print(f"[CONTROLLER DEBUG] if_stack: {[s['condition_met'] for s in if_stack]}")
-            print(f"[CONTROLLER DEBUG] skip_blocks: {skip_blocks}")
-            # === END DEBUG ===
         
-            # Kiểm tra xem action hiện tại có nằm trong khối cần bỏ qua không
-            should_skip = False
-            for block in skip_blocks:
-                if i >= block['start'] and i < block['end']:
-                    should_skip = True
-                    break
-                
-            if should_skip:              
-                i += 1
-                continue
+        # 🔄 RESET execution state
+        self.is_execution_stopped = False
+        self.is_actions_running = True  # ← SET FLAG: ACTIONS BẮT ĐẦU CHẠY
+    
+        # 🎧 BẮT ĐẦU lắng nghe ESC có điều kiện
+        self.start_conditional_keyboard_listener()
+
+        try:
+            # Lấy danh sách hành động từ model
+            actions = self.model.get_all_actions()
+    
+            # Khởi tạo đối tượng quản lý biến toàn cục
+            global_vars = GlobalVariables()
+    
+            # Khởi tạo stack để theo dõi các If condition lồng nhau
+            if_stack = []
+    
+            # Thêm biến để theo dõi các khối cần bỏ qua
+            skip_blocks = []
+    
+            # Hiển thị thông báo đang thực thi
+            self.view.show_message("Thực thi", "Đang thực thi chuỗi hành động...")
+    
+            # Thực thi từng hành động theo thứ tự
+            i = 0
+            while i < len(actions):
+                action = actions[i]
+                action_type = action.action_type
             
-            # KHÔNG bỏ qua ELSE_IF khi IF sai - để IfConditionAction tự xử lý
-            if if_stack and not if_stack[-1]['condition_met']:
-                # CHỈ bỏ qua action thông thường, KHÔNG bỏ qua ELSE_IF
-                if action_type != ActionType.ELSE_IF_CONDITION and action_type != ActionType.END_IF_CONDITION:                   
+                # === DEBUG LOG ===
+                print(f"[CONTROLLER DEBUG] Index {i}: {action_type}")
+                print(f"[CONTROLLER DEBUG] if_stack: {[s['condition_met'] for s in if_stack]}")
+                print(f"[CONTROLLER DEBUG] skip_blocks: {skip_blocks}")
+                # === END DEBUG ===
+        
+                # Kiểm tra xem action hiện tại có nằm trong khối cần bỏ qua không
+                should_skip = False
+                for block in skip_blocks:
+                    if i >= block['start'] and i < block['end']:
+                        should_skip = True
+                        break
+                
+                if should_skip:              
                     i += 1
                     continue
             
-            # Xử lý IF condition
-            if action_type == ActionType.IF_CONDITION:
-                # Tạo handler và thực thi condition
-                handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
-                if handler:
-                    result = handler.play() # Lưu kết quả từ handler.play()
-                    condition_result = not result # True nếu điều kiện đúng
-        
-                    # Tạo một ID duy nhất cho khối IF này
-                    import uuid
-                    if_id = str(uuid.uuid4())
-        
-                    # Lưu trạng thái điều kiện IF
-                    global_vars.set(f"__if_condition_{if_id}", condition_result)
-        
-                    # Lưu cấp độ lồng hiện tại
-                    current_if_level = len(if_stack)
-                    global_vars.set("__if_nesting_level", current_if_level + 1)
-                    global_vars.set(f"__if_level_{current_if_level}", if_id)
-        
-                    # Đẩy thông tin vào stack
-                    if_stack.append({
-                        'id': if_id,
-                        'condition_met': condition_result,
-                        'level': current_if_level
-                    })
-        
-                    # THAY ĐỔI: Không tạo skip_blocks, để IfConditionAction tự xử lý
-                    if condition_result:
-                        # IF đúng: IfConditionAction đã xử lý
-                        pass
-                    else:
-                        # IF sai: IfConditionAction đã tìm và thực thi ELSE IF
-                        pass
-        
-            # Xử lý ELSE IF condition
-            elif action_type == ActionType.ELSE_IF_CONDITION:
-                print(f"[CONTROLLER DEBUG] *** BẮT ĐẦU XỬ LÝ ELSE_IF tại index {i} ***")
-                print(f"[CONTROLLER DEBUG] if_stack state: {if_stack}")
-    
-                handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
-                if handler:
-                    action_frame = next((f for f in self.view.action_frames 
-                                        if f.action.id == action.id), None)
-                    if action_frame:
-                        handler.action_frame = action_frame
-        
-                    print(f"[CONTROLLER DEBUG] Gọi handler.play() cho ELSE_IF")
-                    result = handler.play()
-                    print(f"[CONTROLLER DEBUG] ELSE_IF trả về: {result}")
-                else:
-                    print(f"[CONTROLLER DEBUG] KHÔNG thể tạo handler cho ELSE_IF!")
-        
-            # Xử lý END IF condition
-            elif action_type == ActionType.END_IF_CONDITION:
-                # Xử lý kết thúc if
-                if if_stack:
-                    if_stack.pop()
-                
-                    # Cập nhật cấp độ lồng hiện tại
-                    global_vars.set("__if_nesting_level", len(if_stack))
-        
-            # Xử lý các loại action khác
-            else:
-                # Kiểm tra xem có nên bỏ qua action này không
-                should_skip = False
-                # Nếu đang trong if và điều kiện không thỏa mãn thì bỏ qua
-                # NHƯNG KHÔNG bỏ qua ELSE_IF và END_IF
+                # KHÔNG bỏ qua ELSE_IF khi IF sai - để IfConditionAction tự xử lý
                 if if_stack and not if_stack[-1]['condition_met']:
-                    if action_type != ActionType.ELSE_IF_CONDITION and action_type != ActionType.END_IF_CONDITION:
-                        should_skip = True
-    
-                if not should_skip:
-                    # Tạo handler và thực thi
+                    # CHỈ bỏ qua action thông thường, KHÔNG bỏ qua ELSE_IF
+                    if action_type != ActionType.ELSE_IF_CONDITION and action_type != ActionType.END_IF_CONDITION:                   
+                        i += 1
+                        continue
+            
+                # ⚡ CHECK ESC BEFORE EACH ACTION
+                if self.is_execution_stopped:
+                    print("[EXECUTION CONTROL] 🛑 Breaking due to ESC")
+                    break
+            
+                # Xử lý IF condition
+                if action_type == ActionType.IF_CONDITION:
+                    # Tạo handler và thực thi condition
                     handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
                     if handler:
-                        # Thiết lập action frame
+                        result = handler.play() # Lưu kết quả từ handler.play()
+                        condition_result = not result # True nếu điều kiện đúng
+        
+                        # Tạo một ID duy nhất cho khối IF này
+                        import uuid
+                        if_id = str(uuid.uuid4())
+        
+                        # Lưu trạng thái điều kiện IF
+                        global_vars.set(f"__if_condition_{if_id}", condition_result)
+        
+                        # Lưu cấp độ lồng hiện tại
+                        current_if_level = len(if_stack)
+                        global_vars.set("__if_nesting_level", current_if_level + 1)
+                        global_vars.set(f"__if_level_{current_if_level}", if_id)
+        
+                        # Đẩy thông tin vào stack
+                        if_stack.append({
+                            'id': if_id,
+                            'condition_met': condition_result,
+                            'level': current_if_level
+                        })
+        
+                        # THAY ĐỔI: Không tạo skip_blocks, để IfConditionAction tự xử lý
+                        if condition_result:
+                            # IF đúng: IfConditionAction đã xử lý
+                            pass
+                        else:
+                            # IF sai: IfConditionAction đã tìm và thực thi ELSE IF
+                            pass
+        
+                # Xử lý ELSE IF condition
+                elif action_type == ActionType.ELSE_IF_CONDITION:
+                    print(f"[CONTROLLER DEBUG] *** BẮT ĐẦU XỬ LÝ ELSE_IF tại index {i} ***")
+                    print(f"[CONTROLLER DEBUG] if_stack state: {if_stack}")
+    
+                    handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
+                    if handler:
                         action_frame = next((f for f in self.view.action_frames 
                                             if f.action.id == action.id), None)
                         if action_frame:
                             handler.action_frame = action_frame
-                        handler.play()
         
-            # Di chuyển đến action tiếp theo
-            i += 1
+                        print(f"[CONTROLLER DEBUG] Gọi handler.play() cho ELSE_IF")
+                        result = handler.play()
+                        print(f"[CONTROLLER DEBUG] ELSE_IF trả về: {result}")
+                    else:
+                        print(f"[CONTROLLER DEBUG] KHÔNG thể tạo handler cho ELSE_IF!")
+        
+                # Xử lý END IF condition
+                elif action_type == ActionType.END_IF_CONDITION:
+                    # Xử lý kết thúc if
+                    if if_stack:
+                        if_stack.pop()
+                
+                        # Cập nhật cấp độ lồng hiện tại
+                        global_vars.set("__if_nesting_level", len(if_stack))
+                    
+            
+                # Xử lý FOR LOOP
+                elif action_type == ActionType.FOR_LOOP:
+                    import random
     
-        # Hiển thị thông báo hoàn thành
-        self.view.show_message("Hoàn Thành", "Chuỗi hành động đã được thực hiện")
+                    # Import exceptions
+                    try:
+                        from exceptions.loop_exceptions import LoopBreakException, LoopSkipException
+                    except ImportError:
+                        print("[CONTROLLER ERROR] Cannot import loop exceptions. Please create exceptions/loop_exceptions.py")
+                        i += 1
+                        continue
+    
+                    # Lấy số vòng lặp từ parameters
+                    repeat_loop = int(action.parameters.get("repeat_loop", 1))
+                    random_repeat_loop = int(action.parameters.get("random_repeat_loop", 0))
+    
+                    # Sinh số random thêm nếu > 0
+                    extra_loop = random.randint(0, random_repeat_loop) if random_repeat_loop > 0 else 0
+                    total_loops = repeat_loop + extra_loop
+    
+                    print(f"[CONTROLLER DEBUG] 🔄 Bắt đầu For Loop với {total_loops} lần")
+    
+                    # Tìm vị trí End For tương ứng
+                    nesting_level = 0
+                    end_for_index = i
+                    while end_for_index + 1 < len(actions):
+                        end_for_index += 1
+                        check_action = actions[end_for_index]
+                        if check_action.action_type == ActionType.FOR_LOOP:
+                            nesting_level += 1
+                        elif check_action.action_type == ActionType.END_FOR_LOOP:
+                            if nesting_level == 0:
+                                break
+                            nesting_level -= 1
+    
+                    # Kiểm tra tính hợp lệ của For Loop
+                    if end_for_index >= len(actions) or actions[end_for_index].action_type != ActionType.END_FOR_LOOP:
+                        print("[CONTROLLER ERROR] Không tìm thấy End For Loop tương ứng!")
+                        i += 1
+                        continue
+    
+                    # Thực thi vòng lặp For với Exception handling - FIXED
+                    loop_count = 0
+    
+                    try:
+                        while loop_count < total_loops:
+                            print(f"[CONTROLLER DEBUG] For Loop - Iteration {loop_count + 1}/{total_loops}")
+            
+                            iteration_completed = False  # ← FLAG để track iteration completion
+            
+                            try:
+                                # Thực thi các action lồng từ i+1 đến end_for_index-1
+                                nested_i = i + 1
+                
+                                while nested_i < end_for_index:
+                                    nested_action = actions[nested_i]
+                                    nested_action_type = nested_action.action_type
+                    
+                                    # Kiểm tra điều kiện skip từ if_stack
+                                    should_skip_nested = False
+                                    if if_stack and not if_stack[-1]['condition_met']:
+                                        if nested_action_type not in [ActionType.ELSE_IF_CONDITION, ActionType.END_IF_CONDITION]:
+                                            should_skip_nested = True
+                    
+                                    if should_skip_nested:
+                                        nested_i += 1
+                                        continue
+                    
+                                    # Xử lý các action lồng
+                                    if nested_action_type == ActionType.IF_CONDITION:
+                                        handler_nested = ActionFactory.get_handler(self.root, nested_action, self.view, self.model, self)
+                                        if handler_nested:
+                                            result = handler_nested.play()
+                                            condition_result = not result
+        
+                                            # Cập nhật if_stack cho nested IF
+                                            import uuid
+                                            nested_if_id = str(uuid.uuid4())
+                                            if_stack.append({
+                                                'id': nested_if_id,
+                                                'condition_met': condition_result,
+                                                'level': len(if_stack)
+                                            })
+        
+                                            # ✅ FIX: Skip đến END_IF để tránh thực thi lại actions trong khối IF
+                                            if condition_result:  # Nếu IF đúng và đã thực thi
+                                                # Tìm END_IF tương ứng và skip đến đó
+                                                nesting_level_if = 0
+                                                skip_to_end_if = nested_i + 1
+                                                while skip_to_end_if < end_for_index:
+                                                    skip_action = actions[skip_to_end_if]
+                                                    if skip_action.action_type == ActionType.IF_CONDITION:
+                                                        nesting_level_if += 1
+                                                    elif skip_action.action_type == ActionType.END_IF_CONDITION:
+                                                        if nesting_level_if == 0:
+                                                            nested_i = skip_to_end_if  # Skip đến END_IF
+                                                            break
+                                                        nesting_level_if -= 1
+                                                    skip_to_end_if += 1
+                    
+                                    elif nested_action_type == ActionType.ELSE_IF_CONDITION:
+                                        handler_nested = ActionFactory.get_handler(self.root, nested_action, self.view, self.model, self)
+                                        if handler_nested:
+                                            handler_nested.play()
+                    
+                                    elif nested_action_type == ActionType.END_IF_CONDITION:
+                                        if if_stack:
+                                            if_stack.pop()
+                    
+                                    else:
+                                        # Thực thi action bình thường - EXCEPTION SẼ ĐƯỢC THROW TẠI ĐÂY
+                                        handler_nested = ActionFactory.get_handler(self.root, nested_action, self.view, self.model, self)
+                                        if handler_nested:
+                                            action_frame = next((f for f in self.view.action_frames
+                                                              if f.action.id == nested_action.id), None)
+                                            if action_frame:
+                                                handler_nested.action_frame = action_frame
+                            
+                                            # 🚨 CRITICAL: Exception sẽ được throw ngay tại đây
+                                            handler_nested.play()
+                    
+                                    nested_i += 1
+                
+                                # ✅ QUAN TRỌNG: Chỉ set completed = True khi hoàn thành toàn bộ nested actions
+                                iteration_completed = True
+                
+                            except LoopSkipException as e:
+                                print(f"[CONTROLLER DEBUG] ⏭️ LoopSkipException caught: {e}")
+                                print(f"[CONTROLLER DEBUG] Skipping iteration {loop_count + 1}")
+                                iteration_completed = True  # ← Skip cũng coi là completed
+            
+                            # ✅ FIXED: Chỉ tăng loop_count MỘT LẦN duy nhất
+                            if iteration_completed:
+                                loop_count += 1
+    
+                    except LoopBreakException as e:
+                        print(f"[CONTROLLER DEBUG] 🚫 LoopBreakException caught: {e}")
+                        print(f"[CONTROLLER DEBUG] For Loop TERMINATED IMMEDIATELY at iteration {loop_count + 1}")
+    
+                    # Debug thông báo kết thúc For Loop
+                    if loop_count >= total_loops:
+                        print(f"[CONTROLLER DEBUG] ✅ For Loop completed {total_loops} iterations normally")
+                    else:
+                        print(f"[CONTROLLER DEBUG] 🛑 For Loop terminated early at iteration {loop_count + 1}")
+    
+                    # Sau khi hoàn thành vòng lặp, nhảy đến action sau End For
+                    i = end_for_index + 1
+                    continue
 
 
+
+
+
+                # Xử lý END FOR LOOP
+                elif action_type == ActionType.END_FOR_LOOP:
+                    # End For được xử lý trong logic For Loop, chỉ cần bỏ qua
+                    print("[CONTROLLER DEBUG] Gặp End For Loop (đã được xử lý trong For Loop)")
+
+                # Xử lý SKIP FOR LOOP
+                elif action_type == ActionType.SKIP_FOR_LOOP:
+                    handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
+                    if handler and handler.prepare_play():
+                        print(f"[CONTROLLER DEBUG] Skip For được kích hoạt tại index {i}")
+                        # Tìm End For tương ứng để skip đến iteration tiếp theo
+                        nesting_level = 0
+                        skip_to_idx = i + 1
+        
+                        while skip_to_idx < len(actions):
+                            check_action = actions[skip_to_idx]
+                            if check_action.action_type == ActionType.FOR_LOOP:
+                                nesting_level += 1
+                            elif check_action.action_type == ActionType.END_FOR_LOOP:
+                                if nesting_level == 0:
+                                    # Tìm thấy End For cùng level, skip đến đây để iteration tiếp theo
+                                    break
+                                nesting_level -= 1
+                            skip_to_idx += 1
+        
+                        # Set flag để báo hiệu skip iteration trong For Loop
+                        skip_current_iteration = True
+                        break  # Thoát khỏi nested loop hiện tại
+                    else:
+                        print(f"[CONTROLLER DEBUG] Skip For điều kiện không thỏa, tiếp tục bình thường")
+
+                # Xử lý BREAK FOR LOOP  
+                elif action_type == ActionType.BREAK_FOR_LOOP:
+                    handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
+                    if handler and handler.prepare_play():
+                        print(f"[CONTROLLER DEBUG] Break For được kích hoạt tại index {i}")
+                        # Set flag để báo hiệu break For Loop
+                        break_current_loop = True
+                        break  # Thoát khỏi nested loop hiện tại
+                    else:
+                        print(f"[CONTROLLER DEBUG] Break For điều kiện không thỏa, tiếp tục bình thường")
+
+
+                elif action_type == ActionType.BANPHIM:
+                    handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
+                    if handler:
+                        action_frame = next((f for f in self.view.action_frames if f.action.id == action.id), None)
+                        if action_frame:
+                            handler.action_frame = action_frame
+                        handler.play()
+                    
+
+                # Xử lý các loại action khác
+                else:
+                    # Kiểm tra xem có nên bỏ qua action này không
+                    should_skip = False
+                    # Nếu đang trong if và điều kiện không thỏa mãn thì bỏ qua
+                    # NHƯNG KHÔNG bỏ qua ELSE_IF và END_IF
+                    if if_stack and not if_stack[-1]['condition_met']:
+                        if action_type != ActionType.ELSE_IF_CONDITION and action_type != ActionType.END_IF_CONDITION:
+                            should_skip = True
+    
+                    if not should_skip:
+                        # Tạo handler và thực thi
+                        handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
+                        if handler:
+                            # Thiết lập action frame
+                            action_frame = next((f for f in self.view.action_frames 
+                                                if f.action.id == action.id), None)
+                            if action_frame:
+                                handler.action_frame = action_frame
+                            handler.play()
+        
+                # Di chuyển đến action tiếp theo
+                i += 1
+    
+            # Show completion or stop message
+            if self.is_execution_stopped:
+                self.view.show_message("Đã Dừng", "Chuỗi hành động đã được dừng (ESC)")
+            else:
+                self.view.show_message("Hoàn Thành", "Chuỗi hành động đã hoàn thành")
+
+        finally:
+            # ✅ QUAN TRỌNG: LUÔN RESET FLAGS VÀ DỪNG LISTENER
+            self.is_actions_running = False  # ← RESET FLAG: ACTIONS KHÔNG CHẠY NỮA
+            self.stop_keyboard_listener()
+            print("[EXECUTION CONTROL] 🔄 Reset execution state")
 
         
         
@@ -566,6 +806,10 @@ class ActionController:
                 nesting_levels[i] = current_level
                 # Tăng cấp độ cho các action sau IF
                 current_level += 1
+            elif action.action_type == ActionType.FOR_LOOP:
+                # For có cùng logic với IF
+                nesting_levels[i] = current_level
+                current_level += 1
             elif action.action_type == ActionType.ELSE_IF_CONDITION:
                 # Else If có cùng cấp độ với If tương ứng
                 # Giảm level trước (để cùng level với IF) rồi tăng lại sau
@@ -575,6 +819,10 @@ class ActionController:
                 # Giảm cấp độ trước khi gán cho END IF
                 current_level = max(0, current_level - 1)
                 # Lưu cấp độ hiện tại cho action END IF
+                nesting_levels[i] = current_level
+            elif action.action_type == ActionType.END_FOR_LOOP:
+                # End For có cùng logic với End If
+                current_level = max(0, current_level - 1)
                 nesting_levels[i] = current_level
             else:
                 # Các action thông thường lấy cấp độ hiện tại
@@ -627,3 +875,157 @@ class ActionController:
                 self.move_action(selected_index, target_index)
                 self.update_view()
                 self.view.set_selected_action(target_index)
+                
+    def save_actions_to_file(self):
+        """Lưu actions vào file được chọn bởi user"""
+        # Mở dialog chọn file để save
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="Lưu các hành động vào file"
+        )
+    
+        if not file_path:
+            messagebox.showinfo("Thông báo", "Bạn chưa chọn file để lưu.")
+            return
+    
+        try:
+            # Lưu actions vào file được chọn
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump([a.to_dict() for a in self.model.get_all_actions()], f, indent=2)
+        
+            messagebox.showinfo("Thành công", f"Đã lưu {len(self.model.get_all_actions())} hành động vào:\n{file_path}")
+            print(f"Actions saved to: {file_path}")
+        
+        except Exception as e:
+            messagebox.showerror("Lỗi", f"Không thể lưu file:\n{str(e)}")
+            print(f"Error saving actions: {e}")
+
+    def load_actions_from_file(self):
+        """Load actions từ file được chọn bởi user"""
+        # Kiểm tra nếu có actions hiện tại, hỏi user có muốn tiếp tục không
+        current_actions = self.model.get_all_actions()
+        if current_actions:
+            result = messagebox.askyesno(
+                "Xác nhận", 
+                f"Hiện tại có {len(current_actions)} hành động.\n"
+                "Load file mới sẽ xóa toàn bộ actions hiện tại.\n\n"
+                "Bạn có muốn tiếp tục không?"
+            )
+            if not result:
+                return
+    
+        # Mở dialog chọn file để load
+        file_path = filedialog.askopenfilename(
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="Chọn file chứa các hành động"
+        )
+    
+        if not file_path:
+            messagebox.showinfo("Thông báo", "Bạn chưa chọn file để load.")
+            return
+    
+        try:
+            # Đọc file JSON
+            with open(file_path, 'r', encoding='utf-8') as f:
+                actions_data = json.load(f)
+        
+            # Validate dữ liệu
+            if not isinstance(actions_data, list):
+                raise ValueError("File không đúng định dạng actions JSON")
+        
+            # Xóa toàn bộ actions hiện tại
+            self.model.delete_all_actions()
+        
+            # Load actions từ file
+            loaded_count = 0
+            for action_data in actions_data:
+                try:
+                    action_type = action_data.get("action_type")
+                    parameters = action_data.get("parameters", {})
+                
+                    # Convert action_type sang enum nếu cần
+                    try:
+                        if isinstance(action_type, str):
+                            action_enum = ActionType.from_display_value(action_type)
+                        else:
+                            action_enum = action_type
+                    except Exception:
+                        action_enum = action_type
+                
+                    # Tạo ActionItem mới và thêm vào model
+                    new_action = ActionItem(action_enum, parameters)
+                    self.model.add_action(new_action)
+                    loaded_count += 1
+                
+                except Exception as e:
+                    print(f"Warning: Không thể load action: {action_data}, Error: {e}")
+                    continue
+        
+            # Cập nhật view
+            self.update_view()
+        
+            messagebox.showinfo(
+                "Thành công", 
+                f"Đã load {loaded_count} hành động từ:\n{file_path}"
+            )
+            print(f"Actions loaded from: {file_path}")
+        
+        except FileNotFoundError:
+            messagebox.showerror("Lỗi", f"Không tìm thấy file:\n{file_path}")
+        except json.JSONDecodeError as e:
+            messagebox.showerror("Lỗi", f"File JSON không hợp lệ:\n{str(e)}")
+        except Exception as e:
+            messagebox.showerror("Lỗi", f"Không thể load file:\n{str(e)}")
+            print(f"Error loading actions: {e}")
+
+    def start_conditional_keyboard_listener(self):
+        """Bắt đầu lắng nghe phím ESC CHỈ KHI actions đang chạy"""
+        from pynput import keyboard
+    
+        def on_key_press(key):
+            try:
+                if key == keyboard.Key.esc:
+                    # ✅ CHỈ XỬ LÝ ESC KHI ACTIONS ĐANG CHẠY
+                    if self.is_actions_running:
+                        print("[ESC DETECTED] 🛑 Người dùng bấm ESC - Dừng execution!")
+                        self.stop_execution()
+                        return False  # Dừng listener
+                    else:
+                        # ✅ ACTIONS KHÔNG CHẠY - KHÔNG XỬ LÝ ESC (để overlay tự xử lý)
+                        print("[ESC IGNORED] 🔕 ESC bị ignore vì actions không chạy")
+            except AttributeError:
+                pass
+    
+        # Tạo và start listener
+        self._keyboard_listener = keyboard.Listener(on_press=on_key_press)
+        self._keyboard_listener.start()
+        print("[KEYBOARD LISTENER] 🎧 Đã bắt đầu lắng nghe ESC có điều kiện")
+
+    def stop_keyboard_listener(self):
+        """Dừng lắng nghe keyboard"""
+        if self._keyboard_listener:
+            self._keyboard_listener.stop()
+            self._keyboard_listener = None
+            print("[KEYBOARD LISTENER] 🛑 Đã dừng lắng nghe ESC")
+
+    def stop_execution(self):
+        """Dừng execution ngay lập tức"""
+        self.is_execution_stopped = True
+        self.is_actions_running = False  # ← RESET FLAG
+        print("[EXECUTION CONTROL] ⏹️ Execution đã được dừng bởi người dùng")
+    
+        try:
+            self.view.show_message("Đã Dừng", "Đã dừng chuỗi hành động theo yêu cầu (ESC)")
+        except:
+            pass
+
+    def on_close(self):
+        """Xử lý khi đóng ứng dụng"""
+        def close_app():
+            # ✅ DỪNG LISTENER TRƯỚC KHI ĐÓNG APP
+            self.stop_keyboard_listener()
+            self.view.master.destroy()
+    
+        self.check_unsaved_changes(close_app)
