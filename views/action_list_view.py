@@ -253,6 +253,8 @@ class ActionItemFrame(tk.Frame):
             return "⌨️"
         elif action_type == ActionType.INPUT_TEXT:  # ➊ THÊM DÒNG NÀY
             return "✏️"  # Icon bút viết
+        elif action_type == ActionType.READ_TXT:  # ➊ THÊM MỚI
+            return "📄"
         else:
             return "📋"  # Icon mặc định cho các loại khác
     
@@ -372,7 +374,8 @@ class ActionItemFrame(tk.Frame):
             'IF_CONDITION',
             'FOR_LOOP',
             'BANPHIM',
-            'INPUT_TEXT'
+            'INPUT_TEXT',
+            'READ_TXT'
             # Thêm các action khác nếu cần
         ]
     
@@ -587,6 +590,16 @@ class ActionItemFrame(tk.Frame):
                 return f"{indent}Text: {preview} | Method: {how_to_input}"
             else:
                 return f"{indent}Chưa có text"
+            
+        elif action_type_display == ActionType.READ_TXT:
+            file_path = action.parameters.get("file_path", "")
+            if file_path:
+                import os
+                file_name = os.path.basename(file_path)
+                how_to_input = action.parameters.get("how_to_input", "Random")
+                return f"{indent}File: {file_name} | Method: {how_to_input}"
+            else:
+                return f"{indent}No file selected"
 
         return indent  # Trả về ít nhất là indent
 

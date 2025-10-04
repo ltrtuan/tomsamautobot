@@ -14,6 +14,7 @@ class ActionType(str, Enum):
     SKIP_FOR_LOOP = "Skip For loop"
     BANPHIM       = "Bàn phím"
     INPUT_TEXT = "Input Text"
+    READ_TXT = "Read TXT File"
     
     @classmethod
     def get_display_values(cls):
