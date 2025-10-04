@@ -32,6 +32,7 @@
     <Compile Include="controllers\actions\for_action.py" />
     <Compile Include="controllers\actions\if_condition_action.py" />
     <Compile Include="controllers\actions\image_search_action.py" />
+    <Compile Include="controllers\actions\input_text_action.py" />
     <Compile Include="controllers\actions\keyboard_action.py" />
     <Compile Include="controllers\actions\mouse_move_action.py" />
     <Compile Include="controllers\actions\skip_for_action.py" />
@@ -58,6 +59,7 @@
     <Compile Include="views\action_params\for_params.py" />
     <Compile Include="views\action_params\if_condition_params.py" />
     <Compile Include="views\action_params\image_search_params.py" />
+    <Compile Include="views\action_params\input_text_params.py" />
     <Compile Include="views\action_params\keyboard_params.py" />
     <Compile Include="views\action_params\mouse_move_params.py" />
     <Compile Include="views\action_params\skip_for_params.py" />

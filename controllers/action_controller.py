@@ -465,8 +465,8 @@ class ActionController:
             
                 # Xử lý FOR LOOP
                 elif action_type == ActionType.FOR_LOOP:
-                    import random
-    
+                    import random                    
+                  
                     # Import exceptions
                     try:
                         from exceptions.loop_exceptions import LoopBreakException, LoopSkipException
@@ -510,7 +510,10 @@ class ActionController:
                     try:
                         while loop_count < total_loops:
                             print(f"[CONTROLLER DEBUG] For Loop - Iteration {loop_count + 1}/{total_loops}")
-            
+                            for_handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
+                            if for_handler:
+                                for_handler.set_loop_index(loop_count + 1, total_loops)  # 1-based index
+                                
                             iteration_completed = False  # ← FLAG để track iteration completion
             
                             try:

@@ -13,6 +13,7 @@ class ActionType(str, Enum):
     BREAK_FOR_LOOP = "Break For loop"
     SKIP_FOR_LOOP = "Skip For loop"
     BANPHIM       = "Bàn phím"
+    INPUT_TEXT = "Input Text"
     
     @classmethod
     def get_display_values(cls):

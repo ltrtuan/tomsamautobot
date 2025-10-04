@@ -8,7 +8,9 @@ from constants import ActionType
 class ActionItemFrame(tk.Frame):
     def __init__(self, parent, action, index, nesting_level=0, **kwargs):
         super().__init__(parent, **kwargs)
-        
+        # ➊ THÊM: Tính height động trước khi config
+        note_text = action.parameters.get("note", "").strip()
+        frame_height = 85 if note_text else 60  # Cao hơn nếu có Note
         # Thiết lập style cho frame
         self.config(
             bg=cfg.LIGHT_BG_COLOR,
@@ -18,7 +20,7 @@ class ActionItemFrame(tk.Frame):
             highlightthickness=1,
             relief=tk.FLAT,            # Thay đổi relief
             bd=1,
-            height=60  # Thêm chiều cao cố định
+            height=frame_height    # Thêm chiều cao cố định
         )
         
         # Lưu trữ các thuộc tính quan trọng
@@ -91,6 +93,21 @@ class ActionItemFrame(tk.Frame):
             wraplength=380
         )
         params_label.grid(row=1, column=1, sticky=tk.W)
+        
+        # ➊ THÊM CODE SAU ĐÂY - Note label (row 2)
+        note_text = action.parameters.get("note", "").strip()
+        if note_text:
+            note_label = tk.Label(
+                self,
+                text=f"📝 {note_text}",
+                justify=tk.LEFT,
+                anchor=tk.W,
+                bg=cfg.LIGHT_BG_COLOR,
+                fg="#ff0000",  # Màu xám nhạt
+                font=("Segoe UI", 9),
+                wraplength=450
+            )
+            note_label.grid(row=2, column=1, columnspan=2, sticky=tk.W, pady=(2, 0))
         
         # Frame chứa các nút hành động - nhỏ gọn hơn với icon
         button_frame = tk.Frame(self, bg=cfg.LIGHT_BG_COLOR)
@@ -234,6 +251,8 @@ class ActionItemFrame(tk.Frame):
             return "🔢"  # Icon số hoặc biến tính toán
         elif action_type == ActionType.BANPHIM:  # ➋ THÊM ICON MỚI 
             return "⌨️"
+        elif action_type == ActionType.INPUT_TEXT:  # ➊ THÊM DÒNG NÀY
+            return "✏️"  # Icon bút viết
         else:
             return "📋"  # Icon mặc định cho các loại khác
     
@@ -352,7 +371,8 @@ class ActionItemFrame(tk.Frame):
             "TAO_BIEN",
             'IF_CONDITION',
             'FOR_LOOP',
-            'BANPHIM'
+            'BANPHIM',
+            'INPUT_TEXT'
             # Thêm các action khác nếu cần
         ]
     
@@ -556,6 +576,17 @@ class ActionItemFrame(tk.Frame):
                 return f"{indent}{key_sequence}"
             else:
                 return f"{indent}Chưa cấu hình phím"
+            
+        # ➊ THÊM MỚI: INPUT_TEXT display
+        elif action_type_display == ActionType.INPUT_TEXT:
+            text_list = action.parameters.get("text_list", "")
+            if text_list:
+                # Preview first 30 chars
+                preview = text_list[:30] + "..." if len(text_list) > 30 else text_list
+                how_to_input = action.parameters.get("how_to_input", "Random")
+                return f"{indent}Text: {preview} | Method: {how_to_input}"
+            else:
+                return f"{indent}Chưa có text"
 
         return indent  # Trả về ít nhất là indent
 

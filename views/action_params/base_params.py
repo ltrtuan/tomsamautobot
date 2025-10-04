@@ -206,6 +206,14 @@ class BaseActionParams:
         self.variables["variable_var"] = tk.StringVar(value=self.parameters.get("variable", ""))
         ttk.Entry(variable_frame, textvariable=self.variables["variable_var"], width=15).pack(side=tk.LEFT, padx=5)
         
+
+        # ➊ THÊM: Note section
+        noteframe = tk.Frame(common_frame, bg=cfg.LIGHT_BG_COLOR)
+        noteframe.pack(fill=tk.X, pady=5)
+        tk.Label(noteframe, text="Note:", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT, padx=5)
+        self.variables["note_var"] = tk.StringVar(value=self.parameters.get("note", ""))
+        ttk.Entry(noteframe, textvariable=self.variables["note_var"], width=30).pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+    
         # Thêm result_action nếu cần
         if show_result_action:
             result_frame = tk.Frame(common_frame, bg=cfg.LIGHT_BG_COLOR)

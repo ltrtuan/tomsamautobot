@@ -13,6 +13,7 @@ from views.action_params.end_for_params import EndForParams
 from views.action_params.break_for_params import BreakForParams
 from views.action_params.skip_for_params import SkipForParams
 from views.action_params.keyboard_params import KeyboardParams
+from views.action_params.input_text_params import InputTextParams
 
 class ActionDialogView(tk.Toplevel):
     def __init__(self, parent, action=None):
@@ -202,7 +203,8 @@ class ActionDialogView(tk.Toplevel):
             ActionType.END_FOR_LOOP: EndForParams,
             ActionType.BREAK_FOR_LOOP: BreakForParams,
             ActionType.SKIP_FOR_LOOP: SkipForParams,
-            ActionType.BANPHIM: KeyboardParams
+            ActionType.BANPHIM: KeyboardParams,
+            ActionType.INPUT_TEXT: InputTextParams
             # Thêm các action khác trong tương lai
         }
 
