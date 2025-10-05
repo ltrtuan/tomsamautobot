@@ -51,20 +51,36 @@ class BaseAction(ABC):
             if frame.action.id == self.action.id:  # Cần thêm id vào ActionItem để so sánh             
                 break    
 
-        # Lấy giá trị repeat_random
-        repeat_random = int(self.params.get("repeat_random", "0"))
+        # ➊ REFACTORED: Lấy giá trị repeat_fixed và repeat_random
+        repeat_fixed = self.params.get("repeat_fixed", "0")
+        repeat_random = self.params.get("repeat_random", "0")
+    
+        try:
+            repeat_fixed = int(repeat_fixed)
+        except (ValueError, TypeError):
+            repeat_fixed = 0
+    
         try:
             repeat_random = int(repeat_random)
         except (ValueError, TypeError):
             repeat_random = 0
-
-        # Xác định số lần lặp lại
-        if repeat_random <= 1:
-            # Nếu <= 0, chạy một lần
+    
+        # ➋ Tính toán số lần repeat: Fixed + Random(0-X)
+        if repeat_fixed <= 0 and repeat_random <= 0:
+            # Cả 2 đều = 0: chạy 1 lần
             repeat_count = 1
         else:
-            # Nếu > 0, random từ 0 đến repeat_random
-            repeat_count = rand.randint(2, repeat_random)
+            # Fixed + Random
+            if repeat_random > 0:
+                random_count = rand.randint(0, repeat_random)
+            else:
+                random_count = 0
+        
+            repeat_count = repeat_fixed + random_count
+        
+            # Đảm bảo ít nhất chạy 1 lần
+            if repeat_count < 1:
+                repeat_count = 1
 
         # Đánh dấu condition đã được đánh giá và là true
         self.condition_evaluated = True
@@ -112,7 +128,7 @@ class BaseAction(ABC):
         """Hiển thị thông báo qua view"""
         self.view.show_message(title, message)
     
-    def delay_execution(self, default_delay=2):
+    def delay_execution(self, default_delay=1):
         
         """Trì hoãn thực thi dựa trên tham số random_time"""
         # Lấy giá trị random_time từ tham số
@@ -126,7 +142,9 @@ class BaseAction(ABC):
         else:
             # Nếu random_time = 0, sử dụng default_delay
             delay_seconds = default_delay
-        print(f"[FACTORY DEBUG] delay_seconds: {delay_seconds}");   
+
+        time.sleep(delay_seconds)
+        
         def execute_after_delay():
             self.setup_esc_handler()  # Thiết lập bắt sự kiện ESC
              # Kiểm tra và chuyển đổi chương trình trước khi thực thi action

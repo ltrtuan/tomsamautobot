@@ -13,6 +13,18 @@ class KeyboardAction(BaseAction):
         key_sequence = self.params.get("key_sequence", "")
         if not key_sequence:
             return
+        
+        # ➊ THÊM: Lưu key_sequence vào variable nếu có
+        variable = self.params.get("variable", "")
+        if variable:
+            from models.global_variables import GlobalVariables
+            globals_var = GlobalVariables()
+            # ➊ Option 1: Lưu raw string với dấu ;
+            # globals_var.set(variable, key_sequence)
+    
+            # ➋ Option 2: Lưu chỉ chữ cái, bỏ dấu ; và space
+            clean_value = key_sequence.replace(";", "").replace(" ", "")
+            globals_var.set(variable, clean_value)
             
         # Tách các row bằng dấu ;
         rows = [row.strip() for row in key_sequence.split(";") if row.strip()]        

@@ -1,23 +1,43 @@
-﻿# actions/play_handlers/tao_bien_handler.py
+﻿# controllers/actions/tao_bien_action.py
+
 from controllers.actions.base_action import BaseAction
+from models.global_variables import GlobalVariables
+import os
 
 class TaoBienAction(BaseAction):
-    """Handler để thực thi hành động tạo biến"""
+    """Handler for create variable action (multi-variable support)."""
     
     def prepare_play(self):
-        """Thực hiện tạo biến sau khi trì hoãn"""
+        """Execute create variable action"""
         if self.should_stop():
             return
         
-        # Lấy thông tin biến từ tham số
-        variable_name = self.params.get("variable", "")
-        variable_value = self.params.get("result_action", "")
+        # Get variables list
+        variables = self.params.get("variables", [])
         
-        # Nếu không có tên biến thì không làm gì
-        if not variable_name:          
+        if not variables:
+            print("[TAO_BIEN] No variables to create")
             return
         
-        # Tạo biến trong GlobalVariables
-        from models.global_variables import GlobalVariables
         globals_var = GlobalVariables()
-        globals_var.set(variable_name, variable_value)
+        
+        # Process each variable
+        for var_data in variables:
+            var_name = var_data.get("name", "").strip()
+            var_value = var_data.get("value", "")
+            var_file = var_data.get("file_path", "").strip()
+            
+            if not var_name:
+                continue
+            
+            # ➊ PRIORITY: Use file_path if exists
+            if var_file and os.path.exists(var_file):
+                final_value = var_file
+                print(f"[TAO_BIEN] Set variable '{var_name}' = '{final_value}' (from file path)")
+            else:
+                # ➋ FALLBACK: Use direct value
+                final_value = var_value
+                print(f"[TAO_BIEN] Set variable '{var_name}' = '{final_value}' (from value)")
+            
+            # Set global variable
+            globals_var.set(var_name, final_value)

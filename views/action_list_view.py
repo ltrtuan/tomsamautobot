@@ -8,7 +8,9 @@ from constants import ActionType
 class ActionItemFrame(tk.Frame):
     def __init__(self, parent, action, index, nesting_level=0, **kwargs):
         super().__init__(parent, **kwargs)
-        
+        # ➊ THÊM: Tính height động trước khi config
+        note_text = action.parameters.get("note", "").strip()
+        frame_height = 85 if note_text else 60  # Cao hơn nếu có Note
         # Thiết lập style cho frame
         self.config(
             bg=cfg.LIGHT_BG_COLOR,
@@ -18,7 +20,7 @@ class ActionItemFrame(tk.Frame):
             highlightthickness=1,
             relief=tk.FLAT,            # Thay đổi relief
             bd=1,
-            height=60  # Thêm chiều cao cố định
+            height=frame_height    # Thêm chiều cao cố định
         )
         
         # Lưu trữ các thuộc tính quan trọng
@@ -91,6 +93,21 @@ class ActionItemFrame(tk.Frame):
             wraplength=380
         )
         params_label.grid(row=1, column=1, sticky=tk.W)
+        
+        # ➊ THÊM CODE SAU ĐÂY - Note label (row 2)
+        note_text = action.parameters.get("note", "").strip()
+        if note_text:
+            note_label = tk.Label(
+                self,
+                text=f"📝 {note_text}",
+                justify=tk.LEFT,
+                anchor=tk.W,
+                bg=cfg.LIGHT_BG_COLOR,
+                fg="#ff0000",  # Màu xám nhạt
+                font=("Segoe UI", 9),
+                wraplength=450
+            )
+            note_label.grid(row=2, column=1, columnspan=2, sticky=tk.W, pady=(2, 0))
         
         # Frame chứa các nút hành động - nhỏ gọn hơn với icon
         button_frame = tk.Frame(self, bg=cfg.LIGHT_BG_COLOR)
@@ -234,6 +251,10 @@ class ActionItemFrame(tk.Frame):
             return "🔢"  # Icon số hoặc biến tính toán
         elif action_type == ActionType.BANPHIM:  # ➋ THÊM ICON MỚI 
             return "⌨️"
+        elif action_type == ActionType.INPUT_TEXT:  # ➊ THÊM DÒNG NÀY
+            return "✏️"  # Icon bút viết
+        elif action_type == ActionType.READ_TXT:  # ➊ THÊM MỚI
+            return "📄"
         else:
             return "📋"  # Icon mặc định cho các loại khác
     
@@ -352,7 +373,12 @@ class ActionItemFrame(tk.Frame):
             "TAO_BIEN",
             'IF_CONDITION',
             'FOR_LOOP',
-            'BANPHIM'
+            'BANPHIM',
+            'INPUT_TEXT',
+            'READ_TXT',
+            'READ_CSV',
+            'WRITE_TXT',
+            'WRITE_CSV'
             # Thêm các action khác nếu cần
         ]
     
@@ -457,10 +483,7 @@ class ActionItemFrame(tk.Frame):
             return f"{indent}Hình: {filename} | Độ chính xác: {accuracy_display}"
     
         elif action_type_display == ActionType.DI_CHUYEN_CHUOT:
-            return f"{indent}X: {action.parameters.get('x', '')}, Y: {action.parameters.get('y', '')} | Thời gian: {action.parameters.get('duration', '')}s"
-    
-        elif action_type_display == ActionType.TAO_BIEN:
-            return f"{indent}Variable {action.parameters.get('variable', '')} = {action.parameters.get('result_action', '')}"
+            return f"{indent}X: {action.parameters.get('x', '')}, Y: {action.parameters.get('y', '')} | Thời gian: {action.parameters.get('duration', '')}s"  
         
         elif action_type_display == ActionType.FOR_LOOP:
             # Lấy thông tin từ parameters
@@ -556,7 +579,122 @@ class ActionItemFrame(tk.Frame):
                 return f"{indent}{key_sequence}"
             else:
                 return f"{indent}Chưa cấu hình phím"
+            
+        elif action_type_display == ActionType.TAO_BIEN:
+            # ✅ NEW: Multi-variable display
+            params = action.parameters
+            variables = params.get("variables", [])
+    
+            if not variables:
+                return f"{indent}Variable = "
+    
+            # Show first variable, indicate count if multiple
+            first_var = variables[0]
+            var_name = first_var.get("name", "")
+            var_value = first_var.get("value", "")
+            var_file = first_var.get("file_path", "")
+    
+            # Priority: file_path > value
+            display_value = var_file if var_file else var_value
+    
+            # Truncate long values
+            if len(display_value) > 30:
+                display_value = display_value[:27] + "..."
+    
+            result = f"{indent}{var_name} = {display_value}"
+    
+            # Show count if multiple variables
+            if len(variables) > 1:
+                result += f" (+{len(variables)-1} more)"
+    
+            return result
+            
+        # ➊ THÊM MỚI: INPUT_TEXT display
+        elif action_type_display == ActionType.INPUT_TEXT:
+            text_list = action.parameters.get("text_list", "")
+            if text_list:
+                # Preview first 30 chars
+                preview = text_list[:30] + "..." if len(text_list) > 30 else text_list
+                how_to_input = action.parameters.get("how_to_input", "Random")
+                return f"{indent}Text: {preview} | Method: {how_to_input}"
+            else:
+                return f"{indent}Chưa có text"
+            
+        elif action_type_display == ActionType.READ_TXT:
+            file_path = action.parameters.get("file_path", "")
+            if file_path:
+                import os
+                file_name = os.path.basename(file_path)
+                how_to_input = action.parameters.get("how_to_input", "Random")
+                return f"{indent}File: {file_name} | Method: {how_to_input}"
+            else:
+                return f"{indent}No file selected"
+            
+        elif action_type_display == ActionType.READ_CSV:
+            file_path = action.parameters.get("file_path", "")
+            if file_path:
+                import os
+                file_name = os.path.basename(file_path)
+                variables = action.parameters.get("variables", "")
+                var_count = len([v for v in variables.split(';') if v.strip()]) if variables else 0
+                return f"{indent}File: {file_name} | Variables: {var_count}"
+            else:
+                return f"{indent}No file selected"
 
+        elif action_type_display == ActionType.WRITE_TXT:
+            file_path = action.parameters.get("file_path", "")
+            file_path_var = action.parameters.get("file_path_variable", "")
+            content = action.parameters.get("content", "")
+    
+            if file_path or file_path_var or content:
+                import os
+        
+                # Show file source
+                if file_path_var:
+                    file_display = f"Var: {file_path_var}"
+                elif file_path:
+                    file_display = f"File: {os.path.basename(file_path)}"
+                else:
+                    file_display = "No file"
+        
+                # Count number of lines (split by ;)
+                content_items = [item.strip() for item in content.split(";") if item.strip()]
+                line_count = len(content_items)
+        
+                # Preview first content (first 30 chars)
+                first_content = content_items[0][:30] + "..." if content_items and len(content_items[0]) > 30 else (content_items[0] if content_items else "")
+        
+                return f"{indent}{file_display} | Lines: {line_count} | First: {first_content}"
+            else:
+                return f"{indent}No configuration"
+
+        elif action_type_display == ActionType.WRITE_CSV:
+            file_path = action.parameters.get("file_path", "")
+            file_path_var = action.parameters.get("file_path_variable", "")
+            content = action.parameters.get("content", "")
+    
+            if file_path or file_path_var or content:
+                import os
+        
+                # Show file source
+                if file_path_var:
+                    file_display = f"Var: {file_path_var}"
+                elif file_path:
+                    file_display = f"File: {os.path.basename(file_path)}"
+                else:
+                    file_display = "No file"
+        
+                # Count number of columns (split by ;)
+                content_items = [item.strip() for item in content.split(";") if item.strip()]
+                col_count = len(content_items)
+        
+                # Preview first content (first 30 chars)
+                first_content = content_items[0][:30] + "..." if content_items and len(content_items[0]) > 30 else (content_items[0] if content_items else "")
+        
+                return f"{indent}{file_display} | Columns: {col_count} | First: {first_content}"
+            else:
+                return f"{indent}No configuration"
+            
         return indent  # Trả về ít nhất là indent
 
 

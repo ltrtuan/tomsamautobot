@@ -10,6 +10,11 @@ from controllers.actions.end_for_action import EndForAction
 from controllers.actions.break_for_action import BreakForAction
 from controllers.actions.skip_for_action import SkipForAction
 from controllers.actions.keyboard_action import KeyboardAction
+from controllers.actions.input_text_action import InputTextAction
+from controllers.actions.read_txt_action import ReadTxtAction
+from controllers.actions.read_csv_action import ReadCsvAction
+from controllers.actions.write_txt_action import WriteTxtAction
+from controllers.actions.write_csv_action import WriteCsvAction
 
 class ActionFactory:
     """Factory tạo ra play handler dựa vào loại action"""
@@ -27,11 +32,7 @@ class ActionFactory:
         Returns:
             BasePlayHandler: Handler phù hợp
         """
-        action_type = action.action_type
-   
-        print(f"[FACTORY DEBUG] Creating handler for: {action_type}")
-        print(f"[FACTORY DEBUG] ActionType.BANPHIM = {ActionType.BANPHIM}")
-        print(f"[FACTORY DEBUG] Match BANPHIM? {action_type == ActionType.BANPHIM}")
+        action_type = action.action_type   
         
         if action_type == ActionType.DI_CHUYEN_CHUOT:
             return MouseMoveAction(root, action, view, model, controller)
@@ -43,7 +44,6 @@ class ActionFactory:
             return IfConditionAction(root, action, view, model, controller)
         elif action_type == ActionType.ELSE_IF_CONDITION:
             handler = ElseIfConditionAction(root, action, view, model, controller)
-            print(f"[FACTORY DEBUG] Created ElseIfConditionAction: {handler}")
             return handler
         elif action_type == ActionType.END_IF_CONDITION:
             return EndIfConditionAction(root, action, view, model, controller)
@@ -56,14 +56,17 @@ class ActionFactory:
         elif action_type == ActionType.SKIP_FOR_LOOP:
             return SkipForAction(root, action, view, model, controller)
         elif action_type == ActionType.BANPHIM:
-            print("[FACTORY DEBUG] Creating KeyboardAction...")
-            try:
-                handler = KeyboardAction(root, action, view, model, controller)
-                print(f"[FACTORY DEBUG] KeyboardAction created: {handler}")
-                return handler
-            except Exception as e:
-                print(f"[FACTORY DEBUG] Error creating KeyboardAction: {e}")
-                return None
+             return KeyboardAction(root, action, view, model, controller)
+        elif action_type == ActionType.INPUT_TEXT:
+            return InputTextAction(root, action, view, model, controller)
+        elif action_type == ActionType.READ_TXT:
+            return ReadTxtAction(root, action, view, model, controller)
+        elif action_type == ActionType.READ_CSV:
+            return ReadCsvAction(root, action, view, model, controller)
+        elif action_type == ActionType.WRITE_TXT:
+            return WriteTxtAction(root, action, view, model, controller)
+        elif action_type == ActionType.WRITE_CSV:
+            return WriteCsvAction(root, action, view, model, controller)
         else:
             # Trả về None nếu không tìm thấy handler phù hợp
             return None

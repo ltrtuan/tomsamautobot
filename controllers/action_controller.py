@@ -232,12 +232,15 @@ class ActionController:
         #Sử dụng factory method để tạo tham số cho loại action
         buttons = dialog.create_params_for_action_type(action_type, parameters)
         
+        # Set dialog reference for params that need it
+        if hasattr(dialog, 'current_params') and dialog.current_params:
+            if hasattr(dialog.current_params, 'set_dialog'):
+                dialog.current_params.set_dialog(dialog)
+        
         # Mapping giữa button key và command tương ứng
         button_commands = {
-            'browse_button': lambda: self.browse_image(dialog),
-            'select_area_button': lambda: self.select_screen_area(dialog),
-            'select_program_button': lambda: self.browse_program(dialog),
-            'screenshot_button': lambda: self.capture_screen_area(dialog)
+            'select_area_button': lambda: self.select_screen_area(dialog),  # SHARED
+            'select_program_button': lambda: self.browse_program(dialog)    # SHARED
         }
     
         # Kiểm tra nếu buttons là tuple
@@ -256,19 +259,21 @@ class ActionController:
                 button.config(command=button_commands[button_key])
     
         return buttons
-
-    def browse_image(self, dialog):
+    
+    
+    def browse_program(self, dialog):
         from tkinter import filedialog
         filename = filedialog.askopenfilename(
-            title="Chọn một hình ảnh",
+            title="Select Program",
             filetypes=(
-                ("Image files", "*.png *.jpg *.jpeg *.bmp *.gif"),
+                ("Executable files", "*.exe"),
                 ("All files", "*.*")
             )
         )
         if filename:
-            dialog.set_parameter_value("image_path", filename)
-        
+            dialog.set_parameter_value("program", filename)
+            
+    
     def select_screen_area(self, dialog):
         """Hiển thị trình chọn khu vực màn hình"""
         try:
@@ -302,18 +307,6 @@ class ActionController:
                 dialog.deiconify()
             except:
                 print("Could not deiconify dialog")
-
-    def browse_program(self, dialog):
-        from tkinter import filedialog
-        filename = filedialog.askopenfilename(
-            title="Select Program",
-            filetypes=(
-                ("Executable files", "*.exe"),
-                ("All files", "*.*")
-            )
-        )
-        if filename:
-            dialog.set_parameter_value("program", filename)
 
     def on_dialog_save(self, dialog):
         action_type_display = dialog.action_type_var.get()
@@ -363,19 +356,14 @@ class ActionController:
             skip_blocks = []
     
             # Hiển thị thông báo đang thực thi
-            self.view.show_message("Thực thi", "Đang thực thi chuỗi hành động...")
-    
+            # self.view.show_message("Thực thi", "Đang thực thi chuỗi hành động...")
+            import time       
+            time.sleep(3)
             # Thực thi từng hành động theo thứ tự
             i = 0
             while i < len(actions):
                 action = actions[i]
                 action_type = action.action_type
-            
-                # === DEBUG LOG ===
-                print(f"[CONTROLLER DEBUG] Index {i}: {action_type}")
-                print(f"[CONTROLLER DEBUG] if_stack: {[s['condition_met'] for s in if_stack]}")
-                print(f"[CONTROLLER DEBUG] skip_blocks: {skip_blocks}")
-                # === END DEBUG ===
         
                 # Kiểm tra xem action hiện tại có nằm trong khối cần bỏ qua không
                 should_skip = False
@@ -465,8 +453,8 @@ class ActionController:
             
                 # Xử lý FOR LOOP
                 elif action_type == ActionType.FOR_LOOP:
-                    import random
-    
+                    import random                    
+                  
                     # Import exceptions
                     try:
                         from exceptions.loop_exceptions import LoopBreakException, LoopSkipException
@@ -510,7 +498,10 @@ class ActionController:
                     try:
                         while loop_count < total_loops:
                             print(f"[CONTROLLER DEBUG] For Loop - Iteration {loop_count + 1}/{total_loops}")
-            
+                            for_handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
+                            if for_handler:
+                                for_handler.set_loop_index(loop_count + 1, total_loops)  # 1-based index
+                                
                             iteration_completed = False  # ← FLAG để track iteration completion
             
                             try:
@@ -693,10 +684,10 @@ class ActionController:
                 i += 1
     
             # Show completion or stop message
-            if self.is_execution_stopped:
-                self.view.show_message("Đã Dừng", "Chuỗi hành động đã được dừng (ESC)")
-            else:
-                self.view.show_message("Hoàn Thành", "Chuỗi hành động đã hoàn thành")
+            # if self.is_execution_stopped:
+            #     self.view.show_message("đã dừng", "chuỗi hành động đã được dừng (esc)")
+            # else:
+            #     self.view.show_message("hoàn thành", "chuỗi hành động đã hoàn thành")
 
         finally:
             # ✅ QUAN TRỌNG: LUÔN RESET FLAGS VÀ DỪNG LISTENER

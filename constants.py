@@ -13,6 +13,11 @@ class ActionType(str, Enum):
     BREAK_FOR_LOOP = "Break For loop"
     SKIP_FOR_LOOP = "Skip For loop"
     BANPHIM       = "Bàn phím"
+    INPUT_TEXT = "Input Text"
+    READ_TXT = "Read TXT File"
+    READ_CSV = "Read CSV/Excel File"
+    WRITE_TXT = "Write TXT File"
+    WRITE_CSV = "Write CSV File"
     
     @classmethod
     def get_display_values(cls):
