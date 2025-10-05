@@ -44,7 +44,7 @@ class ImageSearchAction(BaseAction):
                 
                 # Di chuyển chuột đến vị trí tìm thấy
                 # move_mouse sẽ tự động xử lý double_click từ self.params
-                self.move_mouse(center_x, center_y, 0, 0, 0.1, False)
+                self.move_mouse(center_x, center_y, 1, 1)
                 
                 # Đặt variable = true nếu có
                 variable = self.params.get("variable", "")

@@ -11,7 +11,6 @@ class MouseMoveAction(BaseAction):
         # Lấy thông tin vùng quét
         region = self.get_region()
         x, y, width, height = region
-        duration = float(self.params.get("duration", 0.5))
         
         # Di chuyển chuột (sử dụng phương thức từ lớp cơ sở)
-        self.move_mouse(x, y, width, height, duration, random_in_region=True)
+        self.move_mouse(x, y, width, height)

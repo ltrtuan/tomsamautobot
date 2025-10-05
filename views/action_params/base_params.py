@@ -185,6 +185,81 @@ class BaseActionParams:
         
         return common_frame
     
+    def create_mouse_control(self):
+        """
+        Create UI for Mouse Control frame with Click Type and Is Clickable checkbox.
+        Được gọi tùy theo action (Mouse Move, Image Search, etc.)
+        """
+        mouse_control_frame = tk.LabelFrame(
+            self.parent_frame,
+            text="Mouse Control",
+            bg=cfg.LIGHT_BG_COLOR,
+            pady=10,
+            padx=10
+        )
+        mouse_control_frame.pack(fill=tk.X, pady=10)
+    
+        # Click Type Selection
+        click_type_frame = tk.Frame(mouse_control_frame, bg=cfg.LIGHT_BG_COLOR)
+        click_type_frame.pack(fill=tk.X, pady=5)
+    
+        tk.Label(click_type_frame, text="Click Type:", bg=cfg.LIGHT_BG_COLOR, width=12, anchor="w").pack(side=tk.LEFT, padx=5)
+    
+        # Lấy giá trị click_type từ parameters, hoặc convert từ double_click cũ (backward compatibility)
+        existing_click_type = self.parameters.get("click_type", "")
+    
+        # Backward compatibility: chuyển đổi từ double_click cũ
+        if not existing_click_type and self.parameters.get("double_click", False):
+            existing_click_type = "double_click"
+    
+        self.variables["click_type_var"] = tk.StringVar(value=existing_click_type)
+    
+        click_type_combo = ttk.Combobox(
+            click_type_frame,
+            textvariable=self.variables["click_type_var"],
+            values=["", "single_click", "double_click"],
+            state="readonly",
+            width=15
+        )
+        click_type_combo.pack(side=tk.LEFT, padx=5)
+    
+        tk.Label(
+            click_type_frame,
+            text="(Rỗng = không click, Single = 1 lần, Double = 2 lần)",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 8),
+            fg="gray"
+        ).pack(side=tk.LEFT, padx=5)
+    
+        # Is Clickable Checkbox
+        is_clickable_frame = tk.Frame(mouse_control_frame, bg=cfg.LIGHT_BG_COLOR)
+        is_clickable_frame.pack(fill=tk.X, pady=5)
+    
+        self.variables["is_clickable_var"] = tk.BooleanVar(value=self.parameters.get("is_clickable", False))
+    
+        is_clickable_checkbox = ttk.Checkbutton(
+            is_clickable_frame,
+            text="Is Clickable (Kiểm tra cursor là hand trước khi click)",
+            variable=self.variables["is_clickable_var"]
+        )
+        is_clickable_checkbox.pack(side=tk.LEFT, padx=5)
+    
+        # Fast Checkbox
+        fast_frame = tk.Frame(mouse_control_frame, bg=cfg.LIGHT_BG_COLOR)
+        fast_frame.pack(fill=tk.X, pady=5)
+
+        self.variables["fast_var"] = tk.BooleanVar(value=self.parameters.get("fast", False))
+
+        fast_checkbox = ttk.Checkbutton(
+            fast_frame,
+            text="Fast (Di chuyển chuột siêu nhanh)",
+            variable=self.variables["fast_var"]
+        )
+        fast_checkbox.pack(side=tk.LEFT, padx=5)
+        
+        return mouse_control_frame
+
+    
     def create_note(self):
         """Create note field"""
         note_frame = tk.LabelFrame(self.parent_frame, text="Note", bg=cfg.LIGHT_BG_COLOR, pady=5, padx=10)

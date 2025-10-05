@@ -483,7 +483,11 @@ class ActionItemFrame(tk.Frame):
             return f"{indent}Hình: {filename} | Độ chính xác: {accuracy_display}"
     
         elif action_type_display == ActionType.DI_CHUYEN_CHUOT:
-            return f"{indent}X: {action.parameters.get('x', '')}, Y: {action.parameters.get('y', '')} | Thời gian: {action.parameters.get('duration', '')}s"  
+            x = action.parameters.get('x', '')
+            y = action.parameters.get('y', '')
+            fast = action.parameters.get('fast', False)
+            fast_text = " | Fast" if fast else ""
+            return f"{indent}X: {x}, Y: {y}{fast_text}"
         
         elif action_type_display == ActionType.FOR_LOOP:
             # Lấy thông tin từ parameters
