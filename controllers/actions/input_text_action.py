@@ -69,10 +69,18 @@ class InputTextAction(BaseAction):
         # Replace <VARIABLE_NAME> with variable value
         globals_var = GlobalVariables()
         
-        # Pattern: <VARIABLE_NAME>
+        # ✅ FIXED: Pattern for <VARIABLE_NAME>
         def replace_variable(match):
             var_name = match.group(1)
-            return globals_var.get(var_name, f"<{var_name}>")  # Keep original if not found
+            value = globals_var.get(var_name, None)  # ← Return None if not found
+        
+            if value is not None:
+                print(f"[INPUT_TEXT] Replaced <{var_name}> with '{value}'")
+                return str(value)
+            else:
+                # ❌ DON'T return <var_name>, return empty or keep original
+                print(f"[INPUT_TEXT] WARNING: Variable '{var_name}' not found!")
+                return f"<{var_name}>"  # Keep original to show error
         
         text = re.sub(r'<([^>]+)>', replace_variable, text)
         

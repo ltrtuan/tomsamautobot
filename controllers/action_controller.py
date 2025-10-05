@@ -364,12 +364,6 @@ class ActionController:
             while i < len(actions):
                 action = actions[i]
                 action_type = action.action_type
-            
-                # === DEBUG LOG ===
-                print(f"[CONTROLLER DEBUG] Index {i}: {action_type}")
-                print(f"[CONTROLLER DEBUG] if_stack: {[s['condition_met'] for s in if_stack]}")
-                print(f"[CONTROLLER DEBUG] skip_blocks: {skip_blocks}")
-                # === END DEBUG ===
         
                 # Kiểm tra xem action hiện tại có nằm trong khối cần bỏ qua không
                 should_skip = False

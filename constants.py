@@ -15,6 +15,9 @@ class ActionType(str, Enum):
     BANPHIM       = "Bàn phím"
     INPUT_TEXT = "Input Text"
     READ_TXT = "Read TXT File"
+    READ_CSV = "Read CSV/Excel File"
+    WRITE_TXT = "Write TXT File"
+    WRITE_CSV = "Write CSV File"
     
     @classmethod
     def get_display_values(cls):

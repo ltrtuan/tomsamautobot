@@ -1,4 +1,4 @@
-from controllers.actions.base_action import BaseAction
+﻿from controllers.actions.base_action import BaseAction
 from models.global_variables import GlobalVariables
 import pyautogui
 import pyperclip
@@ -17,7 +17,8 @@ class ReadTxtAction(BaseAction):
             return
         
         # Get file path parameter
-        file_path = self.params.get("file_path", "")
+        file_path = self._resolve_file_path()
+    
         if not file_path:
             print("[READ_TXT] Error: No file path specified")
             return
@@ -143,3 +144,34 @@ class ReadTxtAction(BaseAction):
                     break
                 pyautogui.press(char)
                 time.sleep(random.uniform(0.05, 0.15))
+
+    def _resolve_file_path(self):
+        """
+        Resolve file path with priority:
+        1. From global variable (if file_path_variable is set)
+        2. From direct file_path parameter
+        """
+        from models.global_variables import GlobalVariables
+    
+        # ➊ Try to get from variable first (PRIORITY)
+        file_path_variable = self.params.get("file_path_variable", "").strip()
+    
+        if file_path_variable:
+            # Variable name is specified, try to get its value
+            globals_var = GlobalVariables()
+            file_path_from_var = globals_var.get(file_path_variable, "")
+        
+            if file_path_from_var:
+                print(f"[READ_TXT] Using file path from variable '{file_path_variable}': {file_path_from_var}")
+                return file_path_from_var
+            else:
+                print(f"[READ_TXT] Warning: Variable '{file_path_variable}' not found or empty")
+    
+        # ➋ Fallback to direct file path
+        file_path = self.params.get("file_path", "").strip()
+    
+        if file_path:
+            print(f"[READ_TXT] Using direct file path: {file_path}")
+            return file_path
+    
+        return None

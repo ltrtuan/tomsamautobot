@@ -15,6 +15,9 @@ from views.action_params.skip_for_params import SkipForParams
 from views.action_params.keyboard_params import KeyboardParams
 from views.action_params.input_text_params import InputTextParams
 from views.action_params.read_txt_params import ReadTxtParams
+from views.action_params.read_csv_params import ReadCsvParams
+from views.action_params.write_txt_params import WriteTxtParams
+from views.action_params.write_csv_params import WriteCsvParams
 
 class ActionDialogView(tk.Toplevel):
     def __init__(self, parent, action=None):
@@ -206,7 +209,10 @@ class ActionDialogView(tk.Toplevel):
             ActionType.SKIP_FOR_LOOP: SkipForParams,
             ActionType.BANPHIM: KeyboardParams,
             ActionType.INPUT_TEXT: InputTextParams,
-            ActionType.READ_TXT: ReadTxtParams
+            ActionType.READ_TXT: ReadTxtParams,
+            ActionType.READ_CSV: ReadCsvParams,
+            ActionType.WRITE_TXT: WriteTxtParams,            
+            ActionType.WRITE_CSV: WriteCsvParams,
             # Thêm các action khác trong tương lai
         }
 

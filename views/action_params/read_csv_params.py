@@ -1,18 +1,18 @@
-# views/action_params/read_txt_params.py
+﻿# views/action_params/read_csv_params.py
 
 import tkinter as tk
 from tkinter import ttk, filedialog
 import config as cfg
 from views.action_params.base_params import BaseActionParams
 
-class ReadTxtParams(BaseActionParams):
-    """UI for Read TXT File action parameters."""
+class ReadCsvParams(BaseActionParams):
+    """UI for Read CSV/Excel File action parameters."""
     
     def __init__(self, parent_frame, parameters=None):
         super().__init__(parent_frame, parameters)
     
     def create_params(self):
-        """Create UI for read txt file parameters"""
+        """Create UI for read CSV/Excel parameters"""
         self.clear_frame()
         
         # ========== FILE PATH VARIABLE SECTION (NEW!) ==========
@@ -21,11 +21,11 @@ class ReadTxtParams(BaseActionParams):
         # ========== FILE PATH SECTION ==========
         self.create_file_path_section()
         
+        # ========== SKIP HEADER CHECKBOX ==========
+        self.create_skip_header_section()
+        
         # ========== HOW TO GET SECTION ==========
         self.create_how_to_get_section()
-        
-        # ========== HOW TO INPUT SECTION ==========
-        self.create_how_to_input_section()
         
         # ========== COMMON PARAMETERS ==========
         self.create_common_params()
@@ -37,7 +37,6 @@ class ReadTxtParams(BaseActionParams):
         select_program_button = self.create_program_selector()
         
         return {
-            'browse_txt_button': self.browse_txt_button,
             'select_program_button': select_program_button
         }
     
@@ -46,7 +45,6 @@ class ReadTxtParams(BaseActionParams):
         var_frame = tk.Frame(self.parent_frame, bg=cfg.LIGHT_BG_COLOR)
         var_frame.pack(fill=tk.X, pady=5)
         
-        # Label
         label = tk.Label(
             var_frame,
             text="File Path Variable:",
@@ -55,16 +53,13 @@ class ReadTxtParams(BaseActionParams):
         )
         label.pack(side=tk.LEFT, padx=(10, 5))
         
-        # StringVar for file path variable
         self.variables["file_path_variable_var"] = tk.StringVar()
         
-        # Load existing value if editing
         if self.parameters:
             self.variables["file_path_variable_var"].set(
                 self.parameters.get("file_path_variable", "")
             )
         
-        # Entry for variable name
         var_entry = ttk.Entry(
             var_frame,
             textvariable=self.variables["file_path_variable_var"],
@@ -72,10 +67,9 @@ class ReadTxtParams(BaseActionParams):
         )
         var_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
         
-        # Help label
         help_label = tk.Label(
             var_frame,
-            text="(e.g., FILE_PATH - has priority over Browse)",
+            text="(e.g., CSV_FILE - has priority over Browse)",
             bg=cfg.LIGHT_BG_COLOR,
             font=("Segoe UI", 8),
             fg="gray"
@@ -87,23 +81,18 @@ class ReadTxtParams(BaseActionParams):
         path_frame = tk.Frame(self.parent_frame, bg=cfg.LIGHT_BG_COLOR)
         path_frame.pack(fill=tk.X, pady=5)
         
-        # Label
         label = tk.Label(
             path_frame,
-            text="TXT File (Browse):",
+            text="CSV/Excel File (Browse):",
             bg=cfg.LIGHT_BG_COLOR,
             font=("Segoe UI", 10)
         )
         label.pack(side=tk.LEFT, padx=(10, 5))
         
-        # StringVar for file path
         self.variables["file_path_var"] = tk.StringVar()
-        
-        # Load existing value if editing
         if self.parameters:
             self.variables["file_path_var"].set(self.parameters.get("file_path", ""))
         
-        # Entry for file path
         path_entry = ttk.Entry(
             path_frame,
             textvariable=self.variables["file_path_var"],
@@ -111,13 +100,32 @@ class ReadTxtParams(BaseActionParams):
         )
         path_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
         
-        # Browse button
-        self.browse_txt_button = ttk.Button(
+        browse_button = ttk.Button(
             path_frame,
             text="Browse...",
             command=self.browse_file
         )
-        self.browse_txt_button.pack(side=tk.RIGHT, padx=5)
+        browse_button.pack(side=tk.RIGHT, padx=5)
+    
+    def create_skip_header_section(self):
+        """Create skip header checkbox section"""
+        header_frame = tk.Frame(self.parent_frame, bg=cfg.LIGHT_BG_COLOR)
+        header_frame.pack(fill=tk.X, pady=5)
+        
+        self.variables["skip_header_var"] = tk.BooleanVar()
+        if self.parameters:
+            self.variables["skip_header_var"].set(
+                self.parameters.get("skip_header", False)
+            )
+        
+        skip_header_cb = tk.Checkbutton(
+            header_frame,
+            text="Skip Header Row (Bỏ qua dòng tiêu đề)",
+            variable=self.variables["skip_header_var"],
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10)
+        )
+        skip_header_cb.pack(side=tk.LEFT, padx=(10, 5))
     
     def create_how_to_get_section(self):
         """Create 'How to get' selection section"""
@@ -133,7 +141,6 @@ class ReadTxtParams(BaseActionParams):
         label.pack(side=tk.LEFT, padx=(10, 5))
         
         self.variables["how_to_get_var"] = tk.StringVar()
-        
         if self.parameters:
             self.variables["how_to_get_var"].set(
                 self.parameters.get("how_to_get", "Random")
@@ -150,50 +157,20 @@ class ReadTxtParams(BaseActionParams):
         )
         combo.pack(side=tk.LEFT, padx=5)
     
-    def create_how_to_input_section(self):
-        """Create 'How to input' selection section"""
-        input_frame = tk.Frame(self.parent_frame, bg=cfg.LIGHT_BG_COLOR)
-        input_frame.pack(fill=tk.X, pady=5)
-        
-        label = tk.Label(
-            input_frame,
-            text="How to input:",
-            bg=cfg.LIGHT_BG_COLOR,
-            font=("Segoe UI", 10)
-        )
-        label.pack(side=tk.LEFT, padx=(10, 5))
-        
-        self.variables["how_to_input_var"] = tk.StringVar()
-        
-        if self.parameters:
-            self.variables["how_to_input_var"].set(
-                self.parameters.get("how_to_input", "Random")
-            )
-        else:
-            self.variables["how_to_input_var"].set("Random")
-        
-        combo = ttk.Combobox(
-            input_frame,
-            textvariable=self.variables["how_to_input_var"],
-            values=["Random", "Copy & Paste", "Press Keyboard"],
-            state="readonly",
-            width=20
-        )
-        combo.pack(side=tk.LEFT, padx=5)
-    
     def browse_file(self):
-        """Open file browser dialog to select TXT file"""
+        """Open file browser dialog to select CSV/Excel file"""
         file_path = filedialog.askopenfilename(
-            title="Select TXT File",
+            title="Select CSV or Excel File",
             filetypes=[
-                ("Text Files", "*.txt"),
+                ("CSV Files", "*.csv"),
+                ("Excel Files", "*.xlsx *.xls"),
                 ("All Files", "*.*")
             ]
         )
         
         if file_path:
             self.variables["file_path_var"].set(file_path)
-            print(f"[READ_TXT_PARAMS] Selected file: {file_path}")
+            print(f"[READ_CSV_PARAMS] Selected file: {file_path}")
     
     def get_parameters(self):
         """Collect parameters"""
@@ -205,10 +182,10 @@ class ReadTxtParams(BaseActionParams):
         # Get file path (FALLBACK)
         params["file_path"] = self.variables["file_path_var"].get()
         
+        # Get skip_header checkbox
+        params["skip_header"] = self.variables["skip_header_var"].get()
+        
         # Get how_to_get selection
         params["how_to_get"] = self.variables["how_to_get_var"].get()
-        
-        # Get how_to_input selection
-        params["how_to_input"] = self.variables["how_to_input_var"].get()
         
         return params

@@ -12,6 +12,9 @@ from controllers.actions.skip_for_action import SkipForAction
 from controllers.actions.keyboard_action import KeyboardAction
 from controllers.actions.input_text_action import InputTextAction
 from controllers.actions.read_txt_action import ReadTxtAction
+from controllers.actions.read_csv_action import ReadCsvAction
+from controllers.actions.write_txt_action import WriteTxtAction
+from controllers.actions.write_csv_action import WriteCsvAction
 
 class ActionFactory:
     """Factory tạo ra play handler dựa vào loại action"""
@@ -58,6 +61,12 @@ class ActionFactory:
             return InputTextAction(root, action, view, model, controller)
         elif action_type == ActionType.READ_TXT:
             return ReadTxtAction(root, action, view, model, controller)
+        elif action_type == ActionType.READ_CSV:
+            return ReadCsvAction(root, action, view, model, controller)
+        elif action_type == ActionType.WRITE_TXT:
+            return WriteTxtAction(root, action, view, model, controller)
+        elif action_type == ActionType.WRITE_CSV:
+            return WriteCsvAction(root, action, view, model, controller)
         else:
             # Trả về None nếu không tìm thấy handler phù hợp
             return None
