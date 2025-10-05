@@ -257,6 +257,73 @@ class BaseActionParams:
         )
         fast_checkbox.pack(side=tk.LEFT, padx=5)
         
+        # Clickable Area Section
+        clickable_area_label_frame = tk.LabelFrame(
+            mouse_control_frame,
+            text="Clickable Area",
+            bg=cfg.LIGHT_BG_COLOR,
+            pady=5,
+            padx=5
+        )
+        clickable_area_label_frame.pack(fill=tk.X, pady=5)
+
+        # Row 1: Min Width and Max Width
+        width_frame = tk.Frame(clickable_area_label_frame, bg=cfg.LIGHT_BG_COLOR)
+        width_frame.pack(fill=tk.X, pady=2)
+
+        tk.Label(width_frame, text="Min Width:", bg=cfg.LIGHT_BG_COLOR, width=10, anchor="w").pack(side=tk.LEFT, padx=5)
+        self.variables["click_min_width_var"] = tk.StringVar(value=self.parameters.get("click_min_width", ""))
+        ttk.Entry(
+            width_frame,
+            textvariable=self.variables["click_min_width_var"],
+            width=8,
+            validate="key",
+            validatecommand=self.validate_int_cmd
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Label(width_frame, text="Max Width:", bg=cfg.LIGHT_BG_COLOR, width=10, anchor="w").pack(side=tk.LEFT, padx=5)
+        self.variables["click_max_width_var"] = tk.StringVar(value=self.parameters.get("click_max_width", ""))
+        ttk.Entry(
+            width_frame,
+            textvariable=self.variables["click_max_width_var"],
+            width=8,
+            validate="key",
+            validatecommand=self.validate_int_cmd
+        ).pack(side=tk.LEFT, padx=5)
+
+        # Row 2: Min Height and Max Height
+        height_frame = tk.Frame(clickable_area_label_frame, bg=cfg.LIGHT_BG_COLOR)
+        height_frame.pack(fill=tk.X, pady=2)
+
+        tk.Label(height_frame, text="Min Height:", bg=cfg.LIGHT_BG_COLOR, width=10, anchor="w").pack(side=tk.LEFT, padx=5)
+        self.variables["click_min_height_var"] = tk.StringVar(value=self.parameters.get("click_min_height", ""))
+        ttk.Entry(
+            height_frame,
+            textvariable=self.variables["click_min_height_var"],
+            width=8,
+            validate="key",
+            validatecommand=self.validate_int_cmd
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Label(height_frame, text="Max Height:", bg=cfg.LIGHT_BG_COLOR, width=10, anchor="w").pack(side=tk.LEFT, padx=5)
+        self.variables["click_max_height_var"] = tk.StringVar(value=self.parameters.get("click_max_height", ""))
+        ttk.Entry(
+            height_frame,
+            textvariable=self.variables["click_max_height_var"],
+            width=8,
+            validate="key",
+            validatecommand=self.validate_int_cmd
+        ).pack(side=tk.LEFT, padx=5)
+
+        # Hint text
+        tk.Label(
+            clickable_area_label_frame,
+            text="(Nếu rỗng, mặc định = 1. Random giá trị giữa min-max để click vùng kế bên)",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 8),
+            fg="gray"
+        ).pack(pady=2)
+        
         return mouse_control_frame
 
     

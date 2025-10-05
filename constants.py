@@ -3,6 +3,7 @@ from enum import Enum, auto
 
 class ActionType(str, Enum):
     TIM_HINH_ANH = "Tìm Hình Ảnh"
+    TEXT_SEARCH = "Text Search"
     DI_CHUYEN_CHUOT = "Di Chuyển Chuột"
     TAO_BIEN = "Tạo Biến"
     IF_CONDITION = "If condition"
@@ -18,6 +19,7 @@ class ActionType(str, Enum):
     READ_CSV = "Read CSV/Excel File"
     WRITE_TXT = "Write TXT File"
     WRITE_CSV = "Write CSV File"
+    
     
     @classmethod
     def get_display_values(cls):

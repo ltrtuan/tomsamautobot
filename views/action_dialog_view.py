@@ -18,6 +18,7 @@ from views.action_params.read_txt_params import ReadTxtParams
 from views.action_params.read_csv_params import ReadCsvParams
 from views.action_params.write_txt_params import WriteTxtParams
 from views.action_params.write_csv_params import WriteCsvParams
+from views.action_params.text_search_params import TextSearchParams
 
 class ActionDialogView(tk.Toplevel):
     def __init__(self, parent, action=None):
@@ -213,6 +214,7 @@ class ActionDialogView(tk.Toplevel):
             ActionType.READ_CSV: ReadCsvParams,
             ActionType.WRITE_TXT: WriteTxtParams,            
             ActionType.WRITE_CSV: WriteCsvParams,
+            ActionType.TEXT_SEARCH: TextSearchParams,
             # Thêm các action khác trong tương lai
         }
 
