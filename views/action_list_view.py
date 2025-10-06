@@ -255,6 +255,8 @@ class ActionItemFrame(tk.Frame):
             return "✏️"  # Icon bút viết
         elif action_type == ActionType.READ_TXT:  # ➊ THÊM MỚI
             return "📄"
+        elif action_type == ActionType.TEXT_SEARCH:
+            return "🔍"
         else:
             return "📋"  # Icon mặc định cho các loại khác
     
@@ -378,7 +380,8 @@ class ActionItemFrame(tk.Frame):
             'READ_TXT',
             'READ_CSV',
             'WRITE_TXT',
-            'WRITE_CSV'
+            'WRITE_CSV',
+            'TEXT_SEARCH'
             # Thêm các action khác nếu cần
         ]
     
@@ -483,7 +486,11 @@ class ActionItemFrame(tk.Frame):
             return f"{indent}Hình: {filename} | Độ chính xác: {accuracy_display}"
     
         elif action_type_display == ActionType.DI_CHUYEN_CHUOT:
-            return f"{indent}X: {action.parameters.get('x', '')}, Y: {action.parameters.get('y', '')} | Thời gian: {action.parameters.get('duration', '')}s"  
+            x = action.parameters.get('x', '')
+            y = action.parameters.get('y', '')
+            fast = action.parameters.get('fast', False)
+            fast_text = " | Fast" if fast else ""
+            return f"{indent}X: {x}, Y: {y}{fast_text}"
         
         elif action_type_display == ActionType.FOR_LOOP:
             # Lấy thông tin từ parameters
@@ -695,6 +702,22 @@ class ActionItemFrame(tk.Frame):
             else:
                 return f"{indent}No configuration"
             
+        elif action_type_display == ActionType.TEXT_SEARCH:
+            text_file = action.parameters.get("text_file_path", "")
+            text_content = action.parameters.get("text_content", "")
+            how_to_get = action.parameters.get("how_to_get", "All")
+    
+            if text_file:
+                import os
+                filename = os.path.basename(text_file)
+                return f"{indent}File: {filename} | Method: {how_to_get}"
+            elif text_content:
+                preview = text_content[:30] + "..." if len(text_content) > 30 else text_content
+                preview = preview.replace('\n', ' ')
+                return f"{indent}Text: {preview} | Method: {how_to_get}"
+            else:
+                return f"{indent}Chưa cấu hình"
+
         return indent  # Trả về ít nhất là indent
 
 

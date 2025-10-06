@@ -347,14 +347,14 @@ class BaseAction(ABC):
             return (x, y, width, height)
         
 
-    def move_mouse(self, x, y, width=0, height=0, duration=0.5, random_in_region=False):
+    def move_mouse(self, x, y, width=0, height=0):
         """
         Di chuyển chuột đến một vị trí hoặc vùng
         
         Args:
             x, y: Tọa độ
             width, height: Kích thước vùng (nếu > 0)
-            duration: Thời gian di chuyển (giây)
+            fast: nhanh hay chậm
             random_in_region: Có di chuyển ngẫu nhiên trong vùng không
         """
         from models.human_like_movement import HumanLikeMovement
@@ -368,46 +368,42 @@ class BaseAction(ABC):
         current_x, current_y = pyautogui.position()
         
         # Xác định tọa độ đích
-        if random_in_region and width > 0 and height > 0:
+        if width > 0 and height > 0:
             target_x = random.randint(x, x + width)
             target_y = random.randint(y, y + height)
-        else:
-            target_x, target_y = x, y
         
-        # Tính toán speed_factor dựa trên duration
-        if duration > 0:
-            speed_factor = 1.0 / duration
-        else:
-            speed_factor = 10.0
+        # Lấy giá trị fast từ params
+        fast = self.params.get("fast", False)
         
         # Di chuyển chuột với human-like movement
         try:
-            HumanLikeMovement.move_cursor(current_x, current_y, target_x, target_y, speed_factor, 
-                                        stop_check=self.should_stop)
+            HumanLikeMovement.move_cursor_humanlike(current_x, current_y, target_x, target_y, fast)
             
-            # Kiểm tra xem có yêu cầu double click không
-            if self.params.get("double_click", False):
-                # Thêm delay ngẫu nhiên từ 1-3 giây trước khi double click
-                delay = random.uniform(1, 3)   
-            
-    
-                # Thực hiện delay
-                time.sleep(delay)
+            # Xử lý click dựa trên click_type và is_clickable
+            click_type = self.params.get("click_type", "")
+            is_clickable = self.params.get("is_clickable", False)
+
+            if click_type in ["single_click", "double_click"]:              
+                time.sleep(1)
     
                 # Kiểm tra lại nếu người dùng đã yêu cầu dừng trong thời gian delay
                 if self.should_stop():
                     return target_x, target_y
     
-                # Kiểm tra điều kiện Is Clickable nếu được chọn
-                if self.params.get("is_clickable", False):
+                # Logic is_clickable: kiểm tra cursor là hand trước khi click
+                if is_clickable:
                     # Kiểm tra xem cursor có phải là hand không
-                    if not self.is_hand_cursor():                    
+                    if not self.is_hand_cursor():
+                        # Nếu không phải hand cursor, không click
                         return target_x, target_y
-                    
-                # Thực hiện double click
-                pyautogui.doubleClick()
+    
+                # Thực hiện click theo loại (nếu is_clickable=False hoặc cursor là hand)
+                if click_type == "single_click":
+                    pyautogui.click()
+                elif click_type == "double_click":
+                    pyautogui.doubleClick()
 
-                return target_x, target_y
+            return target_x, target_y
         except:
             return None, None  # Trả về None nếu di chuyển bị dừng
         

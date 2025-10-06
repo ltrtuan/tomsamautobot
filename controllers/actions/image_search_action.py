@@ -43,8 +43,40 @@ class ImageSearchAction(BaseAction):
             
                 
                 # Di chuyển chuột đến vị trí tìm thấy
-                # move_mouse sẽ tự động xử lý double_click từ self.params
-                self.move_mouse(center_x, center_y, 0, 0, 0.1, False)
+                # Lấy clickable area params
+                import random
+    
+                # Lấy giá trị từ params, nếu rỗng thì mặc định = 1
+                click_min_width = self.params.get("click_min_width", "")
+                click_max_width = self.params.get("click_max_width", "")
+                click_min_height = self.params.get("click_min_height", "")
+                click_max_height = self.params.get("click_max_height", "")
+    
+                # Xử lý width
+                if click_min_width and click_max_width:
+                    try:
+                        min_w = int(click_min_width)
+                        max_w = int(click_max_width)
+                        random_width = random.randint(min_w, max_w)
+                    except (ValueError, TypeError):
+                        random_width = 1
+                else:
+                    random_width = 1
+    
+                # Xử lý height
+                if click_min_height and click_max_height:
+                    try:
+                        min_h = int(click_min_height)
+                        max_h = int(click_max_height)
+                        random_height = random.randint(min_h, max_h)
+                    except (ValueError, TypeError):
+                        random_height = 1
+                else:
+                    random_height = 1
+    
+                # Di chuyển chuột đến vị trí tìm thấy với clickable area
+                # move_mouse sẽ tự động xử lý click từ self.params
+                self.move_mouse(center_x, center_y, random_width, random_height)
                 
                 # Đặt variable = true nếu có
                 variable = self.params.get("variable", "")

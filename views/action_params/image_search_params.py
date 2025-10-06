@@ -57,6 +57,9 @@ class ImageSearchParams(BaseActionParams):
         # ========== ACCURACY SECTION ==========
         self.create_accuracy_section()
         
+        # ========== PHẦN MOUSE CONTROL ==========
+        self.create_mouse_control()
+        
         # ========== COMMON PARAMETERS ==========
         self.create_common_params()
         
@@ -140,18 +143,19 @@ class ImageSearchParams(BaseActionParams):
     def get_save_path(self):
         """Get save path from config"""
         try:
-            from config import get_config
-            config = get_config()
-            path = config.get("FILE_PATH", "")
+            import config as cfg
+            # Sử dụng biến toàn cục FILE_PATH từ config
+            path = cfg.FILE_PATH
             if path and os.path.exists(os.path.dirname(path)):
                 return os.path.dirname(path)
         except Exception as e:
             print(f"[IMAGE_SEARCH_PARAMS] Cannot get config path: {e}")
-        
+    
         # Default path
         default_path = "C:\\tomsamautobot"
         os.makedirs(default_path, exist_ok=True)
         return default_path
+
     
     def create_region_section(self):
         """Create search region input section"""
