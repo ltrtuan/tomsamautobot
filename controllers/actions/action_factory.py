@@ -18,6 +18,10 @@ from controllers.actions.write_csv_action import WriteCsvAction
 from controllers.actions.text_search_action import TextSearchAction
 from controllers.actions.show_hide_program_action import ShowHideProgramAction
 from controllers.actions.check_fullscreen_action import CheckFullscreenAction
+from controllers.actions.image_search_live_action import ImageSearchLiveAction
+from controllers.actions.copy_folder_action import CopyFolderAction
+from controllers.actions.run_cmd_action import RunCmdAction
+from controllers.actions.gologin_create_launch_action import GoLoginCreateLaunchAction
 
 
 class ActionFactory:
@@ -77,6 +81,14 @@ class ActionFactory:
             return ShowHideProgramAction(root, action, view, model, controller)
         elif action_type == ActionType.CHECK_FULLSCREEN:
             return CheckFullscreenAction(root, action, view, model, controller)
+        elif action_type == ActionType.IMAGE_SEARCH_LIVE:
+            return ImageSearchLiveAction(root, action, view, model, controller)
+        elif action_type == ActionType.COPY_FOLDER:
+            return CopyFolderAction(root, action, view, model, controller)
+        elif action_type == ActionType.RUN_CMD:
+            return RunCmdAction(root, action, view, model, controller)
+        elif action_type == ActionType.GOLOGIN_CREATE_LAUNCH:
+            return GoLoginCreateLaunchAction(root, action, view, model, controller)
         else:
             # Trả về None nếu không tìm thấy handler phù hợp
             return None

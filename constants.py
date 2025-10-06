@@ -2,10 +2,11 @@
 from enum import Enum, auto
 
 class ActionType(str, Enum):
-    TIM_HINH_ANH = "Tìm Hình Ảnh"
+    TIM_HINH_ANH = "Image Search"
+    IMAGE_SEARCH_LIVE = "Image Search Live"
     TEXT_SEARCH = "Text Search"
-    DI_CHUYEN_CHUOT = "Di Chuyển Chuột"
-    TAO_BIEN = "Tạo Biến"
+    DI_CHUYEN_CHUOT = "Mouse Move"
+    TAO_BIEN = "Set Variable"
     IF_CONDITION = "If condition"
     ELSE_IF_CONDITION = "Else if condition"
     END_IF_CONDITION = "End If condition"
@@ -13,7 +14,7 @@ class ActionType(str, Enum):
     END_FOR_LOOP = "End For loop"
     BREAK_FOR_LOOP = "Break For loop"
     SKIP_FOR_LOOP = "Skip For loop"
-    BANPHIM       = "Bàn phím"
+    BANPHIM       = "Keyboard"
     INPUT_TEXT = "Input Text"
     READ_TXT = "Read TXT File"
     READ_CSV = "Read CSV/Excel File"
@@ -21,6 +22,9 @@ class ActionType(str, Enum):
     WRITE_CSV = "Write CSV File"
     SHOW_HIDE_PROGRAM = "Show Hide Program"
     CHECK_FULLSCREEN = "Check Fullscreen"
+    COPY_FOLDER = "Copy File/Folder"
+    RUN_CMD = "Run CMD"
+    GOLOGIN_CREATE_LAUNCH = "GoLogin Create and Launch Profile"
     
     
     @classmethod
