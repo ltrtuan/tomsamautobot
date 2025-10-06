@@ -19,6 +19,13 @@ from views.action_params.read_csv_params import ReadCsvParams
 from views.action_params.write_txt_params import WriteTxtParams
 from views.action_params.write_csv_params import WriteCsvParams
 from views.action_params.text_search_params import TextSearchParams
+from views.action_params.show_hide_program_params import ShowHideProgramParams
+from views.action_params.check_fullscreen_params import CheckFullscreenParams
+from views.action_params.image_search_live_params import ImageSearchLiveParams
+from views.action_params.copy_folder_params import CopyFolderParams
+from views.action_params.run_cmd_params import RunCmdParams
+from views.action_params.gologin_create_launch_params import GoLoginCreateLaunchParams
+
 
 class ActionDialogView(tk.Toplevel):
     def __init__(self, parent, action=None):
@@ -215,8 +222,16 @@ class ActionDialogView(tk.Toplevel):
             ActionType.WRITE_TXT: WriteTxtParams,            
             ActionType.WRITE_CSV: WriteCsvParams,
             ActionType.TEXT_SEARCH: TextSearchParams,
+            ActionType.SHOW_HIDE_PROGRAM: ShowHideProgramParams,
+            ActionType.CHECK_FULLSCREEN: CheckFullscreenParams,
+            ActionType.IMAGE_SEARCH_LIVE: ImageSearchLiveParams,
+            ActionType.COPY_FOLDER: CopyFolderParams,
+            ActionType.RUN_CMD: RunCmdParams,
+            ActionType.GOLOGIN_CREATE_LAUNCH: GoLoginCreateLaunchParams,
+
             # Thêm các action khác trong tương lai
         }
+        
 
     # Thêm các phương thức hỗ trợ cho cuộn
     def _on_frame_configure(self, event):
