@@ -17,6 +17,8 @@ from controllers.actions.write_txt_action import WriteTxtAction
 from controllers.actions.write_csv_action import WriteCsvAction
 from controllers.actions.text_search_action import TextSearchAction
 from controllers.actions.show_hide_program_action import ShowHideProgramAction
+from controllers.actions.check_fullscreen_action import CheckFullscreenAction
+
 
 class ActionFactory:
     """Factory tạo ra play handler dựa vào loại action"""
@@ -73,6 +75,8 @@ class ActionFactory:
             return TextSearchAction(root, action, view, model, controller)
         elif action_type == ActionType.SHOW_HIDE_PROGRAM:
             return ShowHideProgramAction(root, action, view, model, controller)
+        elif action_type == ActionType.CHECK_FULLSCREEN:
+            return CheckFullscreenAction(root, action, view, model, controller)
         else:
             # Trả về None nếu không tìm thấy handler phù hợp
             return None

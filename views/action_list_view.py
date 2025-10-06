@@ -259,6 +259,8 @@ class ActionItemFrame(tk.Frame):
             return "🔍"
         elif action_type == ActionType.SHOW_HIDE_PROGRAM:
             return "[W]"
+        elif action_type == ActionType.CHECK_FULLSCREEN:
+            return "🖥"
         else:
             return "📋"  # Icon mặc định cho các loại khác
     
@@ -384,7 +386,8 @@ class ActionItemFrame(tk.Frame):
             'WRITE_TXT',
             'WRITE_CSV',
             'TEXT_SEARCH',
-            'SHOW_HIDE_PROGRAM'
+            'SHOW_HIDE_PROGRAM',
+            'CHECK_FULLSCREEN'
             # Thêm các action khác nếu cần
         ]
     
@@ -743,7 +746,13 @@ class ActionItemFrame(tk.Frame):
             else:
                 return f"{indent}Chưa cấu hình"
 
-    
+        elif action_type_display == ActionType.CHECK_FULLSCREEN:
+            variable = action.parameters.get("variable", "")
+            if variable:
+                return f"{indent}Check fullscreen → Variable: {variable}"
+            else:
+                return f"{indent}Check fullscreen (no variable set)"
+            
         return indent  # Trả về ít nhất là indent
 
 

@@ -128,36 +128,59 @@ class ActionController:
                 
     def play_action(self, index):
         """Thực thi một hành động cụ thể khi nút play được nhấn"""
-        action = self.model.get_action(index)
-        action_frame = self.view.action_frames[index] if index < len(self.view.action_frames) else None
     
-        from controllers.actions.action_factory import ActionFactory
-        handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
+        # ← ẨN WINDOW NGAY ĐẦU
+        print("[EXECUTION] Hiding window to tray...")
+        self.root.withdraw()
+    
+        try:
+            action = self.model.get_action(index)
+            action_frame = self.view.action_frames[index] if index < len(self.view.action_frames) else None
 
-        print(f"[CONTROLLER DEBUG] play_action called for index {index}")
-        print(f"[CONTROLLER DEBUG] Handler created: {handler}")        
+            from controllers.actions.action_factory import ActionFactory
+            handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
+
+            print(f"[CONTROLLER DEBUG] play_action called for index {index}")
+            print(f"[CONTROLLER DEBUG] Handler created: {handler}")        
        
-    
-        if handler:
-            handler.action_frame = action_frame
-            print(f"[CONTROLLER DEBUG] Calling handler.play()...")
-            # Xử lý đặc biệt cho các loại condition
-            if action.action_type == ActionType.IF_CONDITION:
-                result = handler.play()
-                print(f"[CONTROLLER DEBUG] handler.play() result: {result}")
-                # Nếu IF sai (result = True), tìm ELSE IF
-                if result:
-                    self._find_and_execute_else_if_for_standalone(index)
-        
-            elif action.action_type == ActionType.ELSE_IF_CONDITION:
-                # THÊM: Xử lý ELSE_IF khi chạy standalone
-                print(f"[STANDALONE DEBUG] Chạy ELSE_IF tại index {index}")
-                handler.play()
+            if handler:
+                handler.action_frame = action_frame
+                print(f"[CONTROLLER DEBUG] Calling handler.play()...")
             
-            else:
-                handler.play()
+                # Xử lý đặc biệt cho các loại condition
+                if action.action_type == ActionType.IF_CONDITION:
+                    result = handler.play()
+                    print(f"[CONTROLLER DEBUG] handler.play() result: {result}")
+                    # Nếu IF sai (result = True), tìm ELSE IF
+                    if result:
+                        self._find_and_execute_else_if_for_standalone(index)
+        
+                elif action.action_type == ActionType.ELSE_IF_CONDITION:
+                    # Xử lý ELSE_IF khi chạy standalone
+                    print(f"[STANDALONE DEBUG] Chạy ELSE_IF tại index {index}")
+                    handler.play()
+            
+                else:
+                    handler.play()
+    
+        finally:
+            # ← QUAN TRỌNG: LUÔN SHOW LẠI WINDOW (ngay cả khi có lỗi)
+            print("[EXECUTION] Showing window back...")
+            self.root.deiconify()
+            self.root.lift()
+            self.root.focus_force()
 
-                
+
+    def temporarily_disable_esc_listener(self):
+        """Tạm thời disable ESC listener (dùng khi Keyboard Action bấm ESC)"""
+        self._esc_listener_enabled = False
+        print("[KEYBOARD LISTENER] 🔇 ESC listener temporarily disabled")
+
+    def re_enable_esc_listener(self):
+        """Bật lại ESC listener"""
+        self._esc_listener_enabled = True
+        print("[KEYBOARD LISTENER] 🔊 ESC listener re-enabled")
+
 
     def _find_and_execute_else_if_for_standalone(self, if_index):
         """Tìm và thực thi ELSE IF cho IF độc lập"""
@@ -331,6 +354,10 @@ class ActionController:
         dialog.destroy()
     
     def run_sequence(self):
+        # ← THÊM: ẨN WINDOW
+        print("[EXECUTION] Hiding window to tray...")
+        self.root.withdraw()
+        
         from models.global_variables import GlobalVariables
         from constants import ActionType
         from controllers.actions.action_factory import ActionFactory
@@ -694,6 +721,11 @@ class ActionController:
             self.is_actions_running = False  # ← RESET FLAG: ACTIONS KHÔNG CHẠY NỮA
             self.stop_keyboard_listener()
             print("[EXECUTION CONTROL] 🔄 Reset execution state")
+            
+            print("[EXECUTION] Showing window back...")
+            self.root.deiconify()
+            self.root.lift()
+            self.root.focus_force()
 
         
         
@@ -975,17 +1007,20 @@ class ActionController:
         """Bắt đầu lắng nghe phím ESC CHỈ KHI actions đang chạy"""
         from pynput import keyboard
     
+        # ← THÊM FLAG
+        self._esc_listener_enabled = True
+    
         def on_key_press(key):
             try:
                 if key == keyboard.Key.esc:
-                    # ✅ CHỈ XỬ LÝ ESC KHI ACTIONS ĐANG CHẠY
-                    if self.is_actions_running:
+                    # ✅ CHỈ XỬ LÝ ESC KHI ACTIONS ĐANG CHẠY VÀ LISTENER ĐƯỢC BẬT
+                    if self.is_actions_running and self._esc_listener_enabled:  # ← THÊM CHECK
                         print("[ESC DETECTED] 🛑 Người dùng bấm ESC - Dừng execution!")
                         self.stop_execution()
                         return False  # Dừng listener
                     else:
-                        # ✅ ACTIONS KHÔNG CHẠY - KHÔNG XỬ LÝ ESC (để overlay tự xử lý)
-                        print("[ESC IGNORED] 🔕 ESC bị ignore vì actions không chạy")
+                        # ✅ ACTIONS KHÔNG CHẠY HOẶC LISTENER BỊ DISABLE - IGNORE ESC
+                        print("[ESC IGNORED] 🔕 ESC bị ignore")
             except AttributeError:
                 pass
     
@@ -993,6 +1028,7 @@ class ActionController:
         self._keyboard_listener = keyboard.Listener(on_press=on_key_press)
         self._keyboard_listener.start()
         print("[KEYBOARD LISTENER] 🎧 Đã bắt đầu lắng nghe ESC có điều kiện")
+
 
     def stop_keyboard_listener(self):
         """Dừng lắng nghe keyboard"""

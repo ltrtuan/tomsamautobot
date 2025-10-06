@@ -74,8 +74,16 @@ class KeyboardAction(BaseAction):
                 pyautogui_keys.append(key.lower())
             else:
                 pyautogui_keys.append(key.lower())
-        
+                
+        # ← THÊM: Kiểm tra nếu có phím ESC
+        is_esc_key = "escape" in pyautogui_keys
         try:
+            # ← THÊM: Disable listener trước khi bấm ESC
+            if is_esc_key:
+                print("[KEYBOARD ACTION] 🔇 Tạm dừng ESC listener (đang bấm ESC)")
+                if hasattr(self, 'controller') and self.controller:
+                    self.controller.temporarily_disable_esc_listener()
+        
             if len(pyautogui_keys) == 1:
                 # Phím đơn
                 print(f"KEYBOARD DEBUG: Nhấn {pyautogui_keys[0]}")
@@ -84,6 +92,14 @@ class KeyboardAction(BaseAction):
                 # Tổ hợp phím - nhấn đồng thời
                 print(f"KEYBOARD DEBUG: Tổ hợp {' + '.join(pyautogui_keys)}")
                 pyautogui.hotkey(*pyautogui_keys)
+        
+            # ← THÊM: Re-enable listener sau khi bấm ESC xong
+            if is_esc_key:
+                import time
+                time.sleep(0.5)  # Đợi 0.5s để ESC được xử lý
+                print("[KEYBOARD ACTION] 🔊 Bật lại ESC listener")
+                if hasattr(self, 'controller') and self.controller:
+                    self.controller.re_enable_esc_listener()
                 
         except Exception as e:
             print(f"KEYBOARD ERROR: Lỗi khi nhấn phím {combination}: {e}")

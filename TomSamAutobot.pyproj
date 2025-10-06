@@ -26,6 +26,7 @@
     <Compile Include="controllers\actions\action_factory.py" />
     <Compile Include="controllers\actions\base_action.py" />
     <Compile Include="controllers\actions\break_for_action.py" />
+    <Compile Include="controllers\actions\check_fullscreen_action.py" />
     <Compile Include="controllers\actions\else_if_condition_action.py" />
     <Compile Include="controllers\actions\end_for_action.py" />
     <Compile Include="controllers\actions\end_if_condition_action.py" />
@@ -60,6 +61,7 @@
     <Compile Include="views\action_list_view.py" />
     <Compile Include="views\action_params\base_params.py" />
     <Compile Include="views\action_params\break_for_params.py" />
+    <Compile Include="views\action_params\check_fullscreen_params.py" />
     <Compile Include="views\action_params\else_if_condition_params.py" />
     <Compile Include="views\action_params\end_for_params.py" />
     <Compile Include="views\action_params\end_if_condition_params.py" />

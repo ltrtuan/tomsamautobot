@@ -20,6 +20,7 @@ class ActionType(str, Enum):
     WRITE_TXT = "Write TXT File"
     WRITE_CSV = "Write CSV File"
     SHOW_HIDE_PROGRAM = "Show Hide Program"
+    CHECK_FULLSCREEN = "Check Fullscreen"
     
     
     @classmethod
