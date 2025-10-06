@@ -19,6 +19,7 @@ class ActionType(str, Enum):
     READ_CSV = "Read CSV/Excel File"
     WRITE_TXT = "Write TXT File"
     WRITE_CSV = "Write CSV File"
+    SHOW_HIDE_PROGRAM = "Show Hide Program"
     
     
     @classmethod

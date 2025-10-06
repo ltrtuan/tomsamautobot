@@ -16,6 +16,7 @@ from controllers.actions.read_csv_action import ReadCsvAction
 from controllers.actions.write_txt_action import WriteTxtAction
 from controllers.actions.write_csv_action import WriteCsvAction
 from controllers.actions.text_search_action import TextSearchAction
+from controllers.actions.show_hide_program_action import ShowHideProgramAction
 
 class ActionFactory:
     """Factory tạo ra play handler dựa vào loại action"""
@@ -70,6 +71,8 @@ class ActionFactory:
             return WriteCsvAction(root, action, view, model, controller)
         elif action_type == ActionType.TEXT_SEARCH:
             return TextSearchAction(root, action, view, model, controller)
+        elif action_type == ActionType.SHOW_HIDE_PROGRAM:
+            return ShowHideProgramAction(root, action, view, model, controller)
         else:
             # Trả về None nếu không tìm thấy handler phù hợp
             return None

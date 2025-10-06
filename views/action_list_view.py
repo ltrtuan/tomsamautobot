@@ -257,6 +257,8 @@ class ActionItemFrame(tk.Frame):
             return "📄"
         elif action_type == ActionType.TEXT_SEARCH:
             return "🔍"
+        elif action_type == ActionType.SHOW_HIDE_PROGRAM:
+            return "[W]"
         else:
             return "📋"  # Icon mặc định cho các loại khác
     
@@ -381,7 +383,8 @@ class ActionItemFrame(tk.Frame):
             'READ_CSV',
             'WRITE_TXT',
             'WRITE_CSV',
-            'TEXT_SEARCH'
+            'TEXT_SEARCH',
+            'SHOW_HIDE_PROGRAM'
             # Thêm các action khác nếu cần
         ]
     
@@ -718,6 +721,29 @@ class ActionItemFrame(tk.Frame):
             else:
                 return f"{indent}Chưa cấu hình"
 
+        
+        elif action_type_display == ActionType.SHOW_HIDE_PROGRAM:
+            program_action = action.parameters.get("program_action", "")
+            program_path = action.parameters.get("program_path", "")  # ← THÊM DÒNG NÀY
+            title_program = action.parameters.get("title_program", "")
+            how_to_get = action.parameters.get("how_to_get", "Random")
+    
+            # ← SỬA PHẦN DISPLAY
+            if title_program:
+                preview = title_program[:30] + "..." if len(title_program) > 30 else title_program
+                preview = preview.replace('\n', ' ')
+        
+                # Hiển thị program path nếu có
+                if program_path:
+                    import os
+                    exe_name = os.path.basename(program_path)
+                    return f"{indent}Action: {program_action} | Title: {preview} | Exe: {exe_name}"
+                else:
+                    return f"{indent}Action: {program_action} | Title: {preview} | Method: {how_to_get}"
+            else:
+                return f"{indent}Chưa cấu hình"
+
+    
         return indent  # Trả về ít nhất là indent
 
 

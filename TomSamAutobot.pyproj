@@ -37,6 +37,7 @@
     <Compile Include="controllers\actions\mouse_move_action.py" />
     <Compile Include="controllers\actions\read_csv_action.py" />
     <Compile Include="controllers\actions\read_txt_action.py" />
+    <Compile Include="controllers\actions\show_hide_program_action.py" />
     <Compile Include="controllers\actions\skip_for_action.py" />
     <Compile Include="controllers\actions\tao_bien_action.py" />
     <Compile Include="controllers\actions\text_search_action.py" />
@@ -70,6 +71,7 @@
     <Compile Include="views\action_params\mouse_move_params.py" />
     <Compile Include="views\action_params\read_csv_params.py" />
     <Compile Include="views\action_params\read_txt_params.py" />
+    <Compile Include="views\action_params\show_hide_program_params.py" />
     <Compile Include="views\action_params\skip_for_params.py" />
     <Compile Include="views\action_params\tao_bien_params.py" />
     <Compile Include="views\action_params\text_search_params.py" />
