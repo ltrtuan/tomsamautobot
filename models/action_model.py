@@ -196,7 +196,12 @@ class ActionModel:
                             action_type = action_data.get("action_type")
                             parameters = action_data.get("parameters", {})
                             is_disabled = action_data.get("is_disabled", False)
-                            self.add_action(ActionItem(action_type, parameters, is_disabled))
+                        
+                            # Tạo ActionItem
+                            action_item = ActionItem(action_type, parameters, is_disabled)
+                        
+                            # Append trực tiếp
+                            self.actions.append(action_item)
                         return True
                     else:  # Nếu file trống (empty array)
                         self.add_sample_actions()
@@ -209,6 +214,8 @@ class ActionModel:
                 return True
         except Exception as e:
             print(f"Lỗi khi tải hành động: {str(e)}")
+            import traceback
+            traceback.print_exc()
             # Nếu có lỗi, vẫn thêm sample actions
             self.add_sample_actions()
             return False

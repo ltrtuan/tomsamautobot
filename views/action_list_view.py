@@ -247,7 +247,7 @@ class ActionItemFrame(tk.Frame):
         # Binding sự kiện kéo thả
         self.drag_handle.bind("<ButtonPress-1>", self.on_drag_start)
         self.drag_handle.bind("<B1-Motion>", self.on_drag_motion)
-        self.drag_handle.bind("<ButtonRelease-1>", self.on_drag_end)
+        self.drag_handle.bind("<ButtonRelease-1>", self.on_drag_end)      
       
         
     def _get_action_icon(self, action_type):
@@ -1415,7 +1415,8 @@ class ActionListView(ttk.Frame):
         for i, action in enumerate(actions):
             nesting_level = nesting_levels[i] if nesting_levels else 0
             frame = ActionItemFrame(self.action_list_frame, action, i+1, nesting_level=nesting_level)
-            frame.pack(fill=tk.X, pady=(0, 3), padx=2)
+            frame.pack(fill=tk.X, pady=(0, 3), padx=2)           
+            
 
             # **THÊM MỚI: Bind click vào frame để chọn action**
             frame.bind("<Button-1>", lambda e, idx=i: self.set_selected_action(idx))
@@ -1434,6 +1435,10 @@ class ActionListView(ttk.Frame):
                 frame.play_button.config(command=lambda idx=i: self._on_play_action(idx))
 
             self.action_frames.append(frame)
+            
+            # ← THÊM: Apply disabled style nếu action.is_disabled
+            if hasattr(action, 'is_disabled') and action.is_disabled:
+                frame._apply_disabled_style()
     
         # Khôi phục selection nếu vẫn còn hợp lệ
         if current_selection is not None and current_selection < len(actions):

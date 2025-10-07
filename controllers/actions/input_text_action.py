@@ -51,11 +51,11 @@ class InputTextAction(BaseAction):
         elif how_to_get == "Sequential by loop":
             # Get loop index from global variables
             globals_var = GlobalVariables()
-            loop_index_str = globals_var.get("loop_index", "1")
+            loop_index_str = globals_var.get("loop_index", "0")
             try:
                 loop_index = int(loop_index_str)
                 # Use modulo to loop through text_items (1-based index)
-                index = (loop_index - 1) % len(text_items)
+                index = loop_index % len(text_items)
                 return text_items[index]
             except:
                 # Fallback to first item

@@ -3,6 +3,7 @@ from controllers.actions.base_action import BaseAction
 from models.global_variables import GlobalVariables
 from models.gologin_api import GoLoginAPI
 import random
+from models.gologin_api import get_gologin_api  # ← Import
 
 class GoLoginStopAction(BaseAction):
     """Handler for GoLogin Stop Profile action"""
@@ -56,7 +57,8 @@ class GoLoginStopAction(BaseAction):
             gologin = GoLoginAPI(api_token)
             
             # Stop profile by ID using REST API
-            success, result = gologin.stop_profile_by_id(profile_id)
+            gologin = get_gologin_api(api_token)  # ← Dùng singleton
+            success, result = gologin.stop_profile(profile_id)
             
             if success:
                 print(f"[GOLOGIN STOP] ✓ Profile {profile_id} stopped successfully!")

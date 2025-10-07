@@ -530,10 +530,10 @@ class ActionController:
     
                     try:
                         while loop_count < total_loops:
-                            print(f"[CONTROLLER DEBUG] For Loop - Iteration {loop_count + 1}/{total_loops}")
+                            print(f"[CONTROLLER DEBUG] For Loop - Iteration {loop_count}/{total_loops}")
                             for_handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
                             if for_handler:
-                                for_handler.set_loop_index(loop_count + 1, total_loops)  # 1-based index
+                                for_handler.set_loop_index(loop_count, total_loops)  # 0-based index
                                 
                             iteration_completed = False  # ← FLAG để track iteration completion
             
@@ -544,6 +544,12 @@ class ActionController:
                                 while nested_i < end_for_index:
                                     nested_action = actions[nested_i]
                                     nested_action_type = nested_action.action_type
+                                    
+                                    # ← THÊM CHECK DISABLED CHO NESTED ACTIONS
+                                    if nested_action.is_disabled:
+                                        print(f"[EXECUTION] ⏭️ Skipping disabled nested action at index {nested_i}: {nested_action.action_type}")
+                                        nested_i += 1
+                                        continue
                     
                                     # Kiểm tra điều kiện skip từ if_stack
                                     should_skip_nested = False
@@ -973,7 +979,7 @@ class ActionController:
                 try:
                     action_type = action_data.get("action_type")
                     parameters = action_data.get("parameters", {})
-                
+                    is_disabled = action_data.get("is_disabled", False)
                     # Convert action_type sang enum nếu cần
                     try:
                         if isinstance(action_type, str):
@@ -984,7 +990,7 @@ class ActionController:
                         action_enum = action_type
                 
                     # Tạo ActionItem mới và thêm vào model
-                    new_action = ActionItem(action_enum, parameters)
+                    new_action = ActionItem(action_enum, parameters, is_disabled)
                     self.model.add_action(new_action)
                     loaded_count += 1
                 

@@ -5,6 +5,8 @@ from models.gologin_api import GoLoginAPI
 import random
 import string
 import re
+import time
+from models.gologin_api import get_gologin_api  # ← Import
 
 class GoLoginCreateAction(BaseAction):
     """Handler for GoLogin Create Profile action"""
@@ -61,7 +63,7 @@ class GoLoginCreateAction(BaseAction):
             country_code = self.params.get("country_code", "US")
             
             # Initialize GoLogin API
-            gologin = GoLoginAPI(api_token)
+            gologin = get_gologin_api(api_token)  # ← Dùng singleton
             
             # Create profile
             print(f"[GOLOGIN CREATE] Creating profile: {profile_name}")
@@ -78,15 +80,16 @@ class GoLoginCreateAction(BaseAction):
                 print(f"[GOLOGIN CREATE] ✓ Profile created successfully!")
                 print(f"[GOLOGIN CREATE] Profile ID: {profile_id}")
                 print(f"[GOLOGIN CREATE] Profile Name: {profile_name}")
-                
-                # ✅ ASSIGN TO MULTIPLE VARIABLES based on loop index
+    
+                # ← BỎ: time.sleep(10)
+                # ← BỎ: print waiting message
+    
+                # ASSIGN TO MULTIPLE VARIABLES
                 variable_name = self.params.get("variable", "")
                 if variable_name:
                     self._assign_to_multiple_variables(variable_name, profile_id)
-                
-                # Also store in default variable
+    
                 GlobalVariables().set("gologin_profile_id", profile_id)
-                
                 self.set_variable(True)
             else:
                 print(f"[GOLOGIN CREATE] ✗ Failed: {result}")

@@ -4,6 +4,7 @@ from models.global_variables import GlobalVariables
 from models.gologin_api import GoLoginAPI
 import random
 import re
+from models.gologin_api import get_gologin_api  # ← Import singleton getter
 
 class GoLoginStartAction(BaseAction):
     """Handler for GoLogin Start Profile action"""
@@ -58,7 +59,8 @@ class GoLoginStartAction(BaseAction):
             
             # Start profile
             print(f"[GOLOGIN START] Starting profile...")
-            success, result = gologin.start_profile(profile_id)
+            gologin = get_gologin_api(api_token)  # ← Dùng singleton
+            success, result = gologin.start_profile(profile_id, wait_for_ready=True, max_wait=180)
             
             if success:
                 debugger_address = result
