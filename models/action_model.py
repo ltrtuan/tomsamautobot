@@ -31,19 +31,22 @@ except (ImportError, AttributeError):
                 
 class ActionItem:
     
-    def __init__(self, action_type, parameters):
+    def __init__(self, action_type, parameters, is_disabled=False):
         # Hoặc dùng UUID để đảm bảo tính duy nhất toàn cục
         self.id = str(uuid.uuid4())
         self.action_type = action_type
         self.parameters = parameters
+        self.is_disabled = is_disabled
     
     def __str__(self):
-        return f"{self.action_type}: {', '.join([f'{k}={v}' for k, v in self.parameters.items()])}"
+        status = " [DISABLED]" if self.is_disabled else ""  # ← THÊM status
+        return f"{self.action_type}: {', '.join([f'{k}={v}' for k, v in self.parameters.items()])}{status}"
     
     def to_dict(self):
         return {
             "action_type": self.action_type.value if hasattr(self.action_type, "value") else self.action_type,
-            "parameters": self.parameters
+            "parameters": self.parameters,
+            "is_disabled": self.is_disabled  # ← THÊM MỚI để lưu vào JSON
         }
 
 class ActionModel:
@@ -76,8 +79,14 @@ class ActionModel:
                 action["action_type"] = action_type
             except ValueError:
                 pass
-            # Chuyển đổi từ dict sang ActionItem
-            action = ActionItem(action["action_type"], action.get("parameters", {}))
+            
+            # ← SỬA: Chuyển đổi từ dict sang ActionItem với is_disabled
+            is_disabled = action.get("is_disabled", False)  # ← THÊM
+            action = ActionItem(
+                action["action_type"], 
+                action.get("parameters", {}),
+                is_disabled  # ← THÊM
+            )
     
         self.actions.append(action)
         self.is_modified = True  # Đánh dấu đã thay đổi
@@ -186,7 +195,8 @@ class ActionModel:
                         for action_data in actions_data:
                             action_type = action_data.get("action_type")
                             parameters = action_data.get("parameters", {})
-                            self.add_action(ActionItem(action_type, parameters))
+                            is_disabled = action_data.get("is_disabled", False)
+                            self.add_action(ActionItem(action_type, parameters, is_disabled))
                         return True
                     else:  # Nếu file trống (empty array)
                         self.add_sample_actions()

@@ -34,7 +34,8 @@ class ActionController:
             self.delete_all_actions,
             self.duplicate_action,
             self.show_move_dialog,
-            self.load_actions_from_file
+            self.load_actions_from_file,
+            self.toggle_action_disable
         )
         
         # ✅ KHỞI ĐỘNG LISTENER NGAY KHI APP START
@@ -108,22 +109,21 @@ class ActionController:
             
     def duplicate_action(self, index):
         """Nhân bản một action và đặt nó ngay sau action gốc"""
-        # Lấy action cần duplicate
         original_action = self.model.get_action(index)
-    
         if original_action:
-            # Tạo một bản sao của action
             import copy
             new_parameters = copy.deepcopy(original_action.parameters)
         
-            # Tạo action mới với parameters giống hệt action gốc
-            new_action = ActionItem(original_action.action_type, new_parameters)
+            # ← SỬA: Thêm is_disabled parameter
+            new_action = ActionItem(
+                original_action.action_type, 
+                new_parameters,
+                original_action.is_disabled  # ← THÊM
+            )
         
-            # Thêm action mới vào sau action gốc
             self.model.add_action_at(index + 1, new_action)
-        
-            # Cập nhật view
-            self.update_view()        
+            self.update_view()
+
             
                 
     def play_action(self, index):
@@ -392,6 +392,12 @@ class ActionController:
                 action = actions[i]
                 action_type = action.action_type
         
+                # ← THÊM CHECK DISABLED
+                if action.is_disabled:
+                    print(f"[EXECUTION] ⏭️ Skipping disabled action at index {i}: {action.action_type}")
+                    i += 1
+                    continue
+    
                 # Kiểm tra xem action hiện tại có nằm trong khối cần bỏ qua không
                 should_skip = False
                 for block in skip_blocks:
@@ -1056,3 +1062,13 @@ class ActionController:
             self.view.master.destroy()
     
         self.check_unsaved_changes(close_app)
+
+    def toggle_action_disable(self, index):
+        """Toggle disable/enable state của action"""
+        action_frame = self.view.action_frames[index]
+        action_frame.toggle_disable()
+    
+        # Mark model as modified
+        self.model.is_modified = True
+    
+        print(f"[CONTROLLER] Action {index+1} {'disabled' if action_frame.action.is_disabled else 'enabled'}")

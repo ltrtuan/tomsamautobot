@@ -21,7 +21,9 @@ from controllers.actions.check_fullscreen_action import CheckFullscreenAction
 from controllers.actions.image_search_live_action import ImageSearchLiveAction
 from controllers.actions.copy_folder_action import CopyFolderAction
 from controllers.actions.run_cmd_action import RunCmdAction
-from controllers.actions.gologin_create_launch_action import GoLoginCreateLaunchAction
+from controllers.actions.gologin_create_action import GoLoginCreateAction
+from controllers.actions.gologin_start_action import GoLoginStartAction
+from controllers.actions.gologin_stop_action import GoLoginStopAction
 
 
 class ActionFactory:
@@ -87,8 +89,14 @@ class ActionFactory:
             return CopyFolderAction(root, action, view, model, controller)
         elif action_type == ActionType.RUN_CMD:
             return RunCmdAction(root, action, view, model, controller)
-        elif action_type == ActionType.GOLOGIN_CREATE_LAUNCH:
-            return GoLoginCreateLaunchAction(root, action, view, model, controller)
+        elif action_type == ActionType.GOLOGIN_CREATE_PROFILE:
+            return GoLoginCreateAction(root, action, view, model, controller)
+
+        elif action_type == ActionType.GOLOGIN_START_PROFILE:
+            return GoLoginStartAction(root, action, view, model, controller)
+
+        elif action_type == ActionType.GOLOGIN_STOP_PROFILE:
+            return GoLoginStopAction(root, action, view, model, controller)
         else:
             # Trả về None nếu không tìm thấy handler phù hợp
             return None
