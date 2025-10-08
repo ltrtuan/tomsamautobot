@@ -24,7 +24,7 @@ from controllers.actions.run_cmd_action import RunCmdAction
 from controllers.actions.gologin_create_action import GoLoginCreateAction
 from controllers.actions.gologin_start_action import GoLoginStartAction
 from controllers.actions.gologin_stop_action import GoLoginStopAction
-
+from controllers.actions.upload_script_action import UploadScriptAction
 
 class ActionFactory:
     """Factory tạo ra play handler dựa vào loại action"""
@@ -97,6 +97,9 @@ class ActionFactory:
 
         elif action_type == ActionType.GOLOGIN_STOP_PROFILE:
             return GoLoginStopAction(root, action, view, model, controller)
+        
+        elif action_type == ActionType.UPLOAD_SCRIPT:
+            return UploadScriptAction(root, action, view, model, controller)
         else:
             # Trả về None nếu không tìm thấy handler phù hợp
             return None

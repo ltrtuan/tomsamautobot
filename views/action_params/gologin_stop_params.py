@@ -16,9 +16,7 @@ class GoLoginStopParams(BaseActionParams):
         
         # ========== API KEY VARIABLE SECTION ==========
         self.create_api_key_variable_section()
-        
-        # GoLogin App Path
-        self.create_gologin_app_path_section()
+     
         
         # ========== PROFILE IDs SECTION ==========
         self.create_profile_ids_section()
@@ -183,49 +181,6 @@ class GoLoginStopParams(BaseActionParams):
             justify=tk.LEFT
         )
         hint.pack(anchor=tk.W, pady=(5, 0))
-        
-    def create_gologin_app_path_section(self):
-        """GoLogin App Path Variable input"""
-        frame = tk.LabelFrame(
-            self.parent_frame,
-            text="GoLogin App Path Variable",
-            bg=cfg.LIGHT_BG_COLOR,
-            pady=10,
-            padx=10
-        )
-        frame.pack(fill=tk.X, pady=10)
-    
-        # Variable name input
-        label = tk.Label(
-            frame,
-            text="Variable name containing app path:",
-            bg=cfg.LIGHT_BG_COLOR,
-            font=("Segoe UI", 10)
-        )
-        label.pack(anchor=tk.W)
-    
-        self.app_path_var = tk.StringVar()
-        if self.parameters:
-            self.app_path_var.set(self.parameters.get("gologin_app_path_variable", ""))
-    
-        entry = tk.Entry(
-            frame,
-            textvariable=self.app_path_var,
-            font=("Segoe UI", 10),
-            width=40
-        )
-        entry.pack(fill=tk.X, pady=(5, 0))
-    
-        # Hint
-        hint = tk.Label(
-            frame,
-            text="💡 Example: GOLOGIN_APP_PATH (set variable value: C:\\Program Files\\GoLogin\\GoLogin.exe)",
-            bg=cfg.LIGHT_BG_COLOR,
-            font=("Segoe UI", 9),
-            fg="#666666",
-            justify=tk.LEFT
-        )
-        hint.pack(anchor=tk.W, pady=(5, 0))
 
     
     def get_parameters(self):
@@ -236,6 +191,5 @@ class GoLoginStopParams(BaseActionParams):
         params["profile_ids"] = self.profile_ids_input.get("1.0", tk.END).strip()
         params["how_to_get"] = self.how_to_get_var.get()
         params["clean_profile"] = self.clean_profile_var.get()
-        params["gologin_app_path_variable"] = self.app_path_var.get().strip()  # ← THÊM
         
         return params

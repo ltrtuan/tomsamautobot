@@ -129,34 +129,33 @@ class BaseAction(ABC):
         self.view.show_message(title, message)
     
     def delay_execution(self, default_delay=1):
-        
-        """Trì hoãn thực thi dựa trên tham số random_time"""
+        """Trì hoãn thực thi và check program ĐỒNG BỘ"""
         # Lấy giá trị random_time từ tham số
         random_time = int(self.params.get("random_time", "0"))
     
-        # Nếu random_time > 0, tạo delay ngẫu nhiên từ 1 đến random_time
+        # Tính delay
         if random_time > 0:
             import random
             delay_seconds = random.randint(1, random_time)
-        
         else:
-            # Nếu random_time = 0, sử dụng default_delay
             delay_seconds = default_delay
-
+    
+        # Sleep đồng bộ
         time.sleep(delay_seconds)
-        
-        def execute_after_delay():
-            self.setup_esc_handler()  # Thiết lập bắt sự kiện ESC
-             # Kiểm tra và chuyển đổi chương trình trước khi thực thi action
-            if self.check_and_switch_to_program():
-                pass
-            
-            self.is_running = False  # Đặt lại trạng thái sau khi chạy xong
-            self.cleanup_esc_handler()  # Hủy bắt sự kiện ESC
-        
-        self.is_running = True  # Đánh dấu đang chạy
-        self.stop_requested = False  # Reset cờ dừng
-        self.root.after(int(delay_seconds * 1000), execute_after_delay)
+    
+        # Check program ĐỒNG BỘ ngay sau khi sleep xong
+        self.setup_esc_handler()
+    
+        if not self.check_and_switch_to_program():
+            # Program không ready, đánh dấu để skip
+            print("[PROGRAM] Program not ready, skipping this action")
+            self.stop_requested = True
+            self.cleanup_esc_handler()
+            return
+    
+        self.cleanup_esc_handler()
+        # ← Khi tới đây, program đã ready và prepare_play() sẽ chạy ngay sau
+
         
     
     def should_break_action(self):
@@ -249,83 +248,162 @@ class BaseAction(ABC):
     
     def check_and_switch_to_program(self):
         """
-        Kiểm tra chương trình từ tham số, chuyển đổi và maximize cửa sổ nếu cần
-    
-        Returns:
-            bool: True nếu thành công, False nếu không
+        Kiểm tra chương trình, filter theo window title nếu có
         """
         import os
         import win32gui
         import win32process
+        import win32con
         import psutil
+        import subprocess
+        import time
+        from models.global_variables import GlobalVariables
     
-        # Lấy đường dẫn chương trình từ tham số
-        program_path = self.params.get("program", "")
+        # ========== ƯU TIÊN: Variable name trước cho PROGRAM PATH ==========
+        program_variable = self.params.get("program_variable", "").strip()
+        program_path = ""
     
-        # Nếu không có đường dẫn, không cần xử lý
-        if not program_path or not os.path.exists(program_path):
+        if program_variable:
+            program_path = GlobalVariables().get(program_variable, "").strip()
+            if program_path:
+                print(f"[PROGRAM] Using path from variable '{program_variable}': {program_path}")
+            else:
+                print(f"[PROGRAM] Variable '{program_variable}' is empty, trying browse option...")
+    
+        if not program_path:
+            program_path = self.params.get("program", "").strip()
+            if program_path:
+                print(f"[PROGRAM] Using path from browse: {program_path}")
+    
+        if not program_path:
             return True
     
-        # Lấy tên file thực thi từ đường dẫn
+        if not os.path.exists(program_path):
+            print(f"[PROGRAM] Error: File not found: {program_path}")
+            return False
+    
         program_name = os.path.basename(program_path).lower()
     
-        # Hàm callback để kiểm tra từng cửa sổ
+        # ========== ƯU TIÊN: Variable name trước cho WINDOW TITLE ==========
+        window_title_variable = self.params.get("window_title_variable", "").strip()
+        window_title_filter = ""
+    
+        if window_title_variable:
+            window_title_filter = GlobalVariables().get(window_title_variable, "").strip()
+            if window_title_filter:
+                print(f"[PROGRAM] Using window title from variable '{window_title_variable}': {window_title_filter}")
+            else:
+                print(f"[PROGRAM] Variable '{window_title_variable}' is empty, trying direct input...")
+    
+        # Nếu không có variable hoặc variable rỗng, dùng direct input
+        if not window_title_filter:
+            window_title_filter = self.params.get("window_title", "").strip()
+            if window_title_filter:
+                print(f"[PROGRAM] Using window title from direct input: {window_title_filter}")
+    
+        # Convert to lowercase for case-insensitive search
+        window_title_filter_lower = window_title_filter.lower() if window_title_filter else ""
+    
+        # Callback để tìm windows
         def enum_windows_callback(hwnd, target_windows):
             if not win32gui.IsWindowVisible(hwnd) or not win32gui.IsWindowEnabled(hwnd):
                 return True
-            
-            # Lấy process ID từ window handle
+    
             try:
                 _, pid = win32process.GetWindowThreadProcessId(hwnd)
                 process = psutil.Process(pid)
                 process_name = process.name().lower()
+        
+                # THAY ĐỔI: Nếu CÓ window_title_filter, CHỈ check title (bỏ qua process name)
+                if window_title_filter_lower:
+                    window_title = win32gui.GetWindowText(hwnd)
             
-                # Nếu tên process khớp với program_name, thêm vào danh sách
-                if program_name == process_name or program_path.lower() == process.exe().lower():
-                    target_windows.append((hwnd, process_name))
+                    # Check title match (case-insensitive)
+                    if window_title_filter_lower in window_title.lower():
+                        target_windows.append((hwnd, process_name, window_title))
+                        print(f"[PROGRAM] ✓ Matched window by title: '{window_title}' (process: {process_name})")
+                else:
+                    # KHÔNG CÓ filter, check process name như cũ
+                    if program_name == process_name or program_path.lower() == process.exe().lower():
+                        window_title = win32gui.GetWindowText(hwnd)
+                        target_windows.append((hwnd, process_name, window_title))
             except:
                 pass
             return True
+
     
-        # Kiểm tra cửa sổ hiện tại
-        current_hwnd = win32gui.GetForegroundWindow()
-        try:
-            _, current_pid = win32process.GetWindowThreadProcessId(current_hwnd)
-            current_process = psutil.Process(current_pid)
-            current_exe = current_process.exe().lower()
-        
-            # Nếu cửa sổ hiện tại đã là chương trình đích, chỉ cần maximize
-            if current_exe == program_path.lower() or current_process.name().lower() == program_name:
-                # Maximize cửa sổ hiện tại
-                win32gui.ShowWindow(current_hwnd, 3)  # SW_MAXIMIZE = 3
-                # Delay 3 giây để đợi phần mềm load
-                time.sleep(3)
-                return True
-        except:
-            pass
-    
-        # Tìm tất cả cửa sổ của chương trình đích
+        # Tìm tất cả cửa sổ của chương trình
         target_windows = []
         win32gui.EnumWindows(enum_windows_callback, target_windows)
     
-        # Nếu tìm thấy cửa sổ, chuyển đổi và maximize
-        if target_windows:
-            hwnd, _ = target_windows[0]  # Lấy cửa sổ đầu tiên tìm thấy
-        
-            # Kiểm tra nếu cửa sổ đã maximize
-            placement = win32gui.GetWindowPlacement(hwnd)
-            if placement[1] != 3:  # Nếu chưa maximize
-                win32gui.ShowWindow(hwnd, 3)  # SW_MAXIMIZE = 3
-        
-            # Đưa cửa sổ lên trước
-            win32gui.SetForegroundWindow(hwnd)
+        # Nếu có filter nhưng không tìm thấy
+        if window_title_filter_lower and not target_windows:
+            print(f"[PROGRAM] ✗ No window found with title containing: '{window_title_filter}'")
+            print(f"[PROGRAM] Searching for any window of: {program_name}")
+            # Thử lại không có filter
+            window_title_filter_lower = ""
+            target_windows = []
+            win32gui.EnumWindows(enum_windows_callback, target_windows)
+    
+        # Nếu không tìm thấy window, start program
+        if not target_windows:
+            try:
+                print(f"[PROGRAM] Not running, starting: {program_path}")
+                subprocess.Popen(program_path)
             
-            # Delay 3 giây để đợi phần mềm load
-            time.sleep(3)
-            return True   
+                # Đợi tối đa 10 giây
+                for _ in range(20):
+                    time.sleep(0.5)
+                    target_windows = []
+                    win32gui.EnumWindows(enum_windows_callback, target_windows)
+                
+                    if target_windows:
+                        print(f"[PROGRAM] Started successfully")
+                        break
+                    
+                if target_windows:
+                    time.sleep(3)
+            
+                if not target_windows:
+                    print(f"[PROGRAM] Failed to start: {program_path}")
+                    return False
+            except Exception as e:
+                print(f"[PROGRAM] Error starting: {e}")
+                return False
+    
+        # Nếu tìm thấy window, lấy CÁI ĐẦU TIÊN
+        if target_windows:
+            hwnd = target_windows[0][0]
+            window_title = target_windows[0][2] if len(target_windows[0]) > 2 else "Unknown"
         
+            # Log nếu có nhiều window match
+            if len(target_windows) > 1:
+                print(f"[PROGRAM] Found {len(target_windows)} matching windows, using first: '{window_title}'")
+        
+            try:
+                # Restore nếu minimize
+                if win32gui.IsIconic(hwnd):
+                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                    time.sleep(0.3)
+            
+                # Maximize
+                win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+                time.sleep(0.2)
+            
+                # Bring to foreground
+                win32gui.SetForegroundWindow(hwnd)
+                time.sleep(0.2)
+            
+                print(f"[PROGRAM] ✓ Ready and maximized: '{window_title}'")
+                return True
+            
+            except Exception as e:
+                print(f"[PROGRAM] Error bringing to front: {e}")
+                return False
     
         return False
+
+
 
     def get_region(self):
         """Lấy vùng quét dựa trên tham số"""

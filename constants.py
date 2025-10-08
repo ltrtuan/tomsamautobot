@@ -27,6 +27,7 @@ class ActionType(str, Enum):
     GOLOGIN_CREATE_PROFILE = "GoLogin Create Profile"
     GOLOGIN_START_PROFILE = "GoLogin Start Profile"
     GOLOGIN_STOP_PROFILE = "GoLogin Stop Profile"
+    UPLOAD_SCRIPT = "Upload Script"
     
     
     @classmethod

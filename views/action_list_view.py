@@ -298,6 +298,9 @@ class ActionItemFrame(tk.Frame):
 
         elif action_type == ActionType.GOLOGIN_STOP_PROFILE:
             return "⏹️"  # Stop icon cho Stop
+        
+        elif action_type == ActionType.UPLOAD_SCRIPT:
+            return "📜"
         else:
             return "📋"  # Icon mặc định cho các loại khác
     
@@ -431,6 +434,7 @@ class ActionItemFrame(tk.Frame):
             'GOLOGIN_CREATE_PROFILE',
             'GOLOGIN_START_PROFILE',
             'GOLOGIN_STOP_PROFILE',
+            'UPLOAD_SCRIPT'
             # Thêm các action khác nếu cần
         ]
     
@@ -844,6 +848,14 @@ class ActionItemFrame(tk.Frame):
             profile_ids = action.parameters.get("profile_ids", "")
             ids_preview = profile_ids[:50] + "..." if len(profile_ids) > 50 else profile_ids
             return f"{indent}Stop IDs: {ids_preview}"
+        
+        elif action_type_display == ActionType.UPLOAD_SCRIPT:
+            script_path = action.parameters.get("script_path", "")
+            if script_path:
+                filename = script_path.split('/')[-1]  # Lấy tên file
+                return f"{indent}Script: {filename}"
+            return f"{indent}Chưa chọn script"
+
 
         return indent  # Trả về ít nhất là indent
 
