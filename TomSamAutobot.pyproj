@@ -48,6 +48,7 @@
     <Compile Include="controllers\actions\skip_for_action.py" />
     <Compile Include="controllers\actions\tao_bien_action.py" />
     <Compile Include="controllers\actions\text_search_action.py" />
+    <Compile Include="controllers\actions\upload_script_action.py" />
     <Compile Include="controllers\actions\write_csv_action.py" />
     <Compile Include="controllers\actions\write_txt_action.py" />
     <Compile Include="controllers\action_controller.py" />
@@ -90,6 +91,7 @@
     <Compile Include="views\action_params\skip_for_params.py" />
     <Compile Include="views\action_params\tao_bien_params.py" />
     <Compile Include="views\action_params\text_search_params.py" />
+    <Compile Include="views\action_params\upload_script_params.py" />
     <Compile Include="views\action_params\write_csv_params.py" />
     <Compile Include="views\action_params\write_txt_params.py" />
     <Compile Include="views\action_params\__init__.py" />

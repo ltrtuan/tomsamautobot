@@ -1078,3 +1078,404 @@ class ActionController:
         self.model.is_modified = True
     
         print(f"[CONTROLLER] Action {index+1} {'disabled' if action_frame.action.is_disabled else 'enabled'}")
+
+
+    def execute_nested_actions(self, action_items):
+        """
+        Execute danh sách actions từ script (nested execution)
+        Xử lý For loop, If condition đúng logic
+    
+        Args:
+            action_items: List of ActionItem objects
+    
+        Returns:
+            bool: True nếu thành công, False nếu bị stop
+        """
+        print(f"[NESTED_EXEC] Starting nested execution with {len(action_items)} actions")
+    
+        # Set flag để các action biết đang trong nested execution
+        self._is_in_nested_execution = True
+    
+        try:
+            # SỬ DỤNG LẠI logic execute_actions hiện có
+            # Nhưng truyền vào action_items thay vì self.model.actions
+        
+            # Tạo temporary model với actions từ script
+            original_actions = self.model.actions
+            self.model.actions = action_items
+        
+            # Execute như bình thường
+            success = self._execute_actions_internal(action_items)
+        
+            # Restore original actions
+            self.model.actions = original_actions
+        
+            return success
+        
+        finally:
+            self._is_in_nested_execution = False
+            print(f"[NESTED_EXEC] Finished nested execution")
+
+
+    def _execute_actions_internal(self, actions):
+        """
+        ✅ FIXED: Internal method để execute actions với logic For/If
+        Sử dụng helper methods mới: find_matching_end(), execute_for_loop_range(), execute_if_range()
+    
+        ⚠️ ẢNH HƯỞNG:
+        - Không ảnh hưởng run_sequence() (vẫn dùng logic cũ)
+        - Chỉ dùng cho execute_nested_actions()
+        """
+        from controllers.actions.action_factory import ActionFactory
+    
+        i = 0
+        context = {'if_stack': [], 'skip_blocks': []}
+    
+        while i < len(actions):
+            if self.is_execution_stopped:
+                return False
+        
+            action = actions[i]
+        
+            # Skip nếu disabled
+            if action.is_disabled:
+                i += 1
+                continue
+        
+            action_type = action.action_type
+        
+            # ========== XỬ LÝ FOR LOOP ==========
+            if action_type == ActionType.FOR_LOOP:
+                # ✅ SỬ DỤNG find_matching_end() thay vì _find_matching_end_for()
+                end_for_index = self.find_matching_end(
+                    actions, i, ActionType.FOR_LOOP, ActionType.END_FOR_LOOP
+                )
+            
+                if end_for_index == -1:
+                    print(f"[ERROR] For loop tại index {i} không có End For")
+                    return False
+            
+                # ✅ SỬ DỤNG execute_for_loop_range() 
+                success = self.execute_for_loop_range(actions, i, end_for_index, context)
+            
+                if not success:
+                    return False
+            
+                # Jump qua End For
+                i = end_for_index + 1
+                continue
+        
+            # ========== XỬ LÝ IF CONDITION ==========
+            elif action_type == ActionType.IF_CONDITION:
+                # ✅ SỬ DỤNG find_matching_end() thay vì _find_matching_end_if()
+                end_if_index = self.find_matching_end(
+                    actions, i, ActionType.IF_CONDITION, ActionType.END_IF_CONDITION
+                )
+            
+                if end_if_index == -1:
+                    print(f"[ERROR] If condition tại index {i} không có End If")
+                    return False
+            
+                # ✅ SỬ DỤNG execute_if_range()
+                success = self.execute_if_range(actions, i, end_if_index, context)
+            
+                if not success:
+                    return False
+            
+                # Jump qua End If
+                i = end_if_index + 1
+                continue
+        
+            # ========== SKIP CÁC KEYWORD ACTIONS ==========
+            elif action_type in [
+                ActionType.END_FOR_LOOP,
+                ActionType.BREAK_FOR_LOOP,
+                ActionType.SKIP_FOR_LOOP,
+                ActionType.END_IF_CONDITION,
+                ActionType.ELSE_IF_CONDITION
+            ]:
+                # Những action này được xử lý bởi For/If handler
+                i += 1
+                continue
+        
+            # ========== EXECUTE NORMAL ACTION ==========
+            else:
+                try:
+                    handler = ActionFactory.get_handler(
+                        self.root, action, self.view, self.model, self
+                    )
+                
+                    if handler:
+                        handler.play()
+                    
+                except Exception as e:
+                    print(f"[ERROR] Failed to execute action at index {i}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return False
+        
+            i += 1
+    
+        return True
+
+    
+    # ==================== CONTROL FLOW HELPERS (REFACTORED) ====================
+    # Những method này được tách ra để REUSE cho run_sequence() và execute_nested_actions()
+
+    def find_matching_end(self, actions, start_index, start_type, end_type):
+        """
+        🆕 NEW METHOD - Tìm keyword kết thúc tương ứng (End For, End If)
+    
+        Args:
+            actions: List actions
+            start_index: Index của keyword bắt đầu (FOR_LOOP, IF_CONDITION)
+            start_type: ActionType của keyword bắt đầu
+            end_type: ActionType của keyword kết thúc
+    
+        Returns:
+            int: Index của keyword kết thúc, hoặc -1 nếu không tìm thấy
+    
+        ⚠️ ẢNH HƯỞNG: Không ảnh hưởng action cũ, chỉ là helper mới
+        """
+        nesting_level = 0
+        i = start_index + 1
+    
+        while i < len(actions):
+            action = actions[i]
+        
+            if action.action_type == start_type:
+                nesting_level += 1  # Nested cùng loại
+            elif action.action_type == end_type:
+                if nesting_level == 0:
+                    return i  # Tìm thấy End cùng cấp
+                nesting_level -= 1
+        
+            i += 1
+    
+        return -1  # Không tìm thấy
+
+
+    def execute_action_range(self, actions, start_index, end_index, context=None):
+        """
+        🆕 NEW METHOD - Execute actions từ start_index+1 đến end_index-1
+        Tự động xử lý nested For/If
+    
+        Args:
+            actions: List actions
+            start_index: Index bắt đầu (KHÔNG execute action này)
+            end_index: Index kết thúc (KHÔNG execute action này)
+            context: Dict chứa if_stack, skip_blocks (optional)
+    
+        Returns:
+            bool: True nếu thành công, False nếu stop/error
+    
+        ⚠️ ẢNH HƯỞNG: Không ảnh hưởng action cũ, chỉ là helper mới
+        """
+        from controllers.actions.action_factory import ActionFactory
+    
+        if context is None:
+            context = {'if_stack': [], 'skip_blocks': []}
+    
+        i = start_index + 1
+    
+        while i < end_index:
+            if self.is_execution_stopped:
+                return False
+        
+            action = actions[i]
+            # ===== THÊM DEBUG LOG =====
+            print(f"[NESTED_EXEC] 📍 Index {i}: {action.action_type}")
+            
+            # Skip disabled
+            if action.is_disabled:
+                print(f"[NESTED_EXEC] ⏭️ Skipped (disabled)")
+                i += 1
+                continue
+        
+            action_type = action.action_type
+        
+            # ===== XỬ LÝ NESTED FOR LOOP =====
+            if action_type == ActionType.FOR_LOOP:
+                end_for = self.find_matching_end(
+                    actions, i, ActionType.FOR_LOOP, ActionType.END_FOR_LOOP
+                )
+            
+                if end_for == -1:
+                    print(f"[ERROR] For loop at index {i} missing End For")
+                    return False
+            
+                # Execute For loop recursively
+                success = self.execute_for_loop_range(actions, i, end_for, context)
+                if not success:
+                    return False
+            
+                i = end_for + 1  # Jump qua End For
+                continue
+        
+            # ===== XỬ LÝ NESTED IF CONDITION =====
+            elif action_type == ActionType.IF_CONDITION:
+                end_if = self.find_matching_end(
+                    actions, i, ActionType.IF_CONDITION, ActionType.END_IF_CONDITION
+                )
+            
+                if end_if == -1:
+                    print(f"[ERROR] If condition at index {i} missing End If")
+                    return False
+            
+                # Execute If block recursively
+                success = self.execute_if_range(actions, i, end_if, context)
+                if not success:
+                    return False
+            
+                i = end_if + 1  # Jump qua End If
+                continue
+        
+            # ===== SKIP CONTROL FLOW KEYWORDS =====
+            elif action_type in [
+                ActionType.END_FOR_LOOP, ActionType.BREAK_FOR_LOOP, ActionType.SKIP_FOR_LOOP,
+                ActionType.END_IF_CONDITION, ActionType.ELSE_IF_CONDITION
+            ]:
+                # Những keyword này được xử lý bởi For/If handler
+                i += 1
+                continue
+        
+            # ===== EXECUTE NORMAL ACTION =====
+            else:
+                handler = ActionFactory.get_handler(
+                    self.root, action, self.view, self.model, self
+                )
+            
+                if handler:
+                    # Link action frame nếu có
+                    action_frame = next(
+                        (f for f in self.view.action_frames if f.action.id == action.id),
+                        None
+                    )
+                    if action_frame:
+                        handler.action_frame = action_frame
+                
+                    handler.play()
+        
+            i += 1
+    
+        return True
+
+
+    def execute_for_loop_range(self, actions, for_index, end_for_index, context=None):
+        """
+        🆕 NEW METHOD - Execute For loop từ for_index đến end_for_index
+        Copy từ logic trong run_sequence()
+    
+        ⚠️ ẢNH HƯỞNG: Không ảnh hưởng action cũ
+        """
+        from models.global_variables import GlobalVariables
+        import random
+    
+        action = actions[for_index]
+        params = action.parameters
+    
+        # Parse iterations
+        iterations_str = params.get("iterations", "1")
+        if "<" in iterations_str and ">" in iterations_str:
+            var_name = iterations_str.strip("<>")
+            iterations_str = GlobalVariables().get(var_name, "1")
+    
+        try:
+            iterations = int(iterations_str)
+        except:
+            iterations = 1
+    
+        print(f"[FOR LOOP] Starting {iterations} iterations (index {for_index} to {end_for_index})")
+    
+        # Execute loop
+        for iteration in range(iterations):
+            if self.is_execution_stopped:
+                return False
+        
+            print(f"[FOR LOOP] Iteration {iteration+1}/{iterations}")
+        
+            # Set loop index variable
+            from controllers.actions.action_factory import ActionFactory
+            for_handler = ActionFactory.get_handler(
+                self.root, action, self.view, self.model, self
+            )
+            if hasattr(for_handler, 'set_loop_index'):
+                for_handler.set_loop_index(iteration, iterations)
+        
+            # Execute actions inside loop
+            success = self.execute_action_range(actions, for_index, end_for_index, context)
+        
+            if not success:
+                return False
+    
+        print(f"[FOR LOOP] Completed {iterations} iterations")
+        return True
+
+
+    def execute_if_range(self, actions, if_index, end_if_index, context=None):
+        """
+        ✅ FIXED: Execute If block với Else If support
+    
+        Logic:
+        1. Evaluate If condition
+        2. Nếu TRUE: Execute actions từ If+1 đến Else If (hoặc End If)
+        3. Nếu FALSE: Tìm Else If và execute từ Else If+1 đến End If
+    
+        ⚠️ ẢNH HƯỞNG: Fix logic If/Else If cho Upload Script
+        """
+        from controllers.actions.action_factory import ActionFactory
+    
+        action = actions[if_index]
+    
+        # ===== EVALUATE CONDITION =====
+        handler = ActionFactory.get_handler(
+            self.root, action, self.view, self.model, self
+        )
+    
+        if not handler:
+            print(f"[IF ERROR] Cannot create handler for If at index {if_index}")
+            return False
+    
+        # Check condition qua should_break_action()
+        condition_result = not handler.should_break_action()
+    
+        print(f"[IF CONDITION] 🔍 Condition at index {if_index} = {condition_result}")
+    
+        # ===== FIND ELSE IF (NẾU CÓ) =====
+        else_if_index = -1
+        nesting_level = 0
+    
+        for i in range(if_index + 1, end_if_index):
+            act = actions[i]
+        
+            # Track nesting
+            if act.action_type == ActionType.IF_CONDITION:
+                nesting_level += 1
+            elif act.action_type == ActionType.END_IF_CONDITION:
+                nesting_level -= 1
+        
+            # Tìm Else If cùng cấp
+            elif act.action_type == ActionType.ELSE_IF_CONDITION and nesting_level == 0:
+                else_if_index = i
+                break
+    
+        # ===== EXECUTE DỰA VÀO CONDITION =====
+        if condition_result:
+            # IF TRUE: Execute từ if_index+1 đến else_if_index (hoặc end_if_index)
+            execute_end = else_if_index if else_if_index != -1 else end_if_index
+        
+            print(f"[IF CONDITION] ✅ TRUE → Execute actions [{if_index+1}:{execute_end}]")
+        
+            return self.execute_action_range(actions, if_index, execute_end, context)
+    
+        else:
+            # IF FALSE: Execute Else If branch (nếu có)
+            if else_if_index != -1:
+                print(f"[IF CONDITION] ❌ FALSE → Execute Else If actions [{else_if_index+1}:{end_if_index}]")
+            
+                return self.execute_action_range(actions, else_if_index, end_if_index, context)
+            else:
+                print(f"[IF CONDITION] ❌ FALSE → No Else If, skip entire block")
+                return True
+
+
