@@ -4,6 +4,8 @@ import requests
 import time
 import tempfile
 import os
+import subprocess
+import psutil
 
 class GoLoginAPI:
     """Class quản lý GoLogin API - 3 methods: Create, Start, Stop"""
@@ -13,7 +15,7 @@ class GoLoginAPI:
         self.gl = None
         self.base_url = "https://api.gologin.com"
         self.headers = {
-            "Authorization": f"Bearer {api_token}",
+            "Authorization": api_token,
             "Content-Type": "application/json"
         }
         # ← THÊM: Dictionary lưu GoLogin instances theo profile_id
@@ -128,43 +130,104 @@ class GoLoginAPI:
             return False, str(e)
 
     
-    def stop_profile(self, profile_id):
-        """Stop profile sử dụng SAVED instance"""
+    def stop_profile(self, profile_id, clean_profile=False):
+        """
+        Stop profile - Close browser nhưng có thể giữ profile data
+        Args:
+            profile_id: Profile ID to stop
+            clean_profile: If True, xóa profile folder (default False)
+        """
         try:
+            
             profile_id = str(profile_id).strip()
             print(f"[GOLOGIN] Stopping profile: {profile_id}")
-            
-            # ← CHECK: Có instance đã lưu không?
+        
             if profile_id in self.active_profiles:
                 gl = self.active_profiles[profile_id]
+            
+                # ← CLOSE BROWSER ONLY (không gọi stop)
+                try:
+                    # Kill browser process
+                    if hasattr(gl, 'pid') and gl.pid:
+                        import psutil
+                        try:
+                            process = psutil.Process(gl.pid)
+                            process.terminate()
+                            process.wait(timeout=5)
+                            print(f"[GOLOGIN] ✓ Browser process terminated")
+                        except:
+                            pass
                 
-                # Close browser using SDK
-                gl.stop()
+                    # Nếu muốn xóa profile folder
+                    if clean_profile:
+                        print(f"[GOLOGIN] 🗑️ Cleaning profile folder...")
+                        gl.stop()  # Gọi stop để xóa folder
+                        print(f"[GOLOGIN] Profile folder deleted")
+                    else:
+                        print(f"[GOLOGIN] 💾 Profile data preserved in: {gl.tmpdir}")
+                        # KHÔNG gọi gl.stop() → giữ folder
                 
+                except Exception as e:
+                    print(f"[GOLOGIN] ⚠ Close warning: {e}")
+            
                 # Remove from active profiles
                 del self.active_profiles[profile_id]
-                
-                print(f"[GOLOGIN] ✓ Profile stopped successfully!")
+            
+                print(f"[GOLOGIN] ✓ Profile stopped!")
                 return True, "Profile stopped"
-            
+        
             else:
-                # ← FALLBACK: Không có instance → Try API stop
-                print(f"[GOLOGIN] ⚠ No active instance found, trying API stop...")
-                url = f"{self.base_url}/browser/{profile_id}/web/stop"
-                
-                response = requests.delete(url, headers=self.headers)
-                
-                if response.status_code == 200 or response.status_code == 204:
-                    print(f"[GOLOGIN] ✓ Profile stopped via API!")
-                    return True, "Profile stopped via API"
-                else:
-                    error_msg = response.text
-                    print(f"[GOLOGIN] ✗ Stop failed: {error_msg}")
-                    return False, error_msg
-            
+                print(f"[GOLOGIN] ⚠ No active instance found")
+                return False, "Profile not running"
+        
         except Exception as e:
             print(f"[GOLOGIN] Stop error: {e}")
             return False, str(e)
+
+    # def stop_profile(self, profile_id, clean_profile=False):
+    #     """Stop profile - Close browser nhưng có thể giữ profile data"""
+    #     try:
+    #         profile_id = str(profile_id).strip()
+    #         print(f"[GOLOGIN] Stopping profile: {profile_id}")
+        
+    #         if profile_id in self.active_profiles:
+    #             gl = self.active_profiles[profile_id]
+            
+    #             if not clean_profile:
+    #                 # Override cleanup để không xóa folder
+    #                 print(f"[GOLOGIN] Closing browser (keeping temp data)...")
+                
+    #                 # Save original
+    #                 original_cleanup = getattr(gl, 'cleanupProfile', None)
+                
+    #                 # Override
+    #                 gl.cleanupProfile = lambda: None
+                
+    #                 # Stop (sẽ KHÔNG xóa temp)
+    #                 gl.stop()
+                
+    #                 # Restore
+    #                 if original_cleanup:
+    #                     gl.cleanupProfile = original_cleanup
+                
+    #                 print(f"[GOLOGIN] 💾 Profile data preserved")
+    #             else:
+    #                 # Full cleanup
+    #                 print(f"[GOLOGIN] Closing browser with cleanup...")
+    #                 gl.stop()
+            
+    #             del self.active_profiles[profile_id]
+    #             print(f"[GOLOGIN] ✓ Profile stopped!")
+    #             return True, "Profile stopped"
+        
+    #         else:
+    #             print(f"[GOLOGIN] ⚠ No active instance found")
+    #             return False, "Profile not running"
+        
+    #     except Exception as e:
+    #         print(f"[GOLOGIN] Stop error: {e}")
+    #         return False, str(e)
+
     
     def stop_profile_by_id(self, profile_id):
         """
@@ -202,14 +265,9 @@ class GoLoginAPI:
             print(f"[GOLOGIN] Stop API error: {e}")
             return False, str(e)
 
-    def check_profile_ready(self, profile_id, max_wait=180, check_interval=10):
+    def check_profile_ready(self, profile_id, max_wait=180, check_interval=30):
         """
         Check if profile is ready to start (polling)
-        Args:
-            profile_id: Profile ID to check
-            max_wait: Maximum seconds to wait (default 180 = 3 mins)
-            check_interval: Seconds between checks (default 10s)
-        Returns: (ready: bool, message: str)
         """
         import time
     
@@ -217,12 +275,22 @@ class GoLoginAPI:
         start_time = time.time()
     
         print(f"[GOLOGIN] ⏳ Checking if profile is ready...")
+        print(f"[GOLOGIN DEBUG] API URL: {url}")
+        print(f"[GOLOGIN DEBUG] Token (first 10 chars): {self.api_token[:10]}...")  # ← THÊM
     
         attempts = 0
+    
         while time.time() - start_time < max_wait:
             attempts += 1
+        
             try:
+                # ← FIX: Thử cả 2 format headers
                 response = requests.get(url, headers=self.headers, timeout=10)
+            
+                # ← THÊM: Log response details
+                print(f"[GOLOGIN DEBUG] Response status: {response.status_code}")
+                if response.status_code == 403:
+                    print(f"[GOLOGIN DEBUG] Response body: {response.text[:200]}")  # First 200 chars
             
                 if response.status_code == 200:
                     profile_data = response.json()
@@ -239,9 +307,24 @@ class GoLoginAPI:
                     print(f"[GOLOGIN] ✗ Profile not found (404)")
                     return False, "Profile not found on server"
             
+                elif response.status_code == 403:
+                    print(f"[GOLOGIN] ⚠ API returned 403 (Forbidden), attempt {attempts}")
+                
+                    # ← THÊM: Try without "Bearer" prefix
+                    if attempts == 1:
+                        print(f"[GOLOGIN] Trying alternative auth format...")
+                        alt_headers = {
+                            "Authorization": self.api_token,  # No "Bearer"
+                            "Content-Type": "application/json"
+                        }
+                        response2 = requests.get(url, headers=alt_headers, timeout=10)
+                        if response2.status_code == 200:
+                            print(f"[GOLOGIN] ✓ Alternative auth works! Updating headers...")
+                            self.headers = alt_headers
+                            continue
                 else:
                     print(f"[GOLOGIN] ⚠ API returned {response.status_code}, attempt {attempts}")
-            
+        
             except requests.exceptions.Timeout:
                 print(f"[GOLOGIN] ⚠ Request timeout, attempt {attempts}")
             except Exception as e:
@@ -256,6 +339,7 @@ class GoLoginAPI:
         elapsed = int(time.time() - start_time)
         return False, f"Profile not ready after {elapsed}s timeout ({attempts} attempts)"
 
+
 # ← SINGLETON INSTANCE - Shared across all actions
 _gologin_instance = None
 
@@ -267,3 +351,75 @@ def get_gologin_api(api_token):
         _gologin_instance = GoLoginAPI(api_token)
     
     return _gologin_instance
+
+def is_gologin_running():
+    """Check if GoLogin app is running"""
+    for proc in psutil.process_iter(['name']):
+        try:
+            if 'gologin' in proc.info['name'].lower():
+                return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return False
+
+def start_gologin_app(app_path, max_wait=60):  # ← TĂNG từ 30s lên 60s
+    """
+    Start GoLogin app and wait until ready
+    Args:
+        app_path: Full path to GoLogin.exe
+        max_wait: Max seconds to wait for app ready (default 60s)
+    Returns: (success: bool, message: str)
+    """
+    import time
+    
+    print(f"[GOLOGIN] Checking if GoLogin app is running...")
+    
+    # Check if already running
+    if is_gologin_running():
+        print(f"[GOLOGIN] ✓ GoLogin app already running")
+        return True, "Already running"
+    
+    # Validate path
+    if not os.path.exists(app_path):
+        return False, f"GoLogin app not found at: {app_path}"
+    
+    try:
+        print(f"[GOLOGIN] Starting GoLogin app: {app_path}")
+        
+        # Start app (detached process)
+        subprocess.Popen(
+            [app_path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            shell=False
+        )
+        
+        # Wait for app to start
+        start_time = time.time()
+        check_count = 0
+        
+        while time.time() - start_time < max_wait:
+            check_count += 1
+            
+            if is_gologin_running():
+                elapsed = int(time.time() - start_time)
+                print(f"[GOLOGIN] ✓ GoLogin app started after {elapsed}s (checked {check_count} times)")
+                
+                # Extra wait for full initialization
+                print(f"[GOLOGIN] Waiting 5s for full initialization...")
+                time.sleep(5)
+                
+                return True, "Started successfully"
+            
+            # ← THÊM: Print progress
+            if check_count % 5 == 0:
+                print(f"[GOLOGIN] Still waiting... ({check_count} checks, {int(time.time() - start_time)}s elapsed)")
+            
+            time.sleep(1)
+        
+        # Timeout
+        elapsed = int(time.time() - start_time)
+        return False, f"GoLogin app did not start within {max_wait}s ({check_count} checks)"
+        
+    except Exception as e:
+        return False, f"Failed to start: {str(e)}"

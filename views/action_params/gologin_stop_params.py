@@ -17,11 +17,17 @@ class GoLoginStopParams(BaseActionParams):
         # ========== API KEY VARIABLE SECTION ==========
         self.create_api_key_variable_section()
         
+        # GoLogin App Path
+        self.create_gologin_app_path_section()
+        
         # ========== PROFILE IDs SECTION ==========
         self.create_profile_ids_section()
         
         # ========== HOW TO GET SECTION ==========
         self.create_how_to_get_section()
+        
+        # ========== CLEAN PROFILE SECTION ==========
+        self.create_clean_profile_section()
         
         # ========== COMMON PARAMETERS ==========
         self.create_common_params(
@@ -138,6 +144,90 @@ class GoLoginStopParams(BaseActionParams):
         )
         combo.pack(side=tk.LEFT, padx=5)
     
+    def create_clean_profile_section(self):
+        """Checkbox để xóa temp folder hay không"""
+        clean_frame = tk.LabelFrame(
+            self.parent_frame,
+            text="Cleanup Options",
+            bg=cfg.LIGHT_BG_COLOR,
+            pady=10,
+            padx=10
+        )
+        clean_frame.pack(fill=tk.X, pady=10)
+    
+        self.clean_profile_var = tk.BooleanVar()
+    
+        # Load from parameters (default: False - KEEP temp folder)
+        if self.parameters:
+            self.clean_profile_var.set(self.parameters.get("clean_profile", False))
+        else:
+            self.clean_profile_var.set(False)
+    
+        checkbox = tk.Checkbutton(
+            clean_frame,
+            text="Delete temp profile folder after stop (slower next start)",
+            variable=self.clean_profile_var,
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10)
+        )
+        checkbox.pack(anchor=tk.W)
+    
+        # Hint text
+        hint = tk.Label(
+            clean_frame,
+            text="💡 Unchecked (default): Keep temp folder for faster future starts\n"
+                 "   Checked: Delete temp folder to save disk space (~50-100MB per profile)",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9),
+            fg="#666666",
+            justify=tk.LEFT
+        )
+        hint.pack(anchor=tk.W, pady=(5, 0))
+        
+    def create_gologin_app_path_section(self):
+        """GoLogin App Path Variable input"""
+        frame = tk.LabelFrame(
+            self.parent_frame,
+            text="GoLogin App Path Variable",
+            bg=cfg.LIGHT_BG_COLOR,
+            pady=10,
+            padx=10
+        )
+        frame.pack(fill=tk.X, pady=10)
+    
+        # Variable name input
+        label = tk.Label(
+            frame,
+            text="Variable name containing app path:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10)
+        )
+        label.pack(anchor=tk.W)
+    
+        self.app_path_var = tk.StringVar()
+        if self.parameters:
+            self.app_path_var.set(self.parameters.get("gologin_app_path_variable", ""))
+    
+        entry = tk.Entry(
+            frame,
+            textvariable=self.app_path_var,
+            font=("Segoe UI", 10),
+            width=40
+        )
+        entry.pack(fill=tk.X, pady=(5, 0))
+    
+        # Hint
+        hint = tk.Label(
+            frame,
+            text="💡 Example: GOLOGIN_APP_PATH (set variable value: C:\\Program Files\\GoLogin\\GoLogin.exe)",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9),
+            fg="#666666",
+            justify=tk.LEFT
+        )
+        hint.pack(anchor=tk.W, pady=(5, 0))
+
+    
     def get_parameters(self):
         """Collect parameters"""
         params = super().get_parameters()
@@ -145,5 +235,7 @@ class GoLoginStopParams(BaseActionParams):
         params["api_key_variable"] = self.api_key_var.get().strip()
         params["profile_ids"] = self.profile_ids_input.get("1.0", tk.END).strip()
         params["how_to_get"] = self.how_to_get_var.get()
+        params["clean_profile"] = self.clean_profile_var.get()
+        params["gologin_app_path_variable"] = self.app_path_var.get().strip()  # ← THÊM
         
         return params

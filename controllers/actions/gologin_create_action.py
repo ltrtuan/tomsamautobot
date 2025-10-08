@@ -6,7 +6,7 @@ import random
 import string
 import re
 import time
-from models.gologin_api import get_gologin_api  # ← Import
+from models.gologin_api import get_gologin_api, start_gologin_app
 
 class GoLoginCreateAction(BaseAction):
     """Handler for GoLogin Create Profile action"""
@@ -14,6 +14,28 @@ class GoLoginCreateAction(BaseAction):
     def prepare_play(self):
         """Execute GoLogin create profile"""
         try:
+            # ← THÊM: Check & Start GoLogin App
+            app_path_variable = self.params.get("gologin_app_path_variable", "").strip()
+            if app_path_variable:
+                app_path = GlobalVariables().get(app_path_variable, "")
+    
+                if app_path:
+                    print(f"[GOLOGIN CREATE] App path from variable '{app_path_variable}': {app_path}")
+        
+                    # Start app if not running
+                    success, msg = start_gologin_app(app_path, max_wait=60)
+        
+                    if not success:
+                        print(f"[GOLOGIN CREATE] ✗ Failed to start GoLogin app: {msg}")
+                        self.set_variable(False)
+                        return
+        
+                    print(f"[GOLOGIN CREATE] ✓ GoLogin app ready: {msg}")
+                else:
+                    print(f"[GOLOGIN CREATE] ⚠ Variable '{app_path_variable}' is empty, assuming app already running")
+            else:
+                print(f"[GOLOGIN CREATE] No app path variable specified, assuming app already running")
+
             # Get API token from variable name
             api_key_variable = self.params.get("api_key_variable", "").strip()
             if not api_key_variable:

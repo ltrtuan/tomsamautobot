@@ -3,7 +3,7 @@ from controllers.actions.base_action import BaseAction
 from models.global_variables import GlobalVariables
 from models.gologin_api import GoLoginAPI
 import random
-from models.gologin_api import get_gologin_api  # ← Import
+from models.gologin_api import get_gologin_api, start_gologin_app
 
 class GoLoginStopAction(BaseAction):
     """Handler for GoLogin Stop Profile action"""
@@ -11,6 +11,28 @@ class GoLoginStopAction(BaseAction):
     def prepare_play(self):
         """Execute GoLogin stop profile"""
         try:
+            # ← THÊM: Check & Start GoLogin App
+            app_path_variable = self.params.get("gologin_app_path_variable", "").strip()
+            if app_path_variable:
+                app_path = GlobalVariables().get(app_path_variable, "")
+    
+                if app_path:
+                    print(f"[GOLOGIN CREATE] App path from variable '{app_path_variable}': {app_path}")
+        
+                    # Start app if not running
+                    success, msg = start_gologin_app(app_path, max_wait=60)
+        
+                    if not success:
+                        print(f"[GOLOGIN CREATE] ✗ Failed to start GoLogin app: {msg}")
+                        self.set_variable(False)
+                        return
+        
+                    print(f"[GOLOGIN CREATE] ✓ GoLogin app ready: {msg}")
+                else:
+                    print(f"[GOLOGIN CREATE] ⚠ Variable '{app_path_variable}' is empty, assuming app already running")
+            else:
+                print(f"[GOLOGIN CREATE] No app path variable specified, assuming app already running")
+                
             # Get API token from variable name
             api_key_variable = self.params.get("api_key_variable", "").strip()
             if not api_key_variable:
@@ -51,6 +73,7 @@ class GoLoginStopAction(BaseAction):
             # Process special formats (mainly <variable_name>)
             profile_id = self._process_text(selected_text)
             
+            clean_profile = self.params.get("clean_profile", False)
             print(f"[GOLOGIN STOP] Selected profile ID to stop: {profile_id}")
             
             # Initialize GoLogin API
@@ -58,7 +81,7 @@ class GoLoginStopAction(BaseAction):
             
             # Stop profile by ID using REST API
             gologin = get_gologin_api(api_token)  # ← Dùng singleton
-            success, result = gologin.stop_profile(profile_id)
+            success, result = gologin.stop_profile(profile_id,clean_profile=clean_profile)
             
             if success:
                 print(f"[GOLOGIN STOP] ✓ Profile {profile_id} stopped successfully!")
