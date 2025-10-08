@@ -32,7 +32,9 @@
     <Compile Include="controllers\actions\end_for_action.py" />
     <Compile Include="controllers\actions\end_if_condition_action.py" />
     <Compile Include="controllers\actions\for_action.py" />
-    <Compile Include="controllers\actions\gologin_create_launch_action.py" />
+    <Compile Include="controllers\actions\gologin_create_action.py" />
+    <Compile Include="controllers\actions\gologin_start_action.py" />
+    <Compile Include="controllers\actions\gologin_stop_action.py" />
     <Compile Include="controllers\actions\if_condition_action.py" />
     <Compile Include="controllers\actions\image_search_action.py" />
     <Compile Include="controllers\actions\image_search_live_action.py" />
@@ -46,6 +48,7 @@
     <Compile Include="controllers\actions\skip_for_action.py" />
     <Compile Include="controllers\actions\tao_bien_action.py" />
     <Compile Include="controllers\actions\text_search_action.py" />
+    <Compile Include="controllers\actions\upload_script_action.py" />
     <Compile Include="controllers\actions\write_csv_action.py" />
     <Compile Include="controllers\actions\write_txt_action.py" />
     <Compile Include="controllers\action_controller.py" />
@@ -72,7 +75,9 @@
     <Compile Include="views\action_params\end_for_params.py" />
     <Compile Include="views\action_params\end_if_condition_params.py" />
     <Compile Include="views\action_params\for_params.py" />
-    <Compile Include="views\action_params\gologin_create_launch_params.py" />
+    <Compile Include="views\action_params\gologin_create_params.py" />
+    <Compile Include="views\action_params\gologin_start_params.py" />
+    <Compile Include="views\action_params\gologin_stop_params.py" />
     <Compile Include="views\action_params\if_condition_params.py" />
     <Compile Include="views\action_params\image_search_live_params.py" />
     <Compile Include="views\action_params\image_search_params.py" />
@@ -86,6 +91,7 @@
     <Compile Include="views\action_params\skip_for_params.py" />
     <Compile Include="views\action_params\tao_bien_params.py" />
     <Compile Include="views\action_params\text_search_params.py" />
+    <Compile Include="views\action_params\upload_script_params.py" />
     <Compile Include="views\action_params\write_csv_params.py" />
     <Compile Include="views\action_params\write_txt_params.py" />
     <Compile Include="views\action_params\__init__.py" />

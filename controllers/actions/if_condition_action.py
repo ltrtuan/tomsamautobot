@@ -40,6 +40,12 @@ class IfConditionAction(BaseAction):
     
         while i < len(all_actions):
             action = all_actions[i]
+            
+            # ← THÊM CHECK DISABLED (ƯU TIÊN CAO NHẤT)
+            if action.is_disabled:
+                print(f"[IF DEBUG] ⏭️ Skipping disabled action at index {i}")
+                i += 1
+                continue
         
             # Kiểm tra xem index i có nằm trong vùng đã được xử lý không
             is_handled = False
@@ -84,6 +90,11 @@ class IfConditionAction(BaseAction):
         
         while i < len(all_actions):
             action = all_actions[i]
+            # ← THÊM CHECK DISABLED (ƯU TIÊN CAO NHẤT)
+            if action.is_disabled:
+                print(f"[IF DEBUG] ⏭️ Skipping disabled action at index {i}")
+                i += 1
+                continue
             
             if action.action_type == ActionType.IF_CONDITION:
                 nesting_level += 1
@@ -134,6 +145,12 @@ class IfConditionAction(BaseAction):
         
         while i < len(all_actions):
             action = all_actions[i]
+            
+            # ← THÊM CHECK DISABLED (ƯU TIÊN CAO NHẤT)
+            if action.is_disabled:
+                print(f"[IF DEBUG] ⏭️ Skipping disabled action at index {i}")
+                i += 1
+                continue
             
             if action.action_type == ActionType.IF_CONDITION:
                 nesting_level += 1

@@ -24,8 +24,10 @@ from views.action_params.check_fullscreen_params import CheckFullscreenParams
 from views.action_params.image_search_live_params import ImageSearchLiveParams
 from views.action_params.copy_folder_params import CopyFolderParams
 from views.action_params.run_cmd_params import RunCmdParams
-from views.action_params.gologin_create_launch_params import GoLoginCreateLaunchParams
-
+from views.action_params.gologin_create_params import GoLoginCreateParams
+from views.action_params.gologin_start_params import GoLoginStartParams
+from views.action_params.gologin_stop_params import GoLoginStopParams
+from views.action_params.upload_script_params import UploadScriptParams
 
 class ActionDialogView(tk.Toplevel):
     def __init__(self, parent, action=None):
@@ -227,8 +229,10 @@ class ActionDialogView(tk.Toplevel):
             ActionType.IMAGE_SEARCH_LIVE: ImageSearchLiveParams,
             ActionType.COPY_FOLDER: CopyFolderParams,
             ActionType.RUN_CMD: RunCmdParams,
-            ActionType.GOLOGIN_CREATE_LAUNCH: GoLoginCreateLaunchParams,
-
+            ActionType.GOLOGIN_CREATE_PROFILE: GoLoginCreateParams,
+            ActionType.GOLOGIN_START_PROFILE: GoLoginStartParams,
+            ActionType.GOLOGIN_STOP_PROFILE: GoLoginStopParams,
+            ActionType.UPLOAD_SCRIPT: UploadScriptParams,
             # Thêm các action khác trong tương lai
         }
         

@@ -107,12 +107,16 @@ class TextSearchAction(BaseAction):
             return random.choice(texts)
         else:  # Sequential by loop
             # Lấy loop index từ global variables (nếu đang trong vòng lặp)
-            loop_var = GlobalVariables().get("LOOP_INDEX", "0")
+            globals_var = GlobalVariables()
+            loop_index_str = globals_var.get("loop_index", "0")
             try:
-                loop_index = int(loop_var)
+                loop_index = int(loop_index_str)
+                # Use modulo to loop through lines (1-based index)
+                index = loop_index % len(texts)
+                return texts[index]
             except:
-                loop_index = 0
-            return texts[loop_index % len(texts)]
+                # Fallback to first line
+                return texts[0]
     
     def process_text_pattern(self, text):
         """

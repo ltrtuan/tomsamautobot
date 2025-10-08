@@ -8,6 +8,7 @@ from constants import ActionType
 class ActionItemFrame(tk.Frame):
     def __init__(self, parent, action, index, nesting_level=0, **kwargs):
         super().__init__(parent, **kwargs)
+        
         # ➊ THÊM: Tính height động trước khi config
         note_text = action.parameters.get("note", "").strip()
         frame_height = 85 if note_text else 60  # Cao hơn nếu có Note
@@ -172,6 +173,28 @@ class ActionItemFrame(tk.Frame):
         # Thêm tooltip
         ToolTip(self.duplicate_button, "Nhân bản")
         
+        # ← THÊM NÚT DISABLE/ENABLE
+        self.disable_button = tk.Button(
+            button_frame,
+            text="🚫" if not action.is_disabled else "✅",
+            bg=cfg.LIGHT_BG_COLOR,
+            fg="#FFA500" if not action.is_disabled else "#4CAF50",
+            padx=4,
+            pady=1,
+            font=("Segoe UI", 10),
+            relief=tk.FLAT,
+            bd=0,
+            cursor="hand2",
+            activebackground=cfg.HOVER_COLOR
+        )
+        self.disable_button.pack(side=tk.LEFT, padx=(0, 2))
+     
+        ToolTip(self.disable_button, "Disable/Enable action")
+
+        # ← APPLY DISABLED STYLING NGAY KHI KHỞI TẠO (nếu action đã disabled)
+        if action.is_disabled:
+            self._apply_disabled_style()
+        
         # Nút xóa nhỏ gọn với icon
         self.delete_button = tk.Button(
             button_frame, 
@@ -224,7 +247,7 @@ class ActionItemFrame(tk.Frame):
         # Binding sự kiện kéo thả
         self.drag_handle.bind("<ButtonPress-1>", self.on_drag_start)
         self.drag_handle.bind("<B1-Motion>", self.on_drag_motion)
-        self.drag_handle.bind("<ButtonRelease-1>", self.on_drag_end)
+        self.drag_handle.bind("<ButtonRelease-1>", self.on_drag_end)      
       
         
     def _get_action_icon(self, action_type):
@@ -267,8 +290,17 @@ class ActionItemFrame(tk.Frame):
             return "📁"  # Hoặc "[CPY]"
         elif action_type == ActionType.RUN_CMD:
             return "⚡"  # Hoặc "[CMD]"
-        elif action_type == ActionType.GOLOGIN_CREATE_LAUNCH:
-            return "🌐"  # Icon globe cho GoLogin
+        elif action_type == ActionType.GOLOGIN_CREATE_PROFILE:
+            return "➕"  # Plus icon cho Create
+
+        elif action_type == ActionType.GOLOGIN_START_PROFILE:
+            return "▶️"  # Play icon cho Start
+
+        elif action_type == ActionType.GOLOGIN_STOP_PROFILE:
+            return "⏹️"  # Stop icon cho Stop
+        
+        elif action_type == ActionType.UPLOAD_SCRIPT:
+            return "📜"
         else:
             return "📋"  # Icon mặc định cho các loại khác
     
@@ -399,7 +431,10 @@ class ActionItemFrame(tk.Frame):
             'IMAGE_SEARCH_LIVE',
             'COPY_FOLDER',
             'RUN_CMD',
-            'GOLOGIN_CREATE_LAUNCH',
+            'GOLOGIN_CREATE_PROFILE',
+            'GOLOGIN_START_PROFILE',
+            'GOLOGIN_STOP_PROFILE',
+            'UPLOAD_SCRIPT'
             # Thêm các action khác nếu cần
         ]
     
@@ -797,14 +832,31 @@ class ActionItemFrame(tk.Frame):
             cmd = cmd.replace('\n', ' ')
             return f"{indent}CMD: {cmd}"
         
-        elif action_type_display == ActionType.GOLOGIN_CREATE_LAUNCH:
-            profile_name = action.parameters.get("profile_name", "Auto Profile")
+        elif action_type_display == ActionType.GOLOGIN_CREATE_PROFILE:
+            profile_names = action.parameters.get("profile_names", "")
+            names_preview = profile_names[:50] + "..." if len(profile_names) > 50 else profile_names
             os_type = action.parameters.get("os", "win")
-            enable_proxy = action.parameters.get("enable_proxy", True)
-            country_code = action.parameters.get("country_code", "US")
-    
-            proxy_text = f" | Proxy: {country_code}" if enable_proxy else " | No Proxy"
-            return f"{indent}Profile: {profile_name} | OS: {os_type}{proxy_text}"
+            return f"{indent}Names: {names_preview} | OS: {os_type}"
+
+        elif action_type_display == ActionType.GOLOGIN_START_PROFILE:
+            profile_ids = action.parameters.get("profile_ids", "")
+            ids_preview = profile_ids[:50] + "..." if len(profile_ids) > 50 else profile_ids
+            how_to_get = action.parameters.get("how_to_get", "Random")
+            return f"{indent}IDs: {ids_preview} | Get: {how_to_get}"
+
+        elif action_type_display == ActionType.GOLOGIN_STOP_PROFILE:
+            profile_ids = action.parameters.get("profile_ids", "")
+            ids_preview = profile_ids[:50] + "..." if len(profile_ids) > 50 else profile_ids
+            return f"{indent}Stop IDs: {ids_preview}"
+        
+        elif action_type_display == ActionType.UPLOAD_SCRIPT:
+            script_path = action.parameters.get("script_path", "")
+            if script_path:
+                filename = script_path.split('/')[-1]  # Lấy tên file
+                return f"{indent}Script: {filename}"
+            return f"{indent}Chưa chọn script"
+
+
         return indent  # Trả về ít nhất là indent
 
 
@@ -812,7 +864,12 @@ class ActionItemFrame(tk.Frame):
     def _on_hover(self, event):
         if hasattr(self, '_dragging') and self._dragging:
             return
-            
+    
+        # ← THÊM CHECK: Nếu disabled, KHÔNG ĐỔI màu hover
+        if self.action.is_disabled:
+            return  # Bỏ qua hover effect cho disabled action
+    
+        # Apply hover color (chỉ cho enabled action)
         self.config(bg=cfg.HOVER_COLOR)
         for widget in self.winfo_children():
             if isinstance(widget, tk.Frame):
@@ -822,20 +879,32 @@ class ActionItemFrame(tk.Frame):
                         subwidget.config(bg=cfg.HOVER_COLOR)
             elif isinstance(widget, tk.Label):
                 widget.config(bg=cfg.HOVER_COLOR)
+
                 
     def _on_leave(self, event):
         if hasattr(self, '_dragging') and self._dragging:
             return
-            
-        self.config(bg=cfg.LIGHT_BG_COLOR)
+    
+        # ← THÊM CHECK: Nếu action đang disabled, GIỮ NGUYÊN màu xám
+        if self.action.is_disabled:
+            # Restore gray background for disabled action
+            bg_color = "#D3D3D3"
+        else:
+            # Restore normal background for enabled action
+            bg_color = cfg.LIGHT_BG_COLOR
+    
+        # Apply background color
+        self.config(bg=bg_color)
+    
         for widget in self.winfo_children():
             if isinstance(widget, tk.Frame):
-                widget.config(bg=cfg.LIGHT_BG_COLOR)
+                widget.config(bg=bg_color)
                 for subwidget in widget.winfo_children():
                     if isinstance(subwidget, tk.Label):
-                        subwidget.config(bg=cfg.LIGHT_BG_COLOR)
+                        subwidget.config(bg=bg_color)
             elif isinstance(widget, tk.Label):
-                widget.config(bg=cfg.LIGHT_BG_COLOR)
+                widget.config(bg=bg_color)
+
     
     def on_drag_start(self, event):
         """Xử lý sự kiện bắt đầu kéo"""
@@ -978,6 +1047,76 @@ class ActionItemFrame(tk.Frame):
         # Đặt lại các biến trạng thái
         self.is_dragging = False
         delattr(self, '_drag_data')
+        
+    # THÊM VÀO class ActionItemFrame (sau method on_drag_end):
+
+    def toggle_disable(self):
+        """Toggle disable/enable state của action"""
+        # Đảo trạng thái
+        self.action.is_disabled = not self.action.is_disabled
+    
+        # Update UI
+        if self.action.is_disabled:
+            self._apply_disabled_style()
+        else:
+            self._apply_enabled_style()
+
+    def _apply_disabled_style(self):
+        """Apply gray styling khi action bị disabled - CHỈ ĐỔI BACKGROUND"""
+        # Set background to gray
+        self.config(bg="#D3D3D3")
+    
+        # Update button icon and color
+        self.disable_button.config(text="✅", fg="#4CAF50")
+    
+        # Disable play button
+        self.play_button.config(state=tk.DISABLED, fg="#999999")
+    
+        # Gray out drag handle và index label
+        self.drag_handle.config(bg="#D3D3D3")
+        self.index_label.config(bg="#D3D3D3")
+    
+        # ← CHỈ ĐỔI BACKGROUND của widgets, GIỮ NGUYÊN text color
+        for widget in self.winfo_children():
+            if isinstance(widget, tk.Label):
+                widget.config(bg="#D3D3D3")  # CHỈ đổi bg, không đổi fg
+            elif isinstance(widget, tk.Frame):
+                widget.config(bg="#D3D3D3")
+                for child in widget.winfo_children():
+                    if isinstance(child, tk.Label):
+                        child.config(bg="#D3D3D3")  # CHỈ đổi bg
+                    elif isinstance(child, tk.Frame):
+                        child.config(bg="#D3D3D3")
+
+    def _apply_enabled_style(self):
+        """Restore normal styling khi action enabled - CHỈ ĐỔI BACKGROUND"""
+        # Restore normal background
+        self.config(bg=cfg.LIGHT_BG_COLOR)
+    
+        # Update button icon and color
+        self.disable_button.config(text="🚫", fg="#FFA500")
+    
+        # Enable play button if action is playable
+        if self.is_playable:
+            self.play_button.config(state=tk.NORMAL, fg=cfg.SUCCESS_COLOR)
+    
+        # Restore background của drag handle và index label
+        self.drag_handle.config(bg=cfg.LIGHT_BG_COLOR)
+        self.index_label.config(bg=cfg.LIGHT_BG_COLOR)
+    
+        # ← CHỈ RESTORE BACKGROUND của widgets, GIỮ NGUYÊN text color
+        for widget in self.winfo_children():
+            if isinstance(widget, tk.Label):
+                widget.config(bg=cfg.LIGHT_BG_COLOR)  # CHỈ đổi bg
+            elif isinstance(widget, tk.Frame):
+                widget.config(bg=cfg.LIGHT_BG_COLOR)
+                for child in widget.winfo_children():
+                    if isinstance(child, tk.Label):
+                        child.config(bg=cfg.LIGHT_BG_COLOR)  # CHỈ đổi bg
+                    elif isinstance(child, tk.Frame):
+                        child.config(bg=cfg.LIGHT_BG_COLOR)
+
+
 
 class ToolTip:
     """Hiển thị tooltip khi di chuột qua widget"""
@@ -1288,7 +1427,8 @@ class ActionListView(ttk.Frame):
         for i, action in enumerate(actions):
             nesting_level = nesting_levels[i] if nesting_levels else 0
             frame = ActionItemFrame(self.action_list_frame, action, i+1, nesting_level=nesting_level)
-            frame.pack(fill=tk.X, pady=(0, 3), padx=2)
+            frame.pack(fill=tk.X, pady=(0, 3), padx=2)           
+            
 
             # **THÊM MỚI: Bind click vào frame để chọn action**
             frame.bind("<Button-1>", lambda e, idx=i: self.set_selected_action(idx))
@@ -1298,18 +1438,29 @@ class ActionListView(ttk.Frame):
             frame.edit_button.config(command=lambda idx=i: self._on_edit(idx))
             frame.delete_button.config(command=lambda idx=i: self._on_delete(idx))
             frame.duplicate_button.config(command=lambda idx=i: self._on_duplicate(idx))
+            
+            # ← THÊM DÒNG NÀY: Bind disable button
+            if hasattr(frame, 'disable_button'):
+                frame.disable_button.config(command=lambda idx=i: self._on_toggle_disable(idx))
 
             if hasattr(self, 'play_action_callback'):
                 frame.play_button.config(command=lambda idx=i: self._on_play_action(idx))
 
             self.action_frames.append(frame)
+            
+            # ← THÊM: Apply disabled style nếu action.is_disabled
+            if hasattr(action, 'is_disabled') and action.is_disabled:
+                frame._apply_disabled_style()
     
         # Khôi phục selection nếu vẫn còn hợp lệ
         if current_selection is not None and current_selection < len(actions):
             self.set_selected_action(current_selection)
 
 
-            
+    def _on_toggle_disable(self, index):
+        """Hàm xử lý khi nút Disable được nhấn"""
+        if hasattr(self, 'toggle_disable_callback') and self.toggle_disable_callback:
+            self.toggle_disable_callback(index)
         
     def _on_canvas_resize(self, event):
         # Resize canvas window to fill available space
@@ -1418,7 +1569,7 @@ class ActionListView(ttk.Frame):
     def ask_yes_no(self, title, message):
         return messagebox.askyesno(title, message)
             
-    def set_callbacks(self, add_callback, edit_callback, delete_callback, run_callback, drag_callback, save_callback, play_action_callback=None, delete_all_callback=None, duplicate_callback=None, move_callback=None, load_callback=None):
+    def set_callbacks(self, add_callback, edit_callback, delete_callback, run_callback, drag_callback, save_callback, play_action_callback=None, delete_all_callback=None, duplicate_callback=None, move_callback=None, load_callback=None, toggle_disable_callback=None):
         self.add_button.config(command=add_callback)
         self.run_button.config(command=run_callback)
         self.save_button.config(command=save_callback)
@@ -1434,6 +1585,7 @@ class ActionListView(ttk.Frame):
         self.delete_all_callback = delete_all_callback  # Callback cho nút Xóa tất cả
         self.duplicate_callback = duplicate_callback
         self.move_callback = move_callback
+        self.toggle_disable_callback = toggle_disable_callback
     
     # Thêm phương thức mở dialog
     def open_settings(self):
@@ -1490,3 +1642,5 @@ class ActionListView(ttk.Frame):
         """Handle move button click"""
         if hasattr(self, 'move_callback') and self.move_callback:
             self.move_callback()
+            
+    

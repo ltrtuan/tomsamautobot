@@ -341,16 +341,188 @@ class BaseActionParams:
         return note_frame
     
     def create_program_selector(self):
-        """Create UI for program selection"""
-        program_frame = tk.Frame(self.parent_frame, bg=cfg.LIGHT_BG_COLOR)
+        """
+        Create program selector with 2 options:
+        1. Browse program file
+        2. Variable name (like GoLogin app path variable)
+        """
+        from tkinter import filedialog
+    
+        program_frame = tk.LabelFrame(
+            self.parent_frame,
+            text="Select Program to Action",
+            bg=cfg.LIGHT_BG_COLOR,
+            pady=10,
+            padx=10
+        )
         program_frame.pack(fill=tk.X, pady=10)
-        tk.Label(program_frame, text="Select Program to Action:", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT, padx=5)
-        self.variables["program_var"] = tk.StringVar(value=self.parameters.get("program", ""))
-        program_entry = ttk.Entry(program_frame, textvariable=self.variables["program_var"], width=30)
-        program_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
-        select_program_button = ttk.Button(program_frame, text="Browse...")
-        select_program_button.pack(side=tk.RIGHT, padx=5)
-        return select_program_button
+    
+        # ========== OPTION 1: Browse File ==========
+        browse_label = tk.Label(
+            program_frame,
+            text="Option 1: Browse program file:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10, "bold")
+        )
+        browse_label.pack(anchor=tk.W, pady=(0, 5))
+    
+        # Frame chứa entry và button browse
+        browse_inner_frame = tk.Frame(program_frame, bg=cfg.LIGHT_BG_COLOR)
+        browse_inner_frame.pack(fill=tk.X, pady=(0, 10))
+    
+        # THAY ĐỔI: Đổi tên biến từ program_path_var → program_var
+        self.program_var = tk.StringVar()
+        if self.parameters:
+            self.program_var.set(self.parameters.get("program", ""))
+        self.variables["program_var"] = self.program_var
+
+        program_entry = tk.Entry(
+            browse_inner_frame,
+            textvariable=self.program_var,  # THAY ĐỔI ở đây
+            font=("Segoe UI", 10),
+            state="readonly"
+        )
+        program_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+    
+        def browse_program():
+            filename = filedialog.askopenfilename(
+                title="Select Program",
+                filetypes=[("Executable files", "*.exe"), ("All files", "*.*")]
+            )
+            if filename:
+                self.program_var.set(filename)  # THAY ĐỔI ở đây
+    
+        browse_button = ttk.Button(
+            browse_inner_frame,
+            text="Browse",
+            command=browse_program
+        )
+        browse_button.pack(side=tk.LEFT)
+    
+        # ========== OPTION 2: Variable Name ==========
+        var_label = tk.Label(
+            program_frame,
+            text="Option 2: Variable name containing program path:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10, "bold")
+        )
+        var_label.pack(anchor=tk.W, pady=(10, 5))
+    
+        # THAY ĐỔI: Đổi tên biến từ program_variable_var → programvariable_var (bỏ dấu gạch dưới)
+        self.program_variable_var = tk.StringVar()
+        if self.parameters:
+            self.program_variable_var.set(self.parameters.get("program_variable", ""))
+        self.variables["program_variable_var"] = self.program_variable_var
+        
+        var_entry = tk.Entry(
+            program_frame,
+            textvariable=self.program_variable_var,  # THAY ĐỔI ở đây
+            font=("Segoe UI", 10)
+        )
+        var_entry.pack(fill=tk.X, pady=(0, 5))
+    
+        # Hint
+        hint = tk.Label(
+            program_frame,
+            text="💡 Example: GOLOGIN_APP_PATH (set variable value: C:\\Program Files\\GoLogin\\GoLogin.exe)",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9),
+            fg="#666666",
+            justify=tk.LEFT
+        )
+        hint.pack(anchor=tk.W)
+    
+        # Note about priority
+        priority_note = tk.Label(
+            program_frame,
+            text="⚠️ Priority: Variable name will be used first if both are provided",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9, "italic"),
+            fg="#FF6600",
+            justify=tk.LEFT
+        )
+        priority_note.pack(anchor=tk.W, pady=(5, 0))
+        
+        # ========== OPTION 3: Window Title Filter (SỬA LẠI) ==========
+        title_label = tk.Label(
+            program_frame,
+            text="Option 3: Window title filter (optional):",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10, "bold")
+        )
+        title_label.pack(anchor=tk.W, pady=(10, 5))
+
+        # Sub-option 3a: Direct input
+        direct_title_label = tk.Label(
+            program_frame,
+            text="3a. Direct input:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9)
+        )
+        direct_title_label.pack(anchor=tk.W, pady=(0, 3))
+
+        self.window_title_var = tk.StringVar()
+        if self.parameters:
+            self.window_title_var.set(self.parameters.get("window_title", ""))
+
+        self.variables["window_title_var"] = self.window_title_var
+
+        title_entry = tk.Entry(
+            program_frame,
+            textvariable=self.window_title_var,
+            font=("Segoe UI", 10)
+        )
+        title_entry.pack(fill=tk.X, pady=(0, 10))
+
+        # Sub-option 3b: Variable name
+        var_title_label = tk.Label(
+            program_frame,
+            text="3b. Variable name containing window title:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9)
+        )
+        var_title_label.pack(anchor=tk.W, pady=(0, 3))
+
+        self.window_title_variable_var = tk.StringVar()
+        if self.parameters:
+            self.window_title_variable_var.set(self.parameters.get("window_title_variable", ""))
+
+        self.variables["window_title_variable_var"] = self.window_title_variable_var
+
+        var_title_entry = tk.Entry(
+            program_frame,
+            textvariable=self.window_title_variable_var,
+            font=("Segoe UI", 10)
+        )
+        var_title_entry.pack(fill=tk.X, pady=(0, 5))
+
+        # Hint
+        title_hint = tk.Label(
+            program_frame,
+            text="💡 Example: 'F1' will match 'F1 - Chrome', 'F1 - GoLogin Browser', etc.",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9),
+            fg="#666666",
+            justify=tk.LEFT
+        )
+        title_hint.pack(anchor=tk.W)
+
+        # Note
+        title_note = tk.Label(
+            program_frame,
+            text="⚠️ Priority: Variable > Direct input. Returns first matching window.",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9, "italic"),
+            fg="#FF6600",
+            justify=tk.LEFT
+        )
+        title_note.pack(anchor=tk.W, pady=(5, 0))
+
+        return browse_button
+
+    
+        return browse_button
+
     
     def create_break_conditions(self):
         """Create UI for break conditions"""
@@ -474,7 +646,12 @@ class BaseActionParams:
             if key == "note_var":
                 continue
             if isinstance(var, tk.Variable):
-                param_key = key.replace("_var", "")
+                # MỚI (ĐÚNG): Chỉ xóa "_var" Ở CUỐI
+                if key.endswith("_var"):
+                    param_key = key[:-4]  # Xóa 4 ký tự cuối "_var"
+                else:
+                    param_key = key
+            
                 params[param_key] = var.get()
         
         # Collect note from Text widget
@@ -494,5 +671,6 @@ class BaseActionParams:
                     "value": condition["value_var"].get()
                 })
         params["break_conditions"] = break_conditions
+
         
         return params

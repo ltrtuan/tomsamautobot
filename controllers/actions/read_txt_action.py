@@ -69,11 +69,11 @@ class ReadTxtAction(BaseAction):
         elif how_to_get == "Sequential by loop":
             # Get loop index from global variables
             globals_var = GlobalVariables()
-            loop_index_str = globals_var.get("loop_index", "1")
+            loop_index_str = globals_var.get("loop_index", "0")
             try:
                 loop_index = int(loop_index_str)
                 # Use modulo to loop through lines (1-based index)
-                index = (loop_index - 1) % len(lines)
+                index = loop_index % len(lines)
                 return lines[index]
             except:
                 # Fallback to first line
