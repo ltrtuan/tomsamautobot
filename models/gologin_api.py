@@ -15,7 +15,7 @@ class GoLoginAPI:
         self.gl = None
         self.base_url = "https://api.gologin.com"
         self.headers = {
-            "Authorization": api_token,
+            "Authorization": f"Bearer {self.api_token}",
             "Content-Type": "application/json"
         }
         # ← THÊM: Dictionary lưu GoLogin instances theo profile_id
@@ -98,11 +98,11 @@ class GoLoginAPI:
             print(f"[GOLOGIN] Starting profile: {profile_id}")
         
             # ← THÊM: Check if profile is ready (polling)
-            if wait_for_ready:
-                print(f"[GOLOGIN] Checking profile readiness (max {max_wait}s)...")
-                ready, msg = self.check_profile_ready(profile_id, max_wait)
-                if not ready:
-                    return False, f"Profile not ready: {msg}"
+            # if wait_for_ready:
+            #     print(f"[GOLOGIN] Checking profile readiness (max {max_wait}s)...")
+            #     ready, msg = self.check_profile_ready(profile_id, max_wait)
+            #     if not ready:
+            #         return False, f"Profile not ready: {msg}"
         
             # Initialize GoLogin with tmpdir
             self.gl = GoLogin({
@@ -130,59 +130,43 @@ class GoLoginAPI:
             return False, str(e)
 
     
-    def stop_profile(self, profile_id, clean_profile=False):
+    def stop_profile(self, profile_id):
         """
-        Stop profile - Close browser nhưng có thể giữ profile data
+        Stop profile - Close browser VÀ sync data lên cloud
+    
         Args:
             profile_id: Profile ID to stop
-            clean_profile: If True, xóa profile folder (default False)
+            clean_profile: If True, xóa profile folder local (default False)
         """
         try:
-            
             profile_id = str(profile_id).strip()
             print(f"[GOLOGIN] Stopping profile: {profile_id}")
         
             if profile_id in self.active_profiles:
                 gl = self.active_profiles[profile_id]
             
-                # ← CLOSE BROWSER ONLY (không gọi stop)
+                # ← THAY ĐỔI: GỌI gl.stop() để sync
+                print(f"[GOLOGIN] Closing browser and syncing data to cloud...")
+            
                 try:
-                    # Kill browser process
-                    if hasattr(gl, 'pid') and gl.pid:
-                        import psutil
-                        try:
-                            process = psutil.Process(gl.pid)
-                            process.terminate()
-                            process.wait(timeout=5)
-                            print(f"[GOLOGIN] ✓ Browser process terminated")
-                        except:
-                            pass
-                
-                    # Nếu muốn xóa profile folder
-                    if clean_profile:
-                        print(f"[GOLOGIN] 🗑️ Cleaning profile folder...")
-                        gl.stop()  # Gọi stop để xóa folder
-                        print(f"[GOLOGIN] Profile folder deleted")
-                    else:
-                        print(f"[GOLOGIN] 💾 Profile data preserved in: {gl.tmpdir}")
-                        # KHÔNG gọi gl.stop() → giữ folder
-                
+                    gl.stop()  # ← Sync localStorage/IndexedDB lên GoLogin cloud
+                    print(f"[GOLOGIN] ✓ Data synced to cloud")
                 except Exception as e:
-                    print(f"[GOLOGIN] ⚠ Close warning: {e}")
+                    print(f"[GOLOGIN] ⚠ Sync warning: {e}")
             
                 # Remove from active profiles
                 del self.active_profiles[profile_id]
             
                 print(f"[GOLOGIN] ✓ Profile stopped!")
-                return True, "Profile stopped"
-        
+                return True, "Profile stopped and synced"
             else:
                 print(f"[GOLOGIN] ⚠ No active instance found")
                 return False, "Profile not running"
-        
+            
         except Exception as e:
             print(f"[GOLOGIN] Stop error: {e}")
             return False, str(e)
+
 
     # def stop_profile(self, profile_id, clean_profile=False):
     #     """Stop profile - Close browser nhưng có thể giữ profile data"""
@@ -264,80 +248,125 @@ class GoLoginAPI:
         except Exception as e:
             print(f"[GOLOGIN] Stop API error: {e}")
             return False, str(e)
+    
+    def refresh_fingerprint(self, profile_ids):
+        """
+        Refresh fingerprint for profiles using GoLogin API
+        API: PATCH https://api.gologin.com/browser/fingerprints
+        Documentation: https://gologin.com/docs/api-reference/profile/refresh-profile-fingerprint
+    
+        Args:
+            profile_ids: Single profile_id (string) or list of profile_ids
+    
+        Returns: (success: bool, message: str)
+        """
+        try:
+            # Ensure profile_ids is a list
+            if isinstance(profile_ids, str):
+                profile_ids = [profile_ids]
+        
+            print(f"[GOLOGIN] Refreshing fingerprint for {len(profile_ids)} profile(s)...")
+        
+            url = f"{self.base_url}/browser/fingerprints"
+        
+            # Build request body with browsersIds key
+            request_body = {
+                "browsersIds": profile_ids
+            }
+        
+            print(f"[DEBUG] Calling: PATCH {url}")
+            print(f"[DEBUG] Request body: {request_body}")
+        
+            response = requests.patch(
+                url,
+                headers=self.headers,
+                json=request_body,
+                timeout=30
+            )
+        
+            print(f"[DEBUG] Response Status: {response.status_code}")
+        
+            if response.status_code in [200, 201]:
+                print(f"[GOLOGIN] ✓ Profile fingerprint(s) refreshed successfully")
+                try:
+                    result = response.json()
+                except:
+                    pass
+                return True, f"Refreshed {len(profile_ids)} profile(s) successfully"
+            else:
+                print(f"[GOLOGIN] Refresh error: Status {response.status_code}")
+                print(f"[DEBUG] === ERROR RESPONSE ===")
+                try:
+                    import json
+                    error_json = response.json()
+                    print(json.dumps(error_json, indent=2, ensure_ascii=False)[:1500])
+                except:
+                    print(response.text[:1500])
+                print(f"[DEBUG] === END ERROR ===")
+                return False, f"Failed to refresh: Status {response.status_code}"
+            
+        except Exception as e:
+            print(f"[GOLOGIN] Error refreshing fingerprint: {e}")
+            import traceback
+            traceback.print_exc()
+            return False, str(e)
 
-    def check_profile_ready(self, profile_id, max_wait=180, check_interval=30):
+        
+    def update_cookies(self, profile_id, cookies, replace_all=True):
         """
-        Check if profile is ready to start (polling)
+        Update cookies for profile
+        API: POST https://api.gologin.com/browser/{profile_id}/cookies?cleanCookies={replace_all}
+        Body: [] (empty array to delete all)
         """
-        import time
-    
-        url = f"{self.base_url}/browser/{profile_id}"
-        start_time = time.time()
-    
-        print(f"[GOLOGIN] ⏳ Checking if profile is ready...")
-        print(f"[GOLOGIN DEBUG] API URL: {url}")
-        print(f"[GOLOGIN DEBUG] Token (first 10 chars): {self.api_token[:10]}...")  # ← THÊM
-    
-        attempts = 0
-    
-        while time.time() - start_time < max_wait:
-            attempts += 1
+        try:
+            url = f"{self.base_url}/browser/{profile_id}/cookies"
+            params = {
+                "cleanCookies": str(replace_all).lower()
+            }
+           
+            response = requests.post(url, headers=self.headers, params=params, json=cookies, timeout=30)
         
-            try:
-                # ← FIX: Thử cả 2 format headers
-                response = requests.get(url, headers=self.headers, timeout=10)
-            
-                # ← THÊM: Log response details
-                print(f"[GOLOGIN DEBUG] Response status: {response.status_code}")
-                if response.status_code == 403:
-                    print(f"[GOLOGIN DEBUG] Response body: {response.text[:200]}")  # First 200 chars
-            
-                if response.status_code == 200:
-                    profile_data = response.json()
-                
-                    # Check if profile exists and has ID
-                    if profile_data.get("id") == profile_id:
-                        elapsed = int(time.time() - start_time)
-                        print(f"[GOLOGIN] ✓ Profile ready after {elapsed}s (attempts: {attempts})")
-                        return True, "Profile ready"
-                    else:
-                        print(f"[GOLOGIN] ⚠ Profile data mismatch, attempt {attempts}")
-            
-                elif response.status_code == 404:
-                    print(f"[GOLOGIN] ✗ Profile not found (404)")
-                    return False, "Profile not found on server"
-            
-                elif response.status_code == 403:
-                    print(f"[GOLOGIN] ⚠ API returned 403 (Forbidden), attempt {attempts}")
-                
-                    # ← THÊM: Try without "Bearer" prefix
-                    if attempts == 1:
-                        print(f"[GOLOGIN] Trying alternative auth format...")
-                        alt_headers = {
-                            "Authorization": self.api_token,  # No "Bearer"
-                            "Content-Type": "application/json"
-                        }
-                        response2 = requests.get(url, headers=alt_headers, timeout=10)
-                        if response2.status_code == 200:
-                            print(f"[GOLOGIN] ✓ Alternative auth works! Updating headers...")
-                            self.headers = alt_headers
-                            continue
-                else:
-                    print(f"[GOLOGIN] ⚠ API returned {response.status_code}, attempt {attempts}")
+            if response.status_code in [200, 204]:
+                return True, "Cookies updated successfully"
+            else:
+                return False, f"Status {response.status_code}: {response.text}"
+        except Exception as e:
+            return False, str(e)
+
+
+    def get_cookies(self, profile_id):
+        """
+        Get cookies from profile using GoLogin API
+        API: GET https://api.gologin.com/browser/{profile_id}/cookies
+        Returns: (success: bool, cookies_data: list or error_message: str)
+        """
+        try:
+            profile_id = str(profile_id).strip()
+            url = f"{self.base_url}/browser/{profile_id}/cookies"
         
-            except requests.exceptions.Timeout:
-                print(f"[GOLOGIN] ⚠ Request timeout, attempt {attempts}")
-            except Exception as e:
-                print(f"[GOLOGIN] ⚠ Check error: {e}, attempt {attempts}")
+            print(f"[GOLOGIN] Getting cookies for profile: {profile_id}")
         
-            # Wait before next check
-            if time.time() - start_time < max_wait:
-                print(f"[GOLOGIN] Waiting {check_interval}s before retry...")
-                time.sleep(check_interval)
-    
-        # Timeout
-        elapsed = int(time.time() - start_time)
-        return False, f"Profile not ready after {elapsed}s timeout ({attempts} attempts)"
+            response = requests.get(url, headers=self.headers, timeout=30)
+        
+            if response.status_code == 200:
+                cookies_data = response.json()
+                print(f"[GOLOGIN] ✓ Retrieved {len(cookies_data)} cookie(s)")
+                return True, cookies_data
+            else:
+                error_msg = f"API returned status {response.status_code}"
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get("message", error_msg)
+                except:
+                    pass
+                print(f"[GOLOGIN] ✗ Get cookies failed: {error_msg}")
+                return False, error_msg
+            
+        except Exception as e:
+            print(f"[GOLOGIN] Get cookies error: {e}")
+            return False, str(e)
+
+
 
 
 # ← SINGLETON INSTANCE - Shared across all actions

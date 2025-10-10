@@ -20,8 +20,12 @@ class GoLoginStartParams(BaseActionParams):
         # ========== PROFILE IDs SECTION ==========
         self.create_profile_ids_section()
         
+        # ========== OPTIONS SECTION ==========  # ← THÊM DÒNG NÀY
+        self.create_options_section()           # ← THÊM DÒNG NÀY
+        
         # ========== HOW TO GET SECTION ==========
         self.create_how_to_get_section()
+        
         
         # ========== COMMON PARAMETERS ==========
         self.create_common_params(
@@ -138,6 +142,128 @@ class GoLoginStartParams(BaseActionParams):
         )
         combo.pack(side=tk.LEFT, padx=5)
 
+    def create_options_section(self):
+        """Options checkboxes"""
+        options_frame = tk.LabelFrame(
+            self.parent_frame,
+            text="Options",
+            bg=cfg.LIGHT_BG_COLOR,
+            pady=10,
+            padx=10
+        )
+        options_frame.pack(fill=tk.X, pady=10)
+    
+        # Refresh fingerprint checkbox
+        self.refresh_fingerprint_var = tk.BooleanVar()
+        if self.parameters:
+            self.refresh_fingerprint_var.set(self.parameters.get("refresh_fingerprint", False))
+        else:
+            self.refresh_fingerprint_var.set(False)
+    
+        refresh_cb = tk.Checkbutton(
+            options_frame,
+            text="Refresh fingerprint before starting profile",
+            variable=self.refresh_fingerprint_var,
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10)
+        )
+        refresh_cb.pack(anchor=tk.W, pady=2)
+    
+        # Delete cookies checkbox
+        self.delete_cookies_var = tk.BooleanVar()
+        if self.parameters:
+            self.delete_cookies_var.set(self.parameters.get("delete_cookies", False))
+        else:
+            self.delete_cookies_var.set(False)
+    
+        delete_cb = tk.Checkbutton(
+            options_frame,
+            text="Delete cookies before starting profile",
+            variable=self.delete_cookies_var,
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10)
+        )
+        delete_cb.pack(anchor=tk.W, pady=2)
+        
+        # ========== COOKIES SECTION ==========
+        cookies_label = tk.Label(
+            options_frame,
+            text="Cookies (nếu có giá trị và không check Delete cookies):",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10, "bold")
+        )
+        cookies_label.pack(anchor=tk.W, pady=(10, 5))
+
+        # Option 1: Browse cookies file
+        from tkinter import filedialog
+
+        browse_cookies_label = tk.Label(
+            options_frame,
+            text="Option 1: Cookies Folder Path (will random pick 1 file):",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=(("Segoe UI", 9))
+        )
+        browse_cookies_label.pack(anchor=tk.W, pady=(0, 3))
+
+        cookies_browse_frame = tk.Frame(options_frame, bg=cfg.LIGHT_BG_COLOR)
+        cookies_browse_frame.pack(fill=tk.X, pady=(0, 10))
+
+        self.cookies_folder_var = tk.StringVar()
+        if self.parameters:
+            self.cookies_folder_var.set(self.parameters.get("cookies_folder", ""))
+
+        cookies_entry = tk.Entry(
+            cookies_browse_frame,
+            textvariable=self.cookies_folder_var,
+            font=("Segoe UI", 10)
+        )
+        cookies_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+
+        def browse_cookies_folder():
+            folder = filedialog.askdirectory(
+                title="Select Cookies Folder"
+            )
+            if folder:
+                self.cookies_folder_var.set(folder)
+
+        browse_cookies_button = ttk.Button(
+            cookies_browse_frame,
+            text="Browse",
+            command=browse_cookies_folder
+        )
+        browse_cookies_button.pack(side=tk.LEFT)
+
+        # Option 2: Variable name
+        var_cookies_label = tk.Label(
+            options_frame,
+            text="Option 2: Variable name containing cookies folder path:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=(("Segoe UI", 9))
+        )
+        var_cookies_label.pack(anchor=tk.W, pady=(0, 3))
+
+        self.cookies_folder_variable_var = tk.StringVar()
+        if self.parameters:
+            self.cookies_folder_variable_var.set(self.parameters.get("cookies_folder_variable", ""))
+
+        cookies_var_entry = tk.Entry(
+            options_frame,
+            textvariable=self.cookies_folder_variable_var,
+            font=("Segoe UI", 10)
+        )
+        cookies_var_entry.pack(fill=tk.X, pady=(0, 5))
+
+        # Hint
+        cookies_hint = tk.Label(
+            options_frame,
+            text="💡 Will random pick 1 JSON file from folder. Priority: Variable > Direct path",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=(("Segoe UI", 8)),
+            fg="#666666"
+        )
+        cookies_hint.pack(anchor=tk.W)
+
+
     
     def get_parameters(self):
         """Collect parameters"""
@@ -146,5 +272,8 @@ class GoLoginStartParams(BaseActionParams):
         params["api_key_variable"] = self.api_key_var.get().strip()
         params["profile_ids"] = self.profile_ids_input.get("1.0", tk.END).strip()
         params["how_to_get"] = self.how_to_get_var.get()
-        
+        params["refresh_fingerprint"] = self.refresh_fingerprint_var.get()  # ← THÊM DÒNG NÀY
+        params["delete_cookies"] = self.delete_cookies_var.get()            # ← THÊM DÒNG NÀY
+        params["cookies_folder"] = self.cookies_folder_var.get().strip()
+        params["cookies_folder_variable"] = self.cookies_folder_variable_var.get().strip()
         return params
