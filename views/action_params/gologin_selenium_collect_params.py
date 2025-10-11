@@ -6,7 +6,7 @@ import config as cfg
 from views.action_params.base_params import BaseActionParams
 
 class GoLoginSeleniumCollectParams(BaseActionParams):
-    """UI for GoLogin Selenium Collect Profiles action"""
+    """UI for GoLogin Selenium Warm Up action"""
     
     def __init__(self, parent_frame, parameters=None):
         super().__init__(parent_frame, parameters)
@@ -24,6 +24,9 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         # ========== HOW TO GET PROFILE SECTION ==========
         self.create_how_to_get_profile_section()
         
+        # ========== OPTIONS SECTION ==========
+        self.create_options_section()
+        
         # ========== WEBSITES LIST SECTION ==========
         self.create_websites_section()
         
@@ -32,9 +35,6 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         
         # ========== DURATION SECTION ==========
         self.create_duration_section()
-        
-        # ========== SAVE OPTIONS SECTION ==========
-        self.create_save_options_section()
         
         # ========== OUTPUT FOLDER SECTION ==========
         self.create_output_folder_section()
@@ -52,6 +52,7 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         
         # ========== PROGRAM SELECTOR ==========
         select_program_button = self.create_program_selector()
+        
         return {'select_program_button': select_program_button}
     
     def create_api_key_variable_section(self):
@@ -100,9 +101,8 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         label_text = (
             "Multiple profile IDs separated by ';'. Special formats:\n"
             "<variable_name> to use variable value\n"
-            "Example: 68e485dd;<profile_id>;68e486ab"
+            "Example: 68e485dd;<PROFILE_ID>;68e486ab"
         )
-        
         label = tk.Label(
             text_frame,
             text=label_text,
@@ -152,6 +152,202 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
             width=20
         )
         combo.pack(side=tk.LEFT, padx=5)
+    
+    def create_options_section(self):
+        """Options checkboxes and cookies import"""
+        options_frame = tk.LabelFrame(
+            self.parent_frame,
+            text="Profile Options",
+            bg=cfg.LIGHT_BG_COLOR,
+            pady=10,
+            padx=10
+        )
+        options_frame.pack(fill=tk.X, pady=10)
+        
+        # Refresh fingerprint checkbox
+        self.refresh_fingerprint_var = tk.BooleanVar()
+        if self.parameters:
+            self.refresh_fingerprint_var.set(self.parameters.get("refresh_fingerprint", False))
+        else:
+            self.refresh_fingerprint_var.set(False)
+        
+        refresh_cb = tk.Checkbutton(
+            options_frame,
+            text="Refresh fingerprint before warming up",
+            variable=self.refresh_fingerprint_var,
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10)
+        )
+        refresh_cb.pack(anchor=tk.W, pady=2)
+        
+        # Delete cookies checkbox
+        self.delete_cookies_var = tk.BooleanVar()
+        if self.parameters:
+            self.delete_cookies_var.set(self.parameters.get("delete_cookies", False))
+        else:
+            self.delete_cookies_var.set(False)
+        
+        delete_cb = tk.Checkbutton(
+            options_frame,
+            text="Delete cookies before warming up",
+            variable=self.delete_cookies_var,
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10)
+        )
+        delete_cb.pack(anchor=tk.W, pady=2)
+        
+
+         # ========== THÊM HEADLESS CHECKBOX ==========
+        self.headless_var = tk.BooleanVar()
+        if self.parameters:
+            self.headless_var.set(self.parameters.get("headless", False))
+        else:
+            self.headless_var.set(False)
+    
+        headless_cb = tk.Checkbutton(
+            options_frame,
+            text="Run in Headless mode (no browser UI, faster but harder to debug)",
+            variable=self.headless_var,
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10)
+        )
+        headless_cb.pack(anchor=tk.W, pady=2)
+        
+        # ========== THÊM MULTI-THREADING SECTION ==========
+        separator = ttk.Separator(options_frame, orient='horizontal')
+        separator.pack(fill=tk.X, pady=10)
+
+        threading_label = tk.Label(
+            options_frame,
+            text="Multi-Threading (Parallel Warm Up):",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10, "bold")
+        )
+        threading_label.pack(anchor=tk.W, pady=(5, 2))
+
+        # Enable multi-threading checkbox
+        self.enable_threading_var = tk.BooleanVar()
+        if self.parameters:
+            self.enable_threading_var.set(self.parameters.get("enable_threading", False))
+        else:
+            self.enable_threading_var.set(False)
+
+        threading_cb = tk.Checkbutton(
+            options_frame,
+            text="Enable Multi-Threading (warm up multiple profiles simultaneously)",
+            variable=self.enable_threading_var,
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10)
+        )
+        threading_cb.pack(anchor=tk.W, pady=2)
+
+        # Max workers input
+        workers_frame = tk.Frame(options_frame, bg=cfg.LIGHT_BG_COLOR)
+        workers_frame.pack(fill=tk.X, pady=5)
+
+        workers_label = tk.Label(
+            workers_frame,
+            text="Max parallel profiles:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9)
+        )
+        workers_label.pack(side=tk.LEFT, padx=(20, 5))
+
+        self.max_workers_var = tk.StringVar()
+        if self.parameters:
+            self.max_workers_var.set(self.parameters.get("max_workers", "3"))
+        else:
+            self.max_workers_var.set("3")
+
+        workers_entry = ttk.Entry(
+            workers_frame,
+            textvariable=self.max_workers_var,
+            width=5
+        )
+        workers_entry.pack(side=tk.LEFT, padx=5)
+
+        workers_hint = tk.Label(
+            workers_frame,
+            text="(Recommended: 3-5 for normal PC, 10+ for high-end PC with headless mode)",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 8),
+            fg="#666666"
+        )
+        workers_hint.pack(side=tk.LEFT, padx=5)
+        
+        # ========== COOKIES IMPORT SECTION ==========
+        cookies_label = tk.Label(
+            options_frame,
+            text="Import Cookies (if not Delete cookies):",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10, "bold")
+        )
+        cookies_label.pack(anchor=tk.W, pady=(10, 5))
+        
+        # Option 1: Browse cookies folder
+        browse_cookies_label = tk.Label(
+            options_frame,
+            text="Option 1: Cookies Folder Path (will random pick 1 JSON file):",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9)
+        )
+        browse_cookies_label.pack(anchor=tk.W, pady=(0, 3))
+        
+        cookies_browse_frame = tk.Frame(options_frame, bg=cfg.LIGHT_BG_COLOR)
+        cookies_browse_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        self.cookies_folder_var = tk.StringVar()
+        if self.parameters:
+            self.cookies_folder_var.set(self.parameters.get("cookies_folder", ""))
+        
+        cookies_entry = tk.Entry(
+            cookies_browse_frame,
+            textvariable=self.cookies_folder_var,
+            font=("Segoe UI", 10)
+        )
+        cookies_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        
+        def browse_cookies_folder():
+            folder = filedialog.askdirectory(title="Select Cookies Folder")
+            if folder:
+                self.cookies_folder_var.set(folder)
+        
+        browse_cookies_button = ttk.Button(
+            cookies_browse_frame,
+            text="Browse",
+            command=browse_cookies_folder
+        )
+        browse_cookies_button.pack(side=tk.LEFT)
+        
+        # Option 2: Variable name
+        var_cookies_label = tk.Label(
+            options_frame,
+            text="Option 2: Variable name containing cookies folder path:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9)
+        )
+        var_cookies_label.pack(anchor=tk.W, pady=(0, 3))
+        
+        self.cookies_folder_variable_var = tk.StringVar()
+        if self.parameters:
+            self.cookies_folder_variable_var.set(self.parameters.get("cookies_folder_variable", ""))
+        
+        cookies_var_entry = tk.Entry(
+            options_frame,
+            textvariable=self.cookies_folder_variable_var,
+            font=("Segoe UI", 10)
+        )
+        cookies_var_entry.pack(fill=tk.X, pady=(0, 5))
+        
+        # Hint
+        cookies_hint = tk.Label(
+            options_frame,
+            text="💡 Will random pick 1 JSON file from folder. Priority: Variable > Direct path",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 8),
+            fg="#666666"
+        )
+        cookies_hint.pack(anchor=tk.W)
     
     def create_websites_section(self):
         """Websites file browse and variable"""
@@ -233,6 +429,88 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
             justify=tk.LEFT
         )
         hint.pack(anchor=tk.W)
+        
+        # ========== THÊM KEYWORDS SECTION ==========
+        separator = ttk.Separator(websites_frame, orient='horizontal')
+        separator.pack(fill=tk.X, pady=10)
+    
+        keywords_label = tk.Label(
+            websites_frame,
+            text="Search Keywords for Google/YouTube:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10, "bold")
+        )
+        keywords_label.pack(anchor=tk.W, pady=(5, 5))
+    
+        # Option 1: Browse keywords TXT file
+        keywords_browse_label = tk.Label(
+            websites_frame,
+            text="Option 1: Keywords TXT file (one keyword per line):",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9)
+        )
+        keywords_browse_label.pack(anchor=tk.W, pady=(0, 3))
+    
+        keywords_browse_frame = tk.Frame(websites_frame, bg=cfg.LIGHT_BG_COLOR)
+        keywords_browse_frame.pack(fill=tk.X, pady=(0, 10))
+    
+        self.keywords_file_var = tk.StringVar()
+        if self.parameters:
+            self.keywords_file_var.set(self.parameters.get("keywords_file", ""))
+    
+        keywords_entry = tk.Entry(
+            keywords_browse_frame,
+            textvariable=self.keywords_file_var,
+            font=("Segoe UI", 10)
+        )
+        keywords_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+    
+        def browse_keywords_file():
+            filename = filedialog.askopenfilename(
+                title="Select Keywords TXT File",
+                filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+            )
+            if filename:
+                self.keywords_file_var.set(filename)
+    
+        browse_keywords_button = ttk.Button(
+            keywords_browse_frame,
+            text="Browse",
+            command=browse_keywords_file
+        )
+        browse_keywords_button.pack(side=tk.LEFT)
+    
+        # Option 2: Variable name
+        keywords_var_label = tk.Label(
+            websites_frame,
+            text="Option 2: Variable name containing keywords TXT file path:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9)
+        )
+        keywords_var_label.pack(anchor=tk.W, pady=(0, 3))
+    
+        self.keywords_variable_var = tk.StringVar()
+        if self.parameters:
+            self.keywords_variable_var.set(self.parameters.get("keywords_variable", ""))
+    
+        keywords_var_entry = tk.Entry(
+            websites_frame,
+            textvariable=self.keywords_variable_var,
+            font=("Segoe UI", 10)
+        )
+        keywords_var_entry.pack(fill=tk.X, pady=(0, 5))
+    
+        # Hint
+        keywords_hint = tk.Label(
+            websites_frame,
+            text="💡 Keywords will be used when visiting google.com or youtube.com. Random keyword per visit. Priority: Variable > Direct path",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 8),
+            fg="#666666",
+            wraplength=500,
+            justify=tk.LEFT
+        )
+        keywords_hint.pack(anchor=tk.W)
     
     def create_how_to_get_websites_section(self):
         """How to get websites selection"""
@@ -306,87 +584,11 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         )
         hint.pack(side=tk.LEFT, padx=5)
     
-    def create_save_options_section(self):
-        """Save options checkboxes"""
-        options_frame = tk.LabelFrame(
-            self.parent_frame,
-            text="Save Options",
-            bg=cfg.LIGHT_BG_COLOR,
-            pady=10,
-            padx=10
-        )
-        options_frame.pack(fill=tk.X, pady=10)
-        
-        # Save IndexDB
-        self.save_indexdb_var = tk.BooleanVar()
-        if self.parameters:
-            self.save_indexdb_var.set(self.parameters.get("save_indexdb", False))
-        else:
-            self.save_indexdb_var.set(False)
-        
-        indexdb_cb = tk.Checkbutton(
-            options_frame,
-            text="Save IndexDB",
-            variable=self.save_indexdb_var,
-            bg=cfg.LIGHT_BG_COLOR,
-            font=("Segoe UI", 10)
-        )
-        indexdb_cb.pack(anchor=tk.W, pady=2)
-        
-        # Save Cookies
-        self.save_cookies_var = tk.BooleanVar()
-        if self.parameters:
-            self.save_cookies_var.set(self.parameters.get("save_cookies", True))
-        else:
-            self.save_cookies_var.set(True)
-        
-        cookies_cb = tk.Checkbutton(
-            options_frame,
-            text="Save Cookies",
-            variable=self.save_cookies_var,
-            bg=cfg.LIGHT_BG_COLOR,
-            font=("Segoe UI", 10)
-        )
-        cookies_cb.pack(anchor=tk.W, pady=2)
-        
-        # Save localStorage
-        self.save_localstorage_var = tk.BooleanVar()
-        if self.parameters:
-            self.save_localstorage_var.set(self.parameters.get("save_localstorage", False))
-        else:
-            self.save_localstorage_var.set(False)
-        
-        localstorage_cb = tk.Checkbutton(
-            options_frame,
-            text="Save localStorage",
-            variable=self.save_localstorage_var,
-            bg=cfg.LIGHT_BG_COLOR,
-            font=("Segoe UI", 10)
-        )
-        localstorage_cb.pack(anchor=tk.W, pady=2)
-        
-        
-        # Save Fingerprint Profile (CSV)
-        self.save_fingerprint_var = tk.BooleanVar()
-        if self.parameters:
-            self.save_fingerprint_var.set(self.parameters.get("save_fingerprint", False))
-        else:
-            self.save_fingerprint_var.set(False)
-        
-        fingerprint_cb = tk.Checkbutton(
-            options_frame,
-            text="Save Fingerprint Profile (Export CSV via API)",
-            variable=self.save_fingerprint_var,
-            bg=cfg.LIGHT_BG_COLOR,
-            font=("Segoe UI", 10)
-        )
-        fingerprint_cb.pack(anchor=tk.W, pady=2)
-    
     def create_output_folder_section(self):
-        """Output folder section with browse and variable options"""
+        """Output folder section - giống GoLogin Get Cookies"""
         folder_frame = tk.LabelFrame(
             self.parent_frame,
-            text="Output Folder",
+            text="Output Folder for Cookies",
             bg=cfg.LIGHT_BG_COLOR,
             pady=10,
             padx=10
@@ -451,12 +653,10 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         # Hint
         hint = tk.Label(
             folder_frame,
-            text="💡 Structure: FOLDER_PATH/DD_MM_YYYY/PROFILENAME_DD_MM_YYYY_HH_MM_SS/files. Priority: Variable > Direct path",
+            text="💡 File format: cookies_DD_MM_YYYY_HH_MM_SS.json. Priority: Variable > Direct path",
             bg=cfg.LIGHT_BG_COLOR,
             font=("Segoe UI", 8),
-            fg="#666666",
-            wraplength=500,
-            justify=tk.LEFT
+            fg="#666666"
         )
         hint.pack(anchor=tk.W)
     
@@ -468,21 +668,27 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         params["profile_ids"] = self.profile_ids_input.get("1.0", tk.END).strip()
         params["how_to_get"] = self.how_to_get_var.get()
         
+        # Options
+        params["refresh_fingerprint"] = self.refresh_fingerprint_var.get()
+        params["delete_cookies"] = self.delete_cookies_var.get()
+        params["cookies_folder"] = self.cookies_folder_var.get().strip()
+        params["cookies_folder_variable"] = self.cookies_folder_variable_var.get().strip()
+        
         # Websites params
         params["websites_file"] = self.websites_file_var.get().strip()
         params["websites_variable"] = self.websites_variable_var.get().strip()
         params["how_to_get_websites"] = self.how_to_get_websites_var.get()
-        
         params["duration_minutes"] = self.duration_var.get().strip()
         
-        # Save options
-        params["save_indexdb"] = self.save_indexdb_var.get()
-        params["save_cookies"] = self.save_cookies_var.get()
-        params["save_localstorage"] = self.save_localstorage_var.get()
-        params["save_fingerprint"] = self.save_fingerprint_var.get()
-        
-        # Output folder
+        # Output folder (for saving cookies only)
         params["folder_path"] = self.folder_path_var.get().strip()
         params["folder_variable"] = self.folder_variable_var.get().strip()
+        params["headless"] = self.headless_var.get()
+        
+        params["enable_threading"] = self.enable_threading_var.get()  # ← THÊM
+        params["max_workers"] = self.max_workers_var.get().strip()    # ← THÊM
+        
+        params["keywords_file"] = self.keywords_file_var.get().strip()
+        params["keywords_variable"] = self.keywords_variable_var.get().strip()
         
         return params

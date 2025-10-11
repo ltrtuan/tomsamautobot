@@ -80,13 +80,14 @@ class GoLoginAPI:
             print(f"[GOLOGIN] Create error: {e}")
             return False, str(e)
     
-    def start_profile(self, profile_id, wait_for_ready=True, max_wait=180):
+    def start_profile(self, profile_id, wait_for_ready=True, max_wait=180, extra_params=None):
         """
         Start profile đã tồn tại
         Args:
             profile_id: Profile ID to start
             wait_for_ready: Poll until profile ready (default True)
             max_wait: Max seconds to wait (default 180 = 3 mins)
+            extra_params: List of browser flags (e.g. ['--headless=new'])
         Returns: (success, debugger_address or error_message)
         """
         try:
@@ -97,37 +98,79 @@ class GoLoginAPI:
         
             print(f"[GOLOGIN] Starting profile: {profile_id}")
         
-            # ← THÊM: Check if profile is ready (polling)
-            # if wait_for_ready:
-            #     print(f"[GOLOGIN] Checking profile readiness (max {max_wait}s)...")
-            #     ready, msg = self.check_profile_ready(profile_id, max_wait)
-            #     if not ready:
-            #         return False, f"Profile not ready: {msg}"
+            if extra_params:
+                print(f"[GOLOGIN] Browser flags: {', '.join(extra_params)}")
         
-            # Initialize GoLogin with tmpdir
-            self.gl = GoLogin({
-                "token": self.api_token,
-                "profile_id": profile_id,
-                "tmpdir": self.tmpdir
-            })
+            # ========== THÊM: Retry mechanism ==========
+            max_retries = 2
+            for attempt in range(max_retries):
+                try:
+                    # Initialize GoLogin with tmpdir and extra_params
+                    gologin_config = {
+                        "token": self.api_token,
+                        "profile_id": profile_id,
+                        "tmpdir": self.tmpdir
+                    }
+                
+                    # Add extra_params if provided (for headless mode)
+                    if extra_params and isinstance(extra_params, list):
+                        gologin_config["extra_params"] = extra_params
+                
+                    self.gl = GoLogin(gologin_config)
+                
+                    # Start browser
+                    if attempt > 0:
+                        print(f"[GOLOGIN] Retry attempt {attempt + 1}/{max_retries}...")
+                    else:
+                        print(f"[GOLOGIN] Launching browser...")
+                    
+                    debugger_address = self.gl.start()
+                
+                    if debugger_address:
+                        self.active_profiles[profile_id] = self.gl
+                        print(f"[GOLOGIN] ✓ Profile started!")
+                        print(f"[GOLOGIN] Debugger: {debugger_address}")
+                        return True, debugger_address
+                
+                except FileNotFoundError as e:
+                    # Profile download incomplete - retry
+                    if attempt < max_retries - 1:
+                        print(f"[GOLOGIN] ⚠ Profile extraction issue (Preferences not found)")
+                        print(f"[GOLOGIN] Cleaning temp folder and retrying...")
+                    
+                        # Clean up temp folder
+                        import shutil
+                        temp_path = os.path.join(self.tmpdir, f"gologin_{profile_id}")
+                        if os.path.exists(temp_path):
+                            try:
+                                shutil.rmtree(temp_path)
+                                print(f"[GOLOGIN] Cleaned: {temp_path}")
+                            except Exception as clean_err:
+                                print(f"[GOLOGIN] Cleanup warning: {clean_err}")
+                    
+                        time.sleep(3)  # Wait before retry
+                        continue
+                    else:
+                        # Last attempt failed
+                        raise
+            
+                except Exception as e:
+                    # Other errors
+                    if attempt < max_retries - 1:
+                        print(f"[GOLOGIN] ⚠ Start error (attempt {attempt + 1}): {str(e)[:100]}")
+                        time.sleep(2)
+                        continue
+                    else:
+                        raise
         
-            # Start browser
-            print(f"[GOLOGIN] Launching browser...")
-            debugger_address = self.gl.start()
-        
-            if debugger_address:
-                self.active_profiles[profile_id] = self.gl
-                print(f"[GOLOGIN] ✓ Profile started!")
-                print(f"[GOLOGIN] Debugger: {debugger_address}")
-                return True, debugger_address
-            else:
-                return False, "No debugger address returned"
+            return False, "Failed after retries"
         
         except Exception as e:
             print(f"[GOLOGIN] Start error: {e}")
             import traceback
             traceback.print_exc()
             return False, str(e)
+
 
     
     def stop_profile(self, profile_id):
