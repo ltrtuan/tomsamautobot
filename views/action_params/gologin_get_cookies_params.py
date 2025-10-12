@@ -1,11 +1,12 @@
-﻿# views/action_params/gologin_stop_params.py
+﻿# views/action_params/gologin_get_cookies_params.py
+
 import tkinter as tk
-from tkinter import ttk, scrolledtext
+from tkinter import ttk, scrolledtext, filedialog
 import config as cfg
 from views.action_params.base_params import BaseActionParams
 
-class GoLoginStopParams(BaseActionParams):
-    """UI for GoLogin Stop Profile action"""
+class GoLoginGetCookiesParams(BaseActionParams):
+    """UI for GoLogin Get Cookies action"""
     
     def __init__(self, parent_frame, parameters=None):
         super().__init__(parent_frame, parameters)
@@ -16,16 +17,15 @@ class GoLoginStopParams(BaseActionParams):
         
         # ========== API KEY VARIABLE SECTION ==========
         self.create_api_key_variable_section()
-     
         
         # ========== PROFILE IDs SECTION ==========
         self.create_profile_ids_section()
         
-        # ========== HOW TO GET SECTION ==========
-        self.create_how_to_get_section()
-        
         # ========== OUTPUT FOLDER SECTION ==========
         self.create_output_folder_section()
+        
+        # ========== HOW TO GET SECTION ==========
+        self.create_how_to_get_section()
         
         # ========== COMMON PARAMETERS ==========
         self.create_common_params(
@@ -40,7 +40,6 @@ class GoLoginStopParams(BaseActionParams):
         
         # ========== PROGRAM SELECTOR ==========
         select_program_button = self.create_program_selector()
-        
         return {'select_program_button': select_program_button}
     
     def create_api_key_variable_section(self):
@@ -76,10 +75,10 @@ class GoLoginStopParams(BaseActionParams):
         entry.pack(anchor=tk.W, padx=5)
     
     def create_profile_ids_section(self):
-        """Profile IDs textarea - GIỐNG START ACTION"""
+        """Profile IDs textarea"""
         text_frame = tk.LabelFrame(
             self.parent_frame,
-            text="Profile IDs to Stop",
+            text="Profile IDs",
             bg=cfg.LIGHT_BG_COLOR,
             pady=10,
             padx=10
@@ -88,10 +87,9 @@ class GoLoginStopParams(BaseActionParams):
         
         label_text = (
             "Multiple profile IDs separated by ';'. Special formats:\n"
-            "<variable_name> to use variable value\n"
-            "Example: 68e485dd; <gologin_profile_id>; <gologin_current_profile_id>"
+            "<variable> to use variable value\n"
+            "Example: 68e485dd; <profile_id>; 68e486ab"
         )
-        
         label = tk.Label(
             text_frame,
             text=label_text,
@@ -113,6 +111,82 @@ class GoLoginStopParams(BaseActionParams):
         if self.parameters:
             profile_ids = self.parameters.get("profile_ids", "")
             self.profile_ids_input.insert("1.0", profile_ids)
+    
+    def create_output_folder_section(self):
+        """Output folder section with browse and variable options"""
+        folder_frame = tk.LabelFrame(
+            self.parent_frame,
+            text="Output Folder for Session Files",
+            bg=cfg.LIGHT_BG_COLOR,
+            pady=10,
+            padx=10
+        )
+        folder_frame.pack(fill=tk.X, pady=10)
+        
+        # Option 1: Browse folder
+        browse_label = tk.Label(
+            folder_frame,
+            text="Option 1: Browse folder path:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9)
+        )
+        browse_label.pack(anchor=tk.W, pady=(0, 3))
+        
+        browse_frame = tk.Frame(folder_frame, bg=cfg.LIGHT_BG_COLOR)
+        browse_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        self.folder_path_var = tk.StringVar()
+        if self.parameters:
+            self.folder_path_var.set(self.parameters.get("folder_path", ""))
+        
+        folder_entry = tk.Entry(
+            browse_frame,
+            textvariable=self.folder_path_var,
+            font=("Segoe UI", 10)
+        )
+        folder_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        
+        def browse_folder():
+            folder = filedialog.askdirectory(title="Select Output Folder")
+            if folder:
+                self.folder_path_var.set(folder)
+        
+        browse_button = ttk.Button(
+            browse_frame,
+            text="Browse",
+            command=browse_folder
+        )
+        browse_button.pack(side=tk.LEFT)
+        
+        # Option 2: Variable name
+        var_label = tk.Label(
+            folder_frame,
+            text="Option 2: Variable name containing folder path:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9)
+        )
+        var_label.pack(anchor=tk.W, pady=(0, 3))
+        
+        self.folder_variable_var = tk.StringVar()
+        if self.parameters:
+            self.folder_variable_var.set(self.parameters.get("folder_variable", ""))
+        
+        folder_var_entry = tk.Entry(
+            folder_frame,
+            textvariable=self.folder_variable_var,
+            font=("Segoe UI", 10)
+        )
+        folder_var_entry.pack(fill=tk.X, pady=(0, 5))
+        
+        # Hint
+        hint = tk.Label(
+            folder_frame,
+            text="💡 File format: cookies_DD_MM_YYYY_HH_MM_SS.json. Priority: Variable > Direct path",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 8),
+            fg="#666666"
+        )
+        hint.pack(anchor=tk.W)
     
     def create_how_to_get_section(self):
         """How to get selection"""
@@ -140,95 +214,14 @@ class GoLoginStopParams(BaseActionParams):
             state="readonly",
             width=20
         )
-        combo.pack(side=tk.LEFT, padx=5)    
-        
-    def create_output_folder_section(self):
-            """Output folder section with browse and variable options"""
-            folder_frame = tk.LabelFrame(
-                self.parent_frame,
-                text="Output Folder for Cookies (Optional)",
-                bg=cfg.LIGHT_BG_COLOR,
-                pady=10,
-                padx=10
-            )
-            folder_frame.pack(fill=tk.X, pady=10)
-    
-            # Option 1: Browse folder
-            browse_label = tk.Label(
-                folder_frame,
-                text="Option 1: Browse folder path:",
-                bg=cfg.LIGHT_BG_COLOR,
-                font=("Segoe UI", 9)
-            )
-            browse_label.pack(anchor=tk.W, pady=(0, 3))
-    
-            browse_frame = tk.Frame(folder_frame, bg=cfg.LIGHT_BG_COLOR)
-            browse_frame.pack(fill=tk.X, pady=(0, 10))
-    
-            self.folder_path_var = tk.StringVar()
-            if self.parameters:
-                self.folder_path_var.set(self.parameters.get("folder_path", ""))
-    
-            folder_entry = tk.Entry(
-                browse_frame,
-                textvariable=self.folder_path_var,
-                font=("Segoe UI", 10)
-            )
-            folder_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
-    
-            def browse_folder():
-                from tkinter import filedialog
-                folder = filedialog.askdirectory(title="Select Output Folder")
-                if folder:
-                    self.folder_path_var.set(folder)
-    
-            browse_button = ttk.Button(
-                browse_frame,
-                text="Browse",
-                command=browse_folder
-            )
-            browse_button.pack(side=tk.LEFT)
-    
-            # Option 2: Variable name
-            var_label = tk.Label(
-                folder_frame,
-                text="Option 2: Variable name containing folder path:",
-                bg=cfg.LIGHT_BG_COLOR,
-                font=("Segoe UI", 9)
-            )
-            var_label.pack(anchor=tk.W, pady=(0, 3))
-    
-            self.folder_variable_var = tk.StringVar()
-            if self.parameters:
-                self.folder_variable_var.set(self.parameters.get("folder_variable", ""))
-    
-            folder_var_entry = tk.Entry(
-                folder_frame,
-                textvariable=self.folder_variable_var,
-                font=("Segoe UI", 10)
-            )
-            folder_var_entry.pack(fill=tk.X, pady=(0, 5))
-    
-            # Hint
-            hint = tk.Label(
-                folder_frame,
-                text="💡 If set, export cookies before stop. File format: cookies_DD_MM_YYYY_HH_MM_SS.json. Priority: Variable > Direct path",
-                bg=cfg.LIGHT_BG_COLOR,
-                font=("Segoe UI", 8),
-                fg="#666666"
-            )
-            hint.pack(anchor=tk.W)
-
-
+        combo.pack(side=tk.LEFT, padx=5)
     
     def get_parameters(self):
         """Collect parameters"""
         params = super().get_parameters()
-        
         params["api_key_variable"] = self.api_key_var.get().strip()
         params["profile_ids"] = self.profile_ids_input.get("1.0", tk.END).strip()
         params["how_to_get"] = self.how_to_get_var.get()
         params["folder_path"] = self.folder_path_var.get().strip()
         params["folder_variable"] = self.folder_variable_var.get().strip()
-        
         return params

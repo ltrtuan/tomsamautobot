@@ -25,6 +25,10 @@ from controllers.actions.gologin_create_action import GoLoginCreateAction
 from controllers.actions.gologin_start_action import GoLoginStartAction
 from controllers.actions.gologin_stop_action import GoLoginStopAction
 from controllers.actions.upload_script_action import UploadScriptAction
+from controllers.actions.gologin_get_cookies_action import GoLoginGetCookiesAction
+from controllers.actions.gologin_selenium_collect_action import GoLoginSeleniumCollectAction
+from controllers.actions.get_new_proxy_action import GetNewProxyAction
+
 
 class ActionFactory:
     """Factory tạo ra play handler dựa vào loại action"""
@@ -100,6 +104,15 @@ class ActionFactory:
         
         elif action_type == ActionType.UPLOAD_SCRIPT:
             return UploadScriptAction(root, action, view, model, controller)
+        
+        elif action_type == ActionType.GOLOGIN_GET_COOKIES:
+            return GoLoginGetCookiesAction(root, action, view, model, controller)
+        
+        elif action_type == ActionType.GOLOGIN_SELENIUM_COLLECT:
+            return GoLoginSeleniumCollectAction(root, action, view, model, controller)
+        
+        elif action_type == ActionType.GET_NEW_PROXY:  # THÊM DÒNG NÀY
+            return GetNewProxyAction(root, action, view, model, controller)
         else:
             # Trả về None nếu không tìm thấy handler phù hợp
             return None

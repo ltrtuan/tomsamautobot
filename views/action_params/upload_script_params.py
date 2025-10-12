@@ -46,8 +46,7 @@ class UploadScriptParams(BaseActionParams):
         script_entry = tk.Entry(
             browse_inner_frame,
             textvariable=self.script_path_var,
-            font=("Segoe UI", 10),
-            state="readonly"
+            font=("Segoe UI", 10)
         )
         script_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
         

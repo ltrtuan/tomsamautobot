@@ -379,8 +379,7 @@ class BaseActionParams:
         program_entry = tk.Entry(
             browse_inner_frame,
             textvariable=self.program_var,  # THAY ĐỔI ở đây
-            font=("Segoe UI", 10),
-            state="readonly"
+            font=("Segoe UI", 10)
         )
         program_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
     

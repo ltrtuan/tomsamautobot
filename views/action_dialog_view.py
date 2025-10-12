@@ -28,6 +28,9 @@ from views.action_params.gologin_create_params import GoLoginCreateParams
 from views.action_params.gologin_start_params import GoLoginStartParams
 from views.action_params.gologin_stop_params import GoLoginStopParams
 from views.action_params.upload_script_params import UploadScriptParams
+from views.action_params.gologin_get_cookies_params import GoLoginGetCookiesParams
+from views.action_params.gologin_selenium_collect_params import GoLoginSeleniumCollectParams
+from views.action_params.get_new_proxy_params import GetNewProxyParams
 
 class ActionDialogView(tk.Toplevel):
     def __init__(self, parent, action=None):
@@ -232,6 +235,9 @@ class ActionDialogView(tk.Toplevel):
             ActionType.GOLOGIN_CREATE_PROFILE: GoLoginCreateParams,
             ActionType.GOLOGIN_START_PROFILE: GoLoginStartParams,
             ActionType.GOLOGIN_STOP_PROFILE: GoLoginStopParams,
+            ActionType.GOLOGIN_GET_COOKIES: GoLoginGetCookiesParams,
+            ActionType.GOLOGIN_SELENIUM_COLLECT: GoLoginSeleniumCollectParams,
+            ActionType.GET_NEW_PROXY: GetNewProxyParams,
             ActionType.UPLOAD_SCRIPT: UploadScriptParams,
             # Thêm các action khác trong tương lai
         }

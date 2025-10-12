@@ -298,9 +298,17 @@ class ActionItemFrame(tk.Frame):
 
         elif action_type == ActionType.GOLOGIN_STOP_PROFILE:
             return "⏹️"  # Stop icon cho Stop
+        elif action_type == ActionType.GOLOGIN_GET_COOKIES:
+            return "🍪"  # Cookie icon
         
         elif action_type == ActionType.UPLOAD_SCRIPT:
             return "📜"
+        
+        elif action_type == ActionType.GOLOGIN_SELENIUM_COLLECT:
+            return "🌐"  # Icon globe cho Selenium Collect
+        
+        elif action_type == ActionType.GET_NEW_PROXY:  # THÊM DÒNG NÀY
+            return "🔌" # Icon plug/connection cho proxy
         else:
             return "📋"  # Icon mặc định cho các loại khác
     
@@ -434,6 +442,9 @@ class ActionItemFrame(tk.Frame):
             'GOLOGIN_CREATE_PROFILE',
             'GOLOGIN_START_PROFILE',
             'GOLOGIN_STOP_PROFILE',
+            'GOLOGIN_GET_COOKIES',
+            'GOLOGIN_SELENIUM_COLLECT',
+            'GET_NEW_PROXY',
             'UPLOAD_SCRIPT'
             # Thêm các action khác nếu cần
         ]
@@ -849,6 +860,25 @@ class ActionItemFrame(tk.Frame):
             ids_preview = profile_ids[:50] + "..." if len(profile_ids) > 50 else profile_ids
             return f"{indent}Stop IDs: {ids_preview}"
         
+        elif action_type_display == ActionType.GOLOGIN_GET_COOKIES:
+            profile_ids = action.parameters.get("profile_ids", "")
+            folder_path = action.parameters.get("folder_path", "")
+            folder_variable = action.parameters.get("folder_variable", "")
+    
+            # Show profile ID (first 30 chars)
+            profile_display = profile_ids[:30] + "..." if len(profile_ids) > 30 else profile_ids
+    
+            # Show folder source
+            if folder_variable:
+                folder_display = f"Var: {folder_variable}"
+            elif folder_path:
+                import os
+                folder_display = f"Folder: {os.path.basename(folder_path)}"
+            else:
+                folder_display = "No folder"
+    
+            return f"{indent}Profile: {profile_display} | {folder_display}"
+        
         elif action_type_display == ActionType.UPLOAD_SCRIPT:
             script_path = action.parameters.get("script_path", "")
             if script_path:
@@ -856,7 +886,30 @@ class ActionItemFrame(tk.Frame):
                 return f"{indent}Script: {filename}"
             return f"{indent}Chưa chọn script"
 
-
+        elif action_type_display == ActionType.GOLOGIN_SELENIUM_COLLECT:
+            profile_ids = action.parameters.get("profile_ids", "")
+            websites_file = action.parameters.get("websites_file", "")
+            websites_variable = action.parameters.get("websites_variable", "")
+            duration = action.parameters.get("duration_minutes", "5")
+    
+            # Show profile ID (first 30 chars)
+            profile_display = profile_ids[:30] + "..." if len(profile_ids) > 30 else profile_ids
+    
+            # Show websites source
+            if websites_variable:
+                websites_display = f"Var: {websites_variable}"
+            elif websites_file:
+                import os
+                websites_display = f"File: {os.path.basename(websites_file)}"
+            else:
+                websites_display = "No websites"
+    
+            return f"{indent}Profile: {profile_display} | {websites_display} | {duration}min"
+        
+        elif action_type_display == ActionType.GET_NEW_PROXY:
+            provider = action.parameters.get("provider", "")
+            return f"{indent}Provider: {provider}"
+        
         return indent  # Trả về ít nhất là indent
 
 
