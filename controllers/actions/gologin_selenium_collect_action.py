@@ -48,6 +48,67 @@ class GoLoginSeleniumCollectAction(BaseAction):
                 return
         
             print(f"[GOLOGIN WARMUP] Total profiles to warm up: {len(profile_list)}")
+            
+            # ========== CHECK AND UPDATE PROXY IF PROVIDED ==========
+            # Get proxy variable names
+            proxy_mode_var = self.params.get("proxy_mode_variable", "").strip()
+            proxy_host_var = self.params.get("proxy_host_variable", "").strip()
+            proxy_port_var = self.params.get("proxy_port_variable", "").strip()
+            proxy_username_var = self.params.get("proxy_username_variable", "").strip()
+            proxy_password_var = self.params.get("proxy_password_variable", "").strip()
+
+            # Check if all 5 variable names are provided
+            if proxy_mode_var and proxy_host_var and proxy_port_var and proxy_username_var and proxy_password_var:
+                print("[GOLOGIN WARMUP] ========== PROXY UPDATE ==========")
+                print("[GOLOGIN WARMUP] Proxy configuration detected, retrieving values from variables...")
+    
+                # Get actual values from GlobalVariables
+                proxy_mode = GlobalVariables().get(proxy_mode_var, "")
+                proxy_host = GlobalVariables().get(proxy_host_var, "")
+                proxy_port = GlobalVariables().get(proxy_port_var, "")
+                proxy_username = GlobalVariables().get(proxy_username_var, "")
+                proxy_password = GlobalVariables().get(proxy_password_var, "")
+    
+                # Check if all values are non-empty
+                if proxy_mode and proxy_host and proxy_port and proxy_username and proxy_password:
+                    proxy_config = {
+                        "mode": proxy_mode,
+                        "host": proxy_host,
+                        "port": proxy_port,
+                        "username": proxy_username,
+                        "password": proxy_password
+                    }
+        
+                    print(f"[GOLOGIN WARMUP] Retrieved proxy values:")
+                    print(f"[GOLOGIN WARMUP]   Mode: {proxy_mode} (from {proxy_mode_var})")
+                    print(f"[GOLOGIN WARMUP]   Host: {proxy_host} (from {proxy_host_var})")
+                    print(f"[GOLOGIN WARMUP]   Port: {proxy_port} (from {proxy_port_var})")
+                    print(f"[GOLOGIN WARMUP]   Username: {proxy_username} (from {proxy_username_var})")
+        
+                    # Get GoLogin API instance
+                    gologin_api = get_gologin_api(api_token)
+        
+                    # Call GoLoginAPI method to update proxy
+                    proxy_success, proxy_message = gologin_api.update_proxy_for_profiles(profile_list, proxy_config)
+        
+                    if proxy_success:
+                        print(f"[GOLOGIN WARMUP] ✓ {proxy_message}")
+                    else:
+                        print(f"[GOLOGIN WARMUP] ⚠ Warning: {proxy_message}")
+                        print("[GOLOGIN WARMUP] Continuing without proxy update...")
+                else:
+                    print("[GOLOGIN WARMUP] ⚠ Warning: Some proxy variables are empty, skipping proxy update")
+                    print(f"[GOLOGIN WARMUP]   Mode: {proxy_mode_var} = '{proxy_mode}'")
+                    print(f"[GOLOGIN WARMUP]   Host: {proxy_host_var} = '{proxy_host}'")
+                    print(f"[GOLOGIN WARMUP]   Port: {proxy_port_var} = '{proxy_port}'")
+                    print(f"[GOLOGIN WARMUP]   Username: {proxy_username_var} = '{proxy_username}'")
+                    print(f"[GOLOGIN WARMUP]   Password: {proxy_password_var} = '{proxy_password}'")
+    
+                print("[GOLOGIN WARMUP] ===================================")
+            else:
+                print("[GOLOGIN WARMUP] No proxy configuration provided (variable names missing), skipping proxy update")
+
+
         
             # Check if multi-threading enabled
             enable_threading = self.params.get("enable_threading", False)
@@ -349,6 +410,83 @@ class GoLoginSeleniumCollectAction(BaseAction):
         except Exception as e:
             print(f"[GOLOGIN WARMUP] Error importing cookies: {e}")
             return False
+        
+    def _update_proxy_for_profiles(self, api_token, profile_ids, proxy_config):
+        """
+        Update proxy for multiple profiles before starting them
+    
+        Args:
+            api_token: GoLogin API token
+            profile_ids: List of profile IDs
+            proxy_config: Dict with keys: mode, host, port, username, password
+    
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            import requests
+        
+            # Validate all 5 required fields are present
+            required_fields = ["mode", "host", "port", "username", "password"]
+            for field in required_fields:
+                if not proxy_config.get(field):
+                    print(f"[GOLOGIN WARMUP] Proxy field '{field}' is empty. Skipping proxy update.")
+                    return False
+        
+            # Convert port to integer
+            try:
+                port = int(proxy_config["port"])
+            except ValueError:
+                print(f"[GOLOGIN WARMUP] ✗ Invalid port number: {proxy_config['port']}")
+                return False
+        
+            # Build API request payload
+            api_url = "https://api.gologin.com/browser/proxy/many/v2"
+            headers = {
+                "Authorization": f"Bearer {api_token}",
+                "Content-Type": "application/json"
+            }
+        
+            # Build proxies array for all profiles
+            proxies_array = []
+            for profile_id in profile_ids:
+                proxy_data = {
+                    "profileId": profile_id,
+                    "proxy": {
+                        "id": None,  # null for new proxy
+                        "mode": proxy_config["mode"],
+                        "host": proxy_config["host"],
+                        "port": port,
+                        "username": proxy_config["username"],
+                        "password": proxy_config["password"],
+                        "changeIpUrl": None,  # null
+                        "customName": None   # null
+                    }
+                }
+                proxies_array.append(proxy_data)
+        
+            payload = {"proxies": proxies_array}
+        
+            print(f"[GOLOGIN WARMUP] Updating proxy for {len(profile_ids)} profiles...")
+            print(f"[GOLOGIN WARMUP] Proxy: {proxy_config['mode']}://{proxy_config['host']}:{port}")
+        
+            # Send PATCH request
+            response = requests.patch(api_url, json=payload, headers=headers, timeout=30)
+        
+            if response.status_code in [200, 201, 204]:
+                print(f"[GOLOGIN WARMUP] ✓ Proxy updated successfully for all profiles")
+                return True
+            else:
+                print(f"[GOLOGIN WARMUP] ✗ Proxy update failed: {response.status_code}")
+                print(f"[GOLOGIN WARMUP] Response: {response.text}")
+                return False
+            
+        except Exception as e:
+            print(f"[GOLOGIN WARMUP] ✗ Error updating proxy: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+
     
     def _connect_selenium(self, debugger_address):
         """Connect Selenium to GoLogin Orbita browser"""

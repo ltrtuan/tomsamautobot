@@ -306,6 +306,9 @@ class ActionItemFrame(tk.Frame):
         
         elif action_type == ActionType.GOLOGIN_SELENIUM_COLLECT:
             return "🌐"  # Icon globe cho Selenium Collect
+        
+        elif action_type == ActionType.GET_NEW_PROXY:  # THÊM DÒNG NÀY
+            return "🔌" # Icon plug/connection cho proxy
         else:
             return "📋"  # Icon mặc định cho các loại khác
     
@@ -441,6 +444,7 @@ class ActionItemFrame(tk.Frame):
             'GOLOGIN_STOP_PROFILE',
             'GOLOGIN_GET_COOKIES',
             'GOLOGIN_SELENIUM_COLLECT',
+            'GET_NEW_PROXY',
             'UPLOAD_SCRIPT'
             # Thêm các action khác nếu cần
         ]
@@ -901,6 +905,10 @@ class ActionItemFrame(tk.Frame):
                 websites_display = "No websites"
     
             return f"{indent}Profile: {profile_display} | {websites_display} | {duration}min"
+        
+        elif action_type_display == ActionType.GET_NEW_PROXY:
+            provider = action.parameters.get("provider", "")
+            return f"{indent}Provider: {provider}"
         
         return indent  # Trả về ít nhất là indent
 

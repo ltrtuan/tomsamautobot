@@ -354,7 +354,92 @@ class GoLoginAPI:
             traceback.print_exc()
             return False, str(e)
 
+    def update_proxy_for_profiles(self, profile_ids, proxy_config):
+        """
+        Update proxy for multiple profiles using GoLogin API
+        API: PATCH https://api.gologin.com/browser/proxy/many/v2
+        Documentation: https://gologin.com/docs/api-reference/profile/update-proxy-for-multiple-profiles
+    
+        Args:
+            profile_ids: List of profile IDs
+            proxy_config: Dict with keys: mode, host, port, username, password
+                - mode: Proxy type (e.g., 'http', 'socks5')
+                - host: Proxy host/IP address
+                - port: Proxy port (int or str, will be converted to int)
+                - username: Proxy username
+                - password: Proxy password
+    
+        Returns:
+            (success: bool, message: str)
+        """
+        try:
+            # Validate all 5 required fields are present
+            required_fields = ["mode", "host", "port", "username", "password"]
+            for field in required_fields:
+                if not proxy_config.get(field):
+                    return False, f"Proxy field '{field}' is missing or empty"
         
+            # Convert port to integer
+            try:
+                port = int(proxy_config["port"])
+            except ValueError:
+                return False, f"Invalid port number: {proxy_config['port']}"
+        
+            # Ensure profile_ids is a list
+            if isinstance(profile_ids, str):
+                profile_ids = [profile_ids]
+        
+            print(f"[GOLOGIN] Updating proxy for {len(profile_ids)} profile(s)...")
+            print(f"[GOLOGIN] Proxy: {proxy_config['mode']}://{proxy_config['host']}:{port}")
+        
+            # Build API request payload
+            url = f"{self.base_url}/browser/proxy/many/v2"
+        
+            # Build proxies array for all profiles
+            proxies_array = []
+            for profile_id in profile_ids:
+                proxy_data = {
+                    "profileId": profile_id,
+                    "proxy": {
+                        "id": None,  # null for new proxy
+                        "mode": proxy_config["mode"],
+                        "host": proxy_config["host"],
+                        "port": port,
+                        "username": proxy_config["username"],
+                        "password": proxy_config["password"],
+                        "changeIpUrl": None,  # null
+                        "customName": None   # null
+                    }
+                }
+                proxies_array.append(proxy_data)
+        
+            payload = {"proxies": proxies_array}
+        
+            # Send PATCH request
+            response = requests.patch(url, json=payload, headers=self.headers, timeout=30)
+        
+            if response.status_code in [200, 201]:
+                print(f"[GOLOGIN] ✓ Proxy updated successfully for all profiles")
+                return True, f"Proxy updated for {len(profile_ids)} profile(s)"
+            else:
+                error_msg = f"API returned status {response.status_code}"
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get("message", error_msg)
+                except:
+                    error_msg = f"{error_msg}: {response.text[:200]}"
+            
+                print(f"[GOLOGIN] ✗ Proxy update failed: {error_msg}")
+                return False, error_msg
+            
+        except Exception as e:
+            print(f"[GOLOGIN] Error updating proxy: {e}")
+            import traceback
+            traceback.print_exc()
+            return False, str(e)
+
+
+
     def update_cookies(self, profile_id, cookies, replace_all=True):
         """
         Update cookies for profile

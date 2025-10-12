@@ -34,6 +34,7 @@
     <Compile Include="controllers\actions\end_for_action.py" />
     <Compile Include="controllers\actions\end_if_condition_action.py" />
     <Compile Include="controllers\actions\for_action.py" />
+    <Compile Include="controllers\actions\get_new_proxy_action.py" />
     <Compile Include="controllers\actions\gologin_create_action.py" />
     <Compile Include="controllers\actions\gologin_get_cookies_action.py" />
     <Compile Include="controllers\actions\gologin_selenium_collect_action.py" />
@@ -69,6 +70,7 @@
     <Compile Include="models\human_like_movement.py" />
     <Compile Include="models\image_search.py" />
     <Compile Include="models\text_searcher.py" />
+    <Compile Include="models\tmproxy_api.py" />
     <Compile Include="models\__init__.py" />
     <Compile Include="views\action_dialog_view.py" />
     <Compile Include="views\action_list_view.py" />
@@ -80,6 +82,7 @@
     <Compile Include="views\action_params\end_for_params.py" />
     <Compile Include="views\action_params\end_if_condition_params.py" />
     <Compile Include="views\action_params\for_params.py" />
+    <Compile Include="views\action_params\get_new_proxy_params.py" />
     <Compile Include="views\action_params\gologin_create_params.py" />
     <Compile Include="views\action_params\gologin_get_cookies_params.py" />
     <Compile Include="views\action_params\gologin_selenium_collect_params.py" />

@@ -348,6 +348,85 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
             fg="#666666"
         )
         cookies_hint.pack(anchor=tk.W)
+        
+        
+        # ========== PROXY CONFIGURATION SECTION ==========
+        separator2 = ttk.Separator(options_frame, orient='horizontal')
+        separator2.pack(fill=tk.X, pady=10)
+
+        proxy_label = tk.Label(
+            options_frame,
+            text="Proxy Configuration (Optional - from Variables):",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10, "bold")
+        )
+        proxy_label.pack(anchor=tk.W, pady=(5, 5))
+
+        # Row 1: Mode Variable, Host Variable, Port Variable
+        row1 = tk.Frame(options_frame, bg=cfg.LIGHT_BG_COLOR)
+        row1.pack(fill=tk.X, pady=3)
+
+        tk.Label(row1, text="Mode Var:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0,5))
+        self.proxy_mode_var = tk.StringVar()
+        if self.parameters:
+            self.proxy_mode_var.set(self.parameters.get("proxy_mode_variable", ""))
+        else:
+            self.proxy_mode_var.set("")
+        mode_entry = ttk.Entry(row1, textvariable=self.proxy_mode_var, width=15)
+        mode_entry.pack(side=tk.LEFT, padx=5)
+
+        tk.Label(row1, text="Host Var:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(15,5))
+        self.proxy_host_var = tk.StringVar()
+        if self.parameters:
+            self.proxy_host_var.set(self.parameters.get("proxy_host_variable", ""))
+        else:
+            self.proxy_host_var.set("")
+        host_entry = ttk.Entry(row1, textvariable=self.proxy_host_var, width=15)
+        host_entry.pack(side=tk.LEFT, padx=5)
+
+        tk.Label(row1, text="Port Var:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(15,5))
+        self.proxy_port_var = tk.StringVar()
+        if self.parameters:
+            self.proxy_port_var.set(self.parameters.get("proxy_port_variable", ""))
+        else:
+            self.proxy_port_var.set("")
+        port_entry = ttk.Entry(row1, textvariable=self.proxy_port_var, width=15)
+        port_entry.pack(side=tk.LEFT, padx=5)
+
+        # Row 2: Username Variable, Password Variable
+        row2 = tk.Frame(options_frame, bg=cfg.LIGHT_BG_COLOR)
+        row2.pack(fill=tk.X, pady=3)
+
+        tk.Label(row2, text="User Var:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0,5))
+        self.proxy_username_var = tk.StringVar()
+        if self.parameters:
+            self.proxy_username_var.set(self.parameters.get("proxy_username_variable", ""))
+        else:
+            self.proxy_username_var.set("")
+        user_entry = ttk.Entry(row2, textvariable=self.proxy_username_var, width=20)
+        user_entry.pack(side=tk.LEFT, padx=5)
+
+        tk.Label(row2, text="Pass Var:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(15,5))
+        self.proxy_password_var = tk.StringVar()
+        if self.parameters:
+            self.proxy_password_var.set(self.parameters.get("proxy_password_variable", ""))
+        else:
+            self.proxy_password_var.set("")
+        pass_entry = ttk.Entry(row2, textvariable=self.proxy_password_var, width=20)
+        pass_entry.pack(side=tk.LEFT, padx=5)
+
+        # Hint
+        proxy_hint = tk.Label(
+            options_frame,
+            text="💡 Enter variable NAMES (e.g., proxy_mode, proxy_host). Fill all 5 to update proxy for ALL profiles before starting.",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 8),
+            fg="#666666",
+            wraplength=500,
+            justify=tk.LEFT
+        )
+        proxy_hint.pack(anchor=tk.W, pady=(2,0))
+
     
     def create_websites_section(self):
         """Websites file browse and variable"""
@@ -690,5 +769,12 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         
         params["keywords_file"] = self.keywords_file_var.get().strip()
         params["keywords_variable"] = self.keywords_variable_var.get().strip()
+        
+        # Proxy params - THÊM 5 DÒNG NÀY
+        params["proxy_mode_variable"] = self.proxy_mode_var.get().strip()
+        params["proxy_host_variable"] = self.proxy_host_var.get().strip()
+        params["proxy_port_variable"] = self.proxy_port_var.get().strip()
+        params["proxy_username_variable"] = self.proxy_username_var.get().strip()
+        params["proxy_password_variable"] = self.proxy_password_var.get().strip()
         
         return params
