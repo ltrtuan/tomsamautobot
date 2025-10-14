@@ -6,6 +6,7 @@ import tempfile
 import os
 import subprocess
 import psutil
+import json
 
 class GoLoginAPI:
     """Class quản lý GoLogin API - 3 methods: Create, Start, Stop"""
@@ -109,7 +110,9 @@ class GoLoginAPI:
                     gologin_config = {
                         "token": self.api_token,
                         "profile_id": profile_id,
-                        "tmpdir": self.tmpdir
+                        "tmpdir": self.tmpdir,
+                        "writeCookesFromServer": True,
+                        "uploadCookiesToServer": False
                     }
                 
                     # Add extra_params if provided (for headless mode)
@@ -175,11 +178,7 @@ class GoLoginAPI:
     
     def stop_profile(self, profile_id):
         """
-        Stop profile - Close browser VÀ sync data lên cloud
-    
-        Args:
-            profile_id: Profile ID to stop
-            clean_profile: If True, xóa profile folder local (default False)
+        Stop profile - Close browser and cleanup processes
         """
         try:
             profile_id = str(profile_id).strip()
@@ -188,20 +187,20 @@ class GoLoginAPI:
             if profile_id in self.active_profiles:
                 gl = self.active_profiles[profile_id]
             
-                # ← THAY ĐỔI: GỌI gl.stop() để sync
-                print(f"[GOLOGIN] Closing browser and syncing data to cloud...")
-            
+                # Stop browser
                 try:
-                    gl.stop()  # ← Sync localStorage/IndexedDB lên GoLogin cloud
-                    print(f"[GOLOGIN] ✓ Data synced to cloud")
-                except Exception as e:
-                    print(f"[GOLOGIN] ⚠ Sync warning: {e}")
+                    print(f"[GOLOGIN] Closing browser and syncing data to cloud...")
+                    gl.stop()
+                except Exception as stop_err:
+                    print(f"[GOLOGIN] ⚠ Stop error: {stop_err}")
+            
+                # Force kill Orbita/Chrome processes if still running
+                self._force_kill_browser_processes(profile_id)
             
                 # Remove from active profiles
                 del self.active_profiles[profile_id]
-            
                 print(f"[GOLOGIN] ✓ Profile stopped!")
-                return True, "Profile stopped and synced"
+                return True, "Profile stopped"
             else:
                 print(f"[GOLOGIN] ⚠ No active instance found")
                 return False, "Profile not running"
@@ -209,6 +208,78 @@ class GoLoginAPI:
         except Exception as e:
             print(f"[GOLOGIN] Stop error: {e}")
             return False, str(e)
+    
+        
+    def _force_kill_browser_processes(self, profile_id):
+        """
+        Force kill Orbita/Chrome processes ONLY related to GoLogin profile
+        SAFE: Will NOT kill user's personal Chrome browser
+        """
+        try:
+            import psutil
+            killed_count = 0
+        
+            # Get tmpdir path to identify GoLogin processes
+            tmpdir_lower = self.tmpdir.lower()
+        
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'exe']):
+                try:
+                    proc_name = proc.info['name'].lower() if proc.info['name'] else ''
+                
+                    # Check if it's a browser process
+                    is_browser = any(name in proc_name for name in ['orbita', 'chrome', 'chromium'])
+                
+                    if is_browser and proc.info['cmdline']:
+                        cmdline = ' '.join(proc.info['cmdline']).lower()
+                    
+                        # CRITICAL CHECK: Only kill if related to GoLogin
+                        # Must have at least 2 of these conditions:
+                        is_gologin_process = False
+                        match_count = 0
+                    
+                        # Check 1: Profile ID in command line
+                        if profile_id.lower() in cmdline:
+                            match_count += 1
+                    
+                        # Check 2: "gologin" keyword in command line or exe path
+                        if 'gologin' in cmdline:
+                            match_count += 1
+                        elif proc.info['exe']:
+                            exe_path = proc.info['exe'].lower()
+                            if 'gologin' in exe_path:
+                                match_count += 1
+                    
+                        # Check 3: Temp directory in command line
+                        if tmpdir_lower in cmdline or 'appdata\\local\\temp\\gologin' in cmdline:
+                            match_count += 1
+                    
+                        # Check 4: "orbita" in process name or path (GoLogin's browser)
+                        if 'orbita' in proc_name:
+                            match_count += 1
+                        elif proc.info['exe'] and 'orbita' in proc.info['exe'].lower():
+                            match_count += 1
+                    
+                        # Only kill if at least 2 conditions match
+                        is_gologin_process = match_count >= 2
+                    
+                        if is_gologin_process:
+                            print(f"[GOLOGIN] Force killing GoLogin {proc_name} process: {proc.info['pid']} (matches: {match_count})")
+                            proc.kill()
+                            killed_count += 1
+                        else:
+                            # This is likely user's personal Chrome - DO NOT KILL
+                            pass
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+        
+            if killed_count > 0:
+                print(f"[GOLOGIN] ✓ Killed {killed_count} GoLogin browser process(es)")
+                time.sleep(2)  # Wait for processes to die
+            else:
+                print(f"[GOLOGIN] No GoLogin browser processes to kill")
+            
+        except Exception as e:
+            print(f"[GOLOGIN] ⚠ Process kill warning: {e}")
 
 
     # def stop_profile(self, profile_id, clean_profile=False):
@@ -455,11 +526,75 @@ class GoLoginAPI:
             response = requests.post(url, headers=self.headers, params=params, json=cookies, timeout=30)
         
             if response.status_code in [200, 204]:
+                print(f"Status {response.status_code}: {response.text}")
                 return True, "Cookies updated successfully"
             else:
                 return False, f"Status {response.status_code}: {response.text}"
         except Exception as e:
             return False, str(e)
+
+    def add_cookies_to_profile(self, profile_id, cookies_file_path):
+        """
+        Add cookies to profile BEFORE starting using addCookiesToProfile()
+        This is the CORRECT way per GoLogin docs
+        :param profile_id: Profile ID
+        :param cookies_file_path: Path to cookies JSON file
+        :return: (success, message)
+        """
+        try:
+            profile_id = str(profile_id).strip()
+        
+            # Load cookies from file
+            if not os.path.exists(cookies_file_path):
+                return False, "Cookies file not found"
+        
+            with open(cookies_file_path, 'r', encoding='utf-8') as f:
+                cookies_data = json.load(f)
+        
+            if not cookies_data:
+                return False, "No cookies in file"
+        
+            # Convert format if needed (your format already matches)
+            cookies_for_gologin = []
+            for cookie in cookies_data:
+                gl_cookie = {
+                    "name": cookie.get("name"),
+                    "value": cookie.get("value"),
+                    "domain": cookie.get("domain"),
+                    "path": cookie.get("path", "/"),
+                    "secure": cookie.get("secure", False),
+                    "httpOnly": cookie.get("httpOnly", False)
+                }
+            
+                # Add expirationDate if not session cookie
+                if not cookie.get("session", False) and "expirationDate" in cookie:
+                    gl_cookie["expirationDate"] = cookie["expirationDate"]
+            
+                # Add sameSite if present
+                if "sameSite" in cookie and cookie["sameSite"] != "unspecified":
+                    gl_cookie["sameSite"] = cookie["sameSite"]
+            
+                cookies_for_gologin.append(gl_cookie)
+        
+            # Create temporary GoLogin instance for this operation
+            gl = GoLogin({
+                "token": self.api_token,
+                "profile_id": profile_id,
+                "tmpdir": self.tmpdir
+            })
+        
+            # Add cookies using SDK method
+            print(f"[GOLOGIN] Adding {len(cookies_for_gologin)} cookies to profile...")
+            gl.addCookiesToProfile(profile_id, cookies_for_gologin)
+        
+            print(f"[GOLOGIN] ✓ Cookies added to profile")
+            return True, f"Added {len(cookies_for_gologin)} cookies"
+        
+        except Exception as e:
+            print(f"[GOLOGIN] Error adding cookies: {e}")
+            return False, str(e)
+
+
 
 
     def get_cookies(self, profile_id):
