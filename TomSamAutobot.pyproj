@@ -35,9 +35,12 @@
     <Compile Include="controllers\actions\end_if_condition_action.py" />
     <Compile Include="controllers\actions\for_action.py" />
     <Compile Include="controllers\actions\get_new_proxy_action.py" />
+    <Compile Include="controllers\actions\gologin_clone_action.py" />
     <Compile Include="controllers\actions\gologin_create_action.py" />
     <Compile Include="controllers\actions\gologin_get_cookies_action.py" />
     <Compile Include="controllers\actions\gologin_selenium_collect_action.py" />
+    <Compile Include="controllers\actions\gologin_selenium_start_action.py" />
+    <Compile Include="controllers\actions\gologin_selenium_stop_action.py" />
     <Compile Include="controllers\actions\gologin_start_action.py" />
     <Compile Include="controllers\actions\gologin_stop_action.py" />
     <Compile Include="controllers\actions\if_condition_action.py" />
@@ -62,6 +65,7 @@
     <Compile Include="exceptions\loop_exceptions.py" />
     <Compile Include="exceptions\__init__.py" />
     <Compile Include="helpers\selenium_actions.py" />
+    <Compile Include="helpers\selenium_registry.py" />
     <Compile Include="login_window.py" />
     <Compile Include="main.py" />
     <Compile Include="models\action_model.py" />
@@ -83,9 +87,12 @@
     <Compile Include="views\action_params\end_if_condition_params.py" />
     <Compile Include="views\action_params\for_params.py" />
     <Compile Include="views\action_params\get_new_proxy_params.py" />
+    <Compile Include="views\action_params\gologin_clone_params.py" />
     <Compile Include="views\action_params\gologin_create_params.py" />
     <Compile Include="views\action_params\gologin_get_cookies_params.py" />
     <Compile Include="views\action_params\gologin_selenium_collect_params.py" />
+    <Compile Include="views\action_params\gologin_selenium_start_params.py" />
+    <Compile Include="views\action_params\gologin_selenium_stop_params.py" />
     <Compile Include="views\action_params\gologin_start_params.py" />
     <Compile Include="views\action_params\gologin_stop_params.py" />
     <Compile Include="views\action_params\if_condition_params.py" />

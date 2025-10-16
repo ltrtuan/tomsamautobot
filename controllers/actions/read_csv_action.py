@@ -103,12 +103,10 @@ class ReadCsvAction(BaseAction):
         """Select row based on how_to_get method"""
         if how_to_get == "Random":
             return random.choice(rows)
-        elif how_to_get == "Sequential by loop":
-            globals_var = GlobalVariables()
-            loop_index_str = globals_var.get("loop_index", "1")
-            try:
-                loop_index = int(loop_index_str)
-                index = (loop_index - 1) % len(rows)
+        elif how_to_get == "Sequential by loop":        
+            loop_index = GlobalVariables().get("loop_index", "0")
+            try:             
+                index = int(loop_index) % len(rows)
                 return rows[index]
             except:
                 return rows[0]

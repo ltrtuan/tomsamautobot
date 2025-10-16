@@ -10,6 +10,7 @@ import time
 from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from helpers.selenium_registry import register_selenium_driver, unregister_selenium_driver
 
 class GoLoginSeleniumCollectAction(BaseAction):
     """Handler for GoLogin Selenium Warm Up action"""
@@ -33,21 +34,48 @@ class GoLoginSeleniumCollectAction(BaseAction):
         
             print(f"[GOLOGIN WARMUP] Using API token from variable: {api_key_variable}")
         
-            # Get profile IDs
-            profile_ids = self.params.get("profile_ids", "").strip()
-            if not profile_ids:
-                print("[GOLOGIN WARMUP] Error: Profile IDs are required")
-                self.set_variable(False)
-                return
+            # ========== NEW: CHECK "ALL PROFILES" OPTION ==========
+            all_profiles = self.params.get("all_profiles", False)
         
-            # Parse profile IDs
-            profile_list = self._parse_profile_ids(profile_ids)
-            if not profile_list:
-                print("[GOLOGIN WARMUP] Error: No valid profile IDs found")
-                self.set_variable(False)
-                return
+            if all_profiles:
+                print("[GOLOGIN WARMUP] ========== FETCHING ALL PROFILES ==========")
+                gologin_api = get_gologin_api(api_token)
+            
+                # Call API to get all profiles
+                success, profiles_data = gologin_api.get_all_profiles()
+            
+                if not success:
+                    print(f"[GOLOGIN WARMUP] ✗ Failed to fetch profiles: {profiles_data}")
+                    self.set_variable(False)
+                    return
+            
+                # Extract profile IDs from response
+                profile_list = [profile.get("id") for profile in profiles_data if profile.get("id")]
+            
+                if not profile_list:
+                    print("[GOLOGIN WARMUP] ✗ No profiles found in account")
+                    self.set_variable(False)
+                    return
+            
+                print(f"[GOLOGIN WARMUP] ✓ Fetched {len(profile_list)} profiles from API")
+                print(f"[GOLOGIN WARMUP] Profile IDs: {', '.join(profile_list[:5])}{'...' if len(profile_list) > 5 else ''}")
         
-            print(f"[GOLOGIN WARMUP] Total profiles to warm up: {len(profile_list)}")
+            else:
+                # Original logic: Get profile IDs from params
+                profile_ids = self.params.get("profile_ids", "").strip()
+                if not profile_ids:
+                    print("[GOLOGIN WARMUP] Error: Profile IDs are required")
+                    self.set_variable(False)
+                    return
+            
+                # Parse profile IDs
+                profile_list = self._parse_profile_ids(profile_ids)
+                if not profile_list:
+                    print("[GOLOGIN WARMUP] Error: No valid profile IDs found")
+                    self.set_variable(False)
+                    return
+            
+                print(f"[GOLOGIN WARMUP] Total profiles to warm up: {len(profile_list)}")
             
             # ========== CHECK AND UPDATE PROXY IF PROVIDED ==========
             # Get proxy variable names
@@ -136,12 +164,13 @@ class GoLoginSeleniumCollectAction(BaseAction):
 
     def _warmup_single_profile(self, profile_id, api_token):
         """Warm up a single profile - can be called from thread"""
+        driver = None
+        gologin = None
         try:
             print(f"\n[GOLOGIN WARMUP] [{profile_id}] Starting warm up...")
-        
+            self._kill_zombie_chrome_processes(profile_id)
             # Get options
-            refresh_fingerprint = self.params.get("refresh_fingerprint", False)
-            delete_cookies = self.params.get("delete_cookies", False)
+            refresh_fingerprint = self.params.get("refresh_fingerprint", False)           
             headless = self.params.get("headless", False)
         
             # Get GoLogin API instance
@@ -156,21 +185,6 @@ class GoLoginSeleniumCollectAction(BaseAction):
                 else:
                     print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Failed to refresh fingerprint")
         
-            # Delete cookies if requested (BEFORE starting profile)
-            if delete_cookies:
-                print(f"[GOLOGIN WARMUP] [{profile_id}] Deleting cookies...")
-                success, result = gologin.update_cookies(profile_id, [], replace_all=True)  # ✓ ĐÚNG
-                if success:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Cookies deleted")
-                else:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Failed to delete cookies: {result}")
-
-            # Import cookies if not deleting (BEFORE starting profile)
-            if not delete_cookies:
-                cookies_imported = self._import_cookies_if_provided(gologin, profile_id)
-                if cookies_imported:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Cookies imported successfully")
-        
             # Start profile
             print(f"[GOLOGIN WARMUP] [{profile_id}] Starting profile...")
         
@@ -181,7 +195,12 @@ class GoLoginSeleniumCollectAction(BaseAction):
                     "--mute-audio",  # Mute audio
                     "--disable-background-networking",
                     "--disable-extensions",
-                    "--enable-features=NetworkService",  # Enable cookies
+                    "--enable-features=NetworkService",  # Enable cookies        
+                    # ← THÊM CÁC FLAG NÀY ĐỂ FORCE SAVE HISTORY                    
+                    "--enable-logging",  # Enable logging
+                    "--v=1",  # Verbose level
+                    "--disk-cache-size=0",  # Disable cache to force writes
+                    "--media-cache-size=0",
                     "--disable-features=CookiesWithoutSameSiteMustBeSecure",  # Allow all cookies
                     "--disable-dev-shm-usage",  # ← QUAN TRỌNG: Không dùng /dev/shm
                     "--disable-gpu",             # ← Tắt GPU trong headless
@@ -194,11 +213,28 @@ class GoLoginSeleniumCollectAction(BaseAction):
                     "--allow-insecure-localhost",           # Allow insecure localhost
                     "--reduce-security-for-testing",        # Reduce security for testing
                     "--disable-site-isolation-trials",      # Disable site isolation
+                    # ← THÊM: Disable GCM to prevent QUOTA_EXCEEDED
+                    "--disable-background-timer-throttling",
+                    "--disable-backgrounding-occluded-windows",
+                    "--disable-breakpad",
+                    "--disable-component-extensions-with-background-pages",
+                    "--disable-features=TranslateUI,BlinkGenPropertyTrees",
+                    "--disable-ipc-flooding-protection",
+                    "--disable-renderer-backgrounding",
+                    "--disable-sync",  # ← QUAN TRỌNG: Tắt Chrome sync
+                    "--gcm-channel-status-poll-interval-seconds=0",  # ← Disable GCM polling
                 ]
             else:
                 extra_params = [                  
                     "--enable-features=NetworkService",
-                    "--disable-features=CookiesWithoutSameSiteMustBeSecure"
+                    "--disable-features=CookiesWithoutSameSiteMustBeSecure",
+                    "--enable-logging",  # Enable logging
+                    "--v=1",  # Verbose level
+                    "--disk-cache-size=0",  # Disable cache to force writes
+                    "--media-cache-size=0",
+                     # ← THÊM: Disable GCM for non-headless too
+                    "--disable-sync",
+                    "--gcm-channel-status-poll-interval-seconds=0",
                 ]
         
             success, debugger_address = gologin.start_profile(profile_id, extra_params=extra_params)
@@ -216,18 +252,14 @@ class GoLoginSeleniumCollectAction(BaseAction):
                 gologin.stop_profile(profile_id)
                 return False
             
+            # ← REGISTER DRIVER FOR AUTO-CLEANUP
+            register_selenium_driver(driver)
+            
             # ← THÊM: Clean up old tabs from previous sessions
             print(f"[GOLOGIN WARMUP] [{profile_id}] Checking browser tabs...")
             self._cleanup_browser_tabs(driver)
             
-            # ← THÊM: Inject cookies directly via Selenium (after browser started)
-            if not delete_cookies:
-                print(f"[GOLOGIN WARMUP] [{profile_id}] Injecting cookies directly to Orbita...")
-                cookies_injected = self._inject_cookies_via_cdp(driver, profile_id)
-                if cookies_injected:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Cookies injected via Selenium")
-                else:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ No cookies injected via Selenium")
+         
         
             # Load websites list
             websites = self._load_websites()
@@ -258,58 +290,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
             # Wait for async operations to complete
             print(f"[GOLOGIN WARMUP] [{profile_id}] Waiting for browser data to settle...")
             time.sleep(5)
-
-          
-
-            # ← THÊM: Close all tabs before quitting to avoid folder lock issues
-            print(f"[GOLOGIN WARMUP] [{profile_id}] Closing all tabs...")
-            self._close_all_tabs(driver)
-            time.sleep(5)  # Wait for tabs to fully close
-            
-            # ← GET COOKIES TRƯỚC KHI QUIT BROWSER (từ Selenium)
-            print(f"[GOLOGIN WARMUP] [{profile_id}] Getting cookies from browser...")
-            cookies_from_browser = []
-            try:
-                cookies_from_browser = driver.get_cookies()
-                print(f"[GOLOGIN WARMUP] [{profile_id}] Retrieved {len(cookies_from_browser)} cookies from browser")
-            except Exception as e:
-                print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Failed to get cookies: {e}")
-
-            # Close browser
-            driver.quit()
-            print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Browser closed")
-
-            # Wait longer for Chrome cleanup (increase from 3 to 5 seconds)
-            print(f"[GOLOGIN WARMUP] [{profile_id}] Waiting for Chrome process cleanup...")
-            time.sleep(5)  # ← TĂNG từ 3s lên 5s
-
-        
-            # Stop profile - This will upload cookies to cloud if uploadCookiesToServer=True
-            print(f"[GOLOGIN WARMUP] [{profile_id}] Stopping profile...")
-            success, msg = gologin.stop_profile(profile_id)
-
-            if success:
-                print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Profile stopped and data synced")
-    
-                # ← DI CHUYỂN: Wait for cloud sync to complete
-                print(f"[GOLOGIN WARMUP] [{profile_id}] Waiting for cookies to sync to cloud...")
-                time.sleep(5)  # Wait for upload to complete
-    
-                # ← SAVE COOKIES từ Selenium (không từ GoLogin API)
-                if cookies_from_browser:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] Saving cookies from browser...")
-                    cookies_saved = self._save_cookies_direct(profile_id, cookies_from_browser)
-        
-                    if cookies_saved:
-                        print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Cookies saved: {cookies_saved}")
-                    else:
-                        print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Failed to save cookies")
-                else:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ No cookies to save")
-    
-            else:
-                print(f"[GOLOGIN WARMUP] [{profile_id}] ✗ Stop failed: {msg}")
-                
+           
             return True
         
         except Exception as e:
@@ -319,9 +300,56 @@ class GoLoginSeleniumCollectAction(BaseAction):
             return False
 
 
+        finally:
+            # ========== CLEANUP BLOCK - LUÔN CHẠY ==========
+            print(f"[GOLOGIN WARMUP] [{profile_id}] Running cleanup...")
+        
+            # 1. Close browser
+            if driver:
+                try:
+                    # Unregister from auto-cleanup first
+                    unregister_selenium_driver(driver)
+                
+                    # Quit driver
+                    driver.quit()
+                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Browser closed")
+                except Exception as cleanup_err:
+                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Browser cleanup warning: {cleanup_err}")
+                    
+                finally:
+                    # ← FIX: CRITICAL - Set driver to None to prevent reuse
+                    driver = None
+        
+            # 2. Wait for Chrome cleanup
+            print(f"[GOLOGIN WARMUP] [{profile_id}] Waiting for Chrome process cleanup...")
+            time.sleep(5)
+        
+            # 3. Stop profile
+            if gologin:
+                try:
+                    print(f"[GOLOGIN WARMUP] [{profile_id}] Stopping profile...")
+                    success, msg = gologin.stop_profile(profile_id)
+                    if success:
+                        print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Profile stopped and data synced")
+                    
+                        # Wait for cloud sync
+                        print(f"[GOLOGIN WARMUP] [{profile_id}] Waiting for cookies to sync to cloud...")
+                        time.sleep(5)
+                    
+                    else:
+                        print(f"[GOLOGIN WARMUP] [{profile_id}] ✗ Stop failed: {msg}")
+                except Exception as stop_err:
+                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Stop profile error: {stop_err}")
+        
+            print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Cleanup completed")
+            # ========== END CLEANUP BLOCK ==========
+
     def _warmup_parallel(self, profile_list, api_token):
-        """Warm up multiple profiles in parallel using threading"""
-        from concurrent.futures import ThreadPoolExecutor, as_completed
+        """
+        Warm up multiple profiles in parallel using threading
+        WITH TIMEOUT to prevent hanging on cleanup
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
     
         # Get max workers
         max_workers_str = self.params.get("max_workers", "3")
@@ -335,43 +363,190 @@ class GoLoginSeleniumCollectAction(BaseAction):
         print(f"[GOLOGIN WARMUP] Warming up {len(profile_list)} profiles with {max_workers} parallel threads")
         print(f"[GOLOGIN WARMUP] Profiles: {', '.join(profile_list)}")
     
+        # Calculate timeout per profile
+        duration_minutes = self.params.get("duration_minutes", "5")
+        try:
+            duration_minutes = float(duration_minutes)
+        except:
+            duration_minutes = 5
+    
+        # Timeout = browsing time + 5 minutes buffer for start/stop
+        timeout_per_profile = int((duration_minutes + 5) * 60)
+        total_timeout = timeout_per_profile * len(profile_list)  # Total timeout for all profiles
+    
+        print(f"[GOLOGIN WARMUP] Timeout per profile: {timeout_per_profile}s")
+        print(f"[GOLOGIN WARMUP] Max total timeout: {total_timeout}s")
+    
         # Store results
         results = []
+        completed_profiles = []
+        timeout_profiles = []
     
-        # Create thread pool
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Submit all profiles to thread pool
-            future_to_profile = {
-                executor.submit(self._warmup_single_profile, profile_id, api_token): profile_id
-                for profile_id in profile_list
-            }
+        # Create thread pool WITHOUT context manager (for explicit control)
+        executor = ThreadPoolExecutor(max_workers=max_workers)
+    
+        try:
+            # Submit all profiles to thread pool WITH STAGGER
+            future_to_profile = {}
+            for i, profile_id in enumerate(profile_list):
+                # ← THÊM: Add 3s delay between each thread start (prevent race condition)
+                if i > 0:
+                    time.sleep(3)
+    
+                future = executor.submit(self._warmup_single_profile, profile_id, api_token)
+                future_to_profile[future] = profile_id
+                print(f"[GOLOGIN WARMUP] Submitted thread {i+1}/{len(profile_list)}: {profile_id}")
+
+            print(f"[GOLOGIN WARMUP] All threads submitted, waiting for completion...")
         
-            # Wait for all threads to complete
-            for future in as_completed(future_to_profile):
-                profile_id = future_to_profile[future]
+            # Wait for all threads to complete WITH GLOBAL TIMEOUT
+            try:
+                for future in as_completed(future_to_profile, timeout=total_timeout):
+                    profile_id = future_to_profile[future]
+                
+                    try:
+                        # Get result with individual timeout
+                        success = future.result(timeout=60)  # 60s to retrieve result
+                        results.append(success)
+                        completed_profiles.append(profile_id)
+                    
+                        if success:
+                            print(f"[GOLOGIN WARMUP] ✓ Profile {profile_id} completed successfully")
+                        else:
+                            print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} failed")
+                        
+                    except TimeoutError:
+                        print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} TIMEOUT (result retrieval)")
+                        results.append(False)
+                        timeout_profiles.append(profile_id)
+                    
+                    except Exception as e:
+                        print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} exception: {e}")
+                        results.append(False)
+        
+            except TimeoutError:
+                print(f"[GOLOGIN WARMUP] ⚠ GLOBAL TIMEOUT reached after {total_timeout}s")
+                print(f"[GOLOGIN WARMUP] Some profiles may not have completed")
+            
+                # Mark remaining profiles as timeout
+                for profile_id in profile_list:
+                    if profile_id not in completed_profiles and profile_id not in timeout_profiles:
+                        print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} TIMEOUT (global)")
+                        results.append(False)
+                        timeout_profiles.append(profile_id)
+    
+        except Exception as e:
+            print(f"[GOLOGIN WARMUP] ⚠ Unexpected error in thread pool: {e}")
+            import traceback
+            traceback.print_exc()
+    
+        finally:
+            # CRITICAL: Force shutdown thread pool
+            print(f"[GOLOGIN WARMUP] Forcing thread pool shutdown...")
+        
+            try:
+                # Try graceful shutdown first (wait max 10s)
+                executor.shutdown(wait=True, timeout=10)
+                print(f"[GOLOGIN WARMUP] ✓ Thread pool gracefully shut down")
+            except:
+                # If timeout not supported (Python < 3.9), use wait=False
                 try:
-                    success = future.result()
-                    results.append(success)
-                    if success:
-                        print(f"[GOLOGIN WARMUP] ✓ Profile {profile_id} completed successfully")
-                    else:
-                        print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} failed")
-                except Exception as e:
-                    print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} exception: {e}")
-                    results.append(False)
+                    executor.shutdown(wait=False)
+                    print(f"[GOLOGIN WARMUP] ✓ Thread pool forcefully shut down")
+                except Exception as shutdown_err:
+                    print(f"[GOLOGIN WARMUP] ⚠ Shutdown error: {shutdown_err}")
     
         # Summary
-        success_count = sum(results)
+        success_count = sum(results) if results else 0
         print(f"\n[GOLOGIN WARMUP] ========== SUMMARY ==========")
         print(f"[GOLOGIN WARMUP] Total: {len(profile_list)} profiles")
+        print(f"[GOLOGIN WARMUP] Completed: {len(completed_profiles)}")
         print(f"[GOLOGIN WARMUP] Success: {success_count}")
-        print(f"[GOLOGIN WARMUP] Failed: {len(results) - success_count}")
+        print(f"[GOLOGIN WARMUP] Failed: {len(results) - success_count if results else 0}")
+        print(f"[GOLOGIN WARMUP] Timeout: {len(timeout_profiles)}")
+    
+        if timeout_profiles:
+            print(f"[GOLOGIN WARMUP] Timeout profiles: {', '.join(timeout_profiles)}")
+    
         print(f"[GOLOGIN WARMUP] ============================\n")
     
         # Set variable based on overall success
         self.set_variable(success_count > 0)
 
-    
+
+    def _kill_zombie_chrome_processes(self, profile_id):
+        """
+        Kill ONLY GoLogin/Orbita Chrome processes for this profile
+        SAFE: Does NOT kill real Chrome browsers
+        """
+        try:
+            import psutil
+        
+            print(f"[GOLOGIN WARMUP] [{profile_id}] Checking for zombie GoLogin processes...")
+        
+            killed_count = 0
+        
+            for proc in psutil.process_iter(['pid', 'name', 'exe', 'cmdline']):
+                try:
+                    proc_name = proc.info['name'].lower()
+                    proc_exe = proc.info.get('exe', '').lower()
+                    cmdline = proc.info.get('cmdline', [])
+                
+                    # ========== FILTER 1: MUST BE ORBITA OR GOLOGIN CHROME ==========
+                    # Check executable path to ensure it's GoLogin's Chrome, not system Chrome
+                    is_gologin_chrome = False
+                
+                    if proc_exe:
+                        # GoLogin Chrome is located in specific paths:
+                        # - Windows: C:\Users\xxx\AppData\Local\GoLogin\app-x.x.x\resources\chrome\...
+                        # - Or: Contains 'gologin' or 'orbita' in path
+                        if ('gologin' in proc_exe or 'orbita' in proc_exe):
+                            is_gologin_chrome = True
+                        elif 'appdata\\local\\gologin' in proc_exe:
+                            is_gologin_chrome = True
+                
+                    # If not GoLogin Chrome, skip
+                    if not is_gologin_chrome:
+                        continue
+                
+                    # ========== FILTER 2: CHECK IF IT BELONGS TO THIS PROFILE ==========
+                    # Check command line arguments for profile ID
+                    has_profile_id = False
+                
+                    if cmdline:
+                        cmdline_str = ' '.join(cmdline).lower()
+                    
+                        # Look for profile ID in:
+                        # - --user-data-dir=C:\...\gologin_profile_<profile_id>
+                        # - --profile-directory=<profile_id>
+                        if profile_id.lower() in cmdline_str:
+                            # Extra check: Must be in user-data-dir or profile-directory
+                            if '--user-data-dir' in cmdline_str or '--profile-directory' in cmdline_str:
+                                has_profile_id = True
+                
+                    # ========== KILL IF BOTH CONDITIONS MET ==========
+                    if is_gologin_chrome and has_profile_id:
+                        print(f"[GOLOGIN WARMUP] [{profile_id}] Killing zombie GoLogin Chrome PID {proc.info['pid']}")
+                        proc.kill()
+                        killed_count += 1
+                    
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    pass
+        
+            if killed_count > 0:
+                print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Killed {killed_count} zombie process(es)")
+                time.sleep(2)  # Wait for processes to terminate
+            else:
+                print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ No zombie processes found")
+        
+            return True
+        
+        except Exception as e:
+            print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Zombie check error: {e}")
+            return False
+
+
+
     def _parse_profile_ids(self, profile_ids_text):
         """Parse profile IDs from text, support variables"""
         profile_list = []
@@ -398,136 +573,16 @@ class GoLoginSeleniumCollectAction(BaseAction):
     def _select_profile(self, profile_list, how_to_get):
         """Select profile based on method"""
         if how_to_get == "Sequential by loop":
-            # Get current index from global variable
-            index_var = "GOLOGIN_PROFILE_INDEX"
-            current_index = GlobalVariables().get(index_var, "0")
+            loop_index = GlobalVariables().get("loop_index", "0")
             try:
-                current_index = int(current_index)
+                index = int(loop_index) % len(profile_list)
+                return profile_list[index]
             except:
-                current_index = 0
-            
-            # Select profile
-            profile_id = profile_list[current_index % len(profile_list)]
-            
-            # Update index
-            next_index = (current_index + 1) % len(profile_list)
-            GlobalVariables().set(index_var, str(next_index))
-            
-            return profile_id
+                return profile_list[0]            
         else:
             # Random
-            return random.choice(profile_list)
+            return random.choice(profile_list)    
     
-    def _import_cookies_if_provided(self, gologin, profile_id):
-        """
-        Import cookies if folder path provided
-        Parse cookies to GoLogin format then call update_cookies API
-        """
-        try:
-            # Get cookies folder
-            cookies_folder = None
-            cookies_folder_var = self.params.get("cookies_folder_variable", "").strip()
-            if cookies_folder_var:
-                cookies_folder = GlobalVariables().get(cookies_folder_var, "")
-        
-            if not cookies_folder:
-                cookies_folder = self.params.get("cookies_folder", "").strip()
-        
-            if not cookies_folder or not os.path.exists(cookies_folder):
-                return False
-        
-            # Get all JSON files
-            json_files = [f for f in os.listdir(cookies_folder) if f.endswith('.json')]
-            if not json_files:
-                print(f"[GOLOGIN WARMUP] No JSON files found in cookies folder")
-                return False
-        
-            # Random pick one file
-            selected_file = random.choice(json_files)
-            cookies_file_path = os.path.join(cookies_folder, selected_file)
-            print(f"[GOLOGIN WARMUP] Randomly selected cookies file: {selected_file}")
-        
-            # Load cookies from file
-            with open(cookies_file_path, 'r', encoding='utf-8') as f:
-                cookies_from_file = json.load(f)
-        
-            if not cookies_from_file:
-                print(f"[GOLOGIN WARMUP] ⚠ Cookies file is empty")
-                return False
-        
-            print(f"[GOLOGIN WARMUP] Loaded {len(cookies_from_file)} cookies from file")
-        
-            # Parse to GoLogin format
-            cookies_for_api = self._parse_cookies_to_gologin_format(cookies_from_file)
-        
-            if not cookies_for_api:
-                print(f"[GOLOGIN WARMUP] ⚠ No valid cookies after parsing")
-                return False
-        
-            print(f"[GOLOGIN WARMUP] Parsed {len(cookies_for_api)} valid cookies")
-        
-            # Import cookies via API (using existing update_cookies)
-            success, result = gologin.update_cookies(profile_id, cookies_for_api, replace_all=True)
-        
-            if success:
-                print(f"[GOLOGIN WARMUP] ✓ Imported {len(cookies_for_api)} cookies from {selected_file}")
-                return True
-            else:
-                print(f"[GOLOGIN WARMUP] ⚠ Failed to import cookies: {result}")
-                return False
-        
-        except Exception as e:
-            print(f"[GOLOGIN WARMUP] Error importing cookies: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
-
-
-    def _parse_cookies_to_gologin_format(self, cookies_from_file):
-        """
-        Parse cookies from Selenium/browser format to GoLogin API format
-        """
-        try:
-            cookies_for_api = []
-        
-            for cookie in cookies_from_file:
-                # Skip invalid cookies (missing name or domain)
-                if not cookie.get("name") or not cookie.get("domain"):
-                    continue
-            
-                # Build GoLogin API format
-                api_cookie = {
-                    "name": cookie.get("name"),
-                    "value": cookie.get("value", ""),
-                    "domain": cookie.get("domain"),
-                    "path": cookie.get("path", "/"),
-                    "secure": cookie.get("secure", False),
-                    "httpOnly": cookie.get("httpOnly", False),
-                    "hostOnly": cookie.get("hostOnly", False),
-                    "session": cookie.get("session", False)
-                }
-            
-                # Add expirationDate if not session cookie
-                if not cookie.get("session", False):
-                    if "expirationDate" in cookie:
-                        api_cookie["expirationDate"] = cookie["expirationDate"]
-                    elif "expiry" in cookie:
-                        api_cookie["expirationDate"] = cookie["expiry"]
-            
-                # Add sameSite if present
-                if "sameSite" in cookie:
-                    same_site = cookie["sameSite"]
-                    if same_site and same_site.lower() != "unspecified":
-                        api_cookie["sameSite"] = same_site
-            
-                cookies_for_api.append(api_cookie)
-        
-            return cookies_for_api
-        
-        except Exception as e:
-            print(f"[GOLOGIN WARMUP] Error parsing cookies: {e}")
-            return []
-
         
     def _update_proxy_for_profiles(self, api_token, profile_ids, proxy_config):
         """
@@ -603,230 +658,8 @@ class GoLoginSeleniumCollectAction(BaseAction):
             print(f"[GOLOGIN WARMUP] ✗ Error updating proxy: {e}")
             import traceback
             traceback.print_exc()
-            return False
-        
-    def _inject_cookies_via_selenium(self, driver, profile_id):
-        """
-        Inject cookies directly to Orbita browser via Selenium
-        This ensures cookies are loaded in current session
-        Call AFTER browser starts and connects
-        """
-        try:
-            # Get cookies folder
-            cookies_folder = None
-            cookies_folder_var = self.params.get("cookies_folder_variable", "").strip()
-            if cookies_folder_var:
-                cookies_folder = GlobalVariables().get(cookies_folder_var, "")
-        
-            if not cookies_folder:
-                cookies_folder = self.params.get("cookies_folder", "").strip()
-        
-            if not cookies_folder or not os.path.exists(cookies_folder):
-                print(f"[GOLOGIN WARMUP] [{profile_id}] No cookies folder for Selenium injection")
-                return False
-        
-            # Get all JSON files
-            json_files = [f for f in os.listdir(cookies_folder) if f.endswith('.json')]
-            if not json_files:
-                print(f"[GOLOGIN WARMUP] [{profile_id}] No JSON files found")
-                return False
-        
-            # Random pick one file (same logic as API import)
-            selected_file = random.choice(json_files)
-            cookies_file_path = os.path.join(cookies_folder, selected_file)
-            print(f"[GOLOGIN WARMUP] [{profile_id}] Injecting cookies via Selenium from: {selected_file}")
-        
-            # Load cookies from file
-            with open(cookies_file_path, 'r', encoding='utf-8') as f:
-                cookies_from_file = json.load(f)
-        
-            if not cookies_from_file:
-                print(f"[GOLOGIN WARMUP] [{profile_id}] Cookies file is empty")
-                return False
-        
-            print(f"[GOLOGIN WARMUP] [{profile_id}] Loaded {len(cookies_from_file)} cookies from file")
-        
-            # Group cookies by domain for efficient injection
-            cookies_by_domain = {}
-            for cookie in cookies_from_file:
-                domain = cookie.get('domain', '')
-                if not domain:
-                    continue
-            
-                # Normalize domain (remove leading dot)
-                domain = domain.lstrip('.')
-            
-                if domain not in cookies_by_domain:
-                    cookies_by_domain[domain] = []
-                cookies_by_domain[domain].append(cookie)
-        
-            print(f"[GOLOGIN WARMUP] [{profile_id}] Cookies grouped into {len(cookies_by_domain)} domains")
-        
-            # Inject cookies domain by domain
-            injected_count = 0
-            failed_count = 0
-        
-            for domain, domain_cookies in cookies_by_domain.items():
-                try:
-                    # Navigate to domain first (Selenium requirement)
-                    try:
-                        driver.get(f"https://{domain}")
-                        time.sleep(0.5)  # Brief wait for page load
-                    except Exception as nav_err:
-                        # Skip if domain not accessible
-                        print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Cannot access {domain}, skipping cookies")
-                        failed_count += len(domain_cookies)
-                        continue
-                
-                    # Add cookies for this domain
-                    for cookie in domain_cookies:
-                        try:
-                            # Convert to Selenium format
-                            selenium_cookie = {
-                                'name': cookie.get('name'),
-                                'value': cookie.get('value', ''),
-                                'domain': cookie.get('domain'),
-                                'path': cookie.get('path', '/'),
-                                'secure': cookie.get('secure', False),
-                                'httpOnly': cookie.get('httpOnly', False)
-                            }
-                        
-                            # Add expiry if exists
-                            if 'expirationDate' in cookie and not cookie.get('session', False):
-                                selenium_cookie['expiry'] = int(cookie['expirationDate'])
-                        
-                            # Add sameSite if valid
-                            if 'sameSite' in cookie:
-                                same_site = cookie['sameSite']
-                                if same_site and same_site.lower() != 'unspecified':
-                                    selenium_cookie['sameSite'] = same_site
-                        
-                            # Add cookie to browser
-                            driver.add_cookie(selenium_cookie)
-                            injected_count += 1
-                        
-                        except Exception as cookie_err:
-                            # Skip invalid cookies
-                            failed_count += 1
-                            continue
-                
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Injected {len(domain_cookies)} cookies for {domain}")
-                
-                except Exception as domain_err:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Error injecting cookies for {domain}: {str(domain_err)[:50]}")
-                    failed_count += len(domain_cookies)
-        
-            print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Selenium injection complete: {injected_count} success, {failed_count} failed")
-        
-            # Navigate to blank page after injection
-            try:
-                driver.get("about:blank")
-            except:
-                pass
-        
-            return injected_count > 0
-        
-        except Exception as e:
-            print(f"[GOLOGIN WARMUP] [{profile_id}] Error injecting cookies via Selenium: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
-
-    def _inject_cookies_via_cdp(self, driver, profile_id):
-        """
-        Inject cookies using Chrome DevTools Protocol (CDP)
-        NO NEED to navigate to domains - cookies are set directly in browser storage
-        This is the ONLY way to bulk-inject cookies without page loads
-        """
-        try:
-            # Get cookies folder
-            cookies_folder = None
-            cookies_folder_var = self.params.get("cookies_folder_variable", "").strip()
-            if cookies_folder_var:
-                cookies_folder = GlobalVariables().get(cookies_folder_var, "")
-        
-            if not cookies_folder:
-                cookies_folder = self.params.get("cookies_folder", "").strip()
-        
-            if not cookies_folder or not os.path.exists(cookies_folder):
-                print(f"[GOLOGIN WARMUP] [{profile_id}] No cookies folder")
-                return False
-        
-            # Get all JSON files
-            json_files = [f for f in os.listdir(cookies_folder) if f.endswith('.json')]
-            if not json_files:
-                print(f"[GOLOGIN WARMUP] [{profile_id}] No JSON files found")
-                return False
-        
-            # Random pick one file
-            selected_file = random.choice(json_files)
-            cookies_file_path = os.path.join(cookies_folder, selected_file)
-            print(f"[GOLOGIN WARMUP] [{profile_id}] Injecting cookies via CDP from: {selected_file}")
-        
-            # Load cookies from file
-            with open(cookies_file_path, 'r', encoding='utf-8') as f:
-                cookies_from_file = json.load(f)
-        
-            if not cookies_from_file:
-                print(f"[GOLOGIN WARMUP] [{profile_id}] Cookies file is empty")
-                return False
-        
-            print(f"[GOLOGIN WARMUP] [{profile_id}] Loaded {len(cookies_from_file)} cookies")
-        
-            # Get CDP connection
-            try:
-                # Execute CDP command to get connection
-                driver.execute_cdp_cmd("Network.enable", {})
-                print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ CDP connection established")
-            except Exception as cdp_err:
-                print(f"[GOLOGIN WARMUP] [{profile_id}] ✗ CDP not available: {cdp_err}")
-                return False
-        
-            # Inject cookies using CDP Network.setCookie
-            injected_count = 0
-            failed_count = 0
-        
-            for cookie in cookies_from_file:
-                try:
-                    # Build CDP cookie format
-                    cdp_cookie = {
-                        "name": cookie.get("name"),
-                        "value": cookie.get("value", ""),
-                        "domain": cookie.get("domain"),
-                        "path": cookie.get("path", "/"),
-                        "secure": cookie.get("secure", False),
-                        "httpOnly": cookie.get("httpOnly", False)
-                    }
-                
-                    # Add expiry if exists
-                    if "expirationDate" in cookie and not cookie.get("session", False):
-                        cdp_cookie["expires"] = cookie["expirationDate"]
-                
-                    # Add sameSite if valid
-                    if "sameSite" in cookie:
-                        same_site = cookie["sameSite"]
-                        if same_site and same_site.lower() != "unspecified":
-                            # CDP uses: Strict, Lax, None
-                            cdp_cookie["sameSite"] = same_site.capitalize()
-                
-                    # Execute CDP command to set cookie
-                    driver.execute_cdp_cmd("Network.setCookie", cdp_cookie)
-                    injected_count += 1
-                
-                except Exception as cookie_err:
-                    failed_count += 1
-                    # Skip invalid cookies silently
-                    continue
-        
-            print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ CDP injection complete: {injected_count} success, {failed_count} failed")
-        
-            return injected_count > 0
-        
-        except Exception as e:
-            print(f"[GOLOGIN WARMUP] [{profile_id}] Error injecting cookies via CDP: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
+            return False        
+    
 
     def _close_all_tabs(self, driver):
         """
@@ -869,37 +702,68 @@ class GoLoginSeleniumCollectAction(BaseAction):
 
 
     def _connect_selenium(self, debugger_address):
-        """Connect Selenium to GoLogin Orbita browser"""
+        """
+        Connect Selenium to GoLogin Orbita browser
+        THREAD-SAFE: Uses lock to prevent ChromeDriver download conflicts
+        """
         try:
+            import threading
             from selenium import webdriver
             from selenium.webdriver.chrome.service import Service
             from selenium.webdriver.chrome.options import Options
             from webdriver_manager.chrome import ChromeDriverManager
-            
+        
             chrome_options = Options()
             chrome_options.add_experimental_option("debuggerAddress", debugger_address)
-            
+        
             # Detect Chrome version
             chrome_version = self._get_chrome_version_from_debugger(debugger_address)
+        
+            # ========== THREAD-SAFE CHROMEDRIVER INSTALLATION ==========
+            # Use class-level lock to prevent multiple threads downloading simultaneously
+            if not hasattr(self.__class__, '_chromedriver_lock'):
+                self.__class__._chromedriver_lock = threading.Lock()
+            if not hasattr(self.__class__, '_chromedriver_path'):
+                self.__class__._chromedriver_path = {}
+        
+            # Get or install ChromeDriver with lock
+            driver_path = None
+            with self.__class__._chromedriver_lock:
+                # Check cache first
+                cache_key = chrome_version if chrome_version else 'default'
             
-            if chrome_version:
-                print(f"[GOLOGIN WARMUP] Installing ChromeDriver for Chrome {chrome_version}...")
-                service = Service(ChromeDriverManager(driver_version=chrome_version).install())
-            else:
-                print(f"[GOLOGIN WARMUP] Installing ChromeDriver with auto-detection...")
-                service = Service(ChromeDriverManager().install())
-            
-            # Disable ChromeDriver logs
-            service.log_output = None
-            
+                if cache_key in self.__class__._chromedriver_path:
+                    driver_path = self.__class__._chromedriver_path[cache_key]
+                    print(f"[GOLOGIN WARMUP] Using cached ChromeDriver: {driver_path}")
+                else:
+                    # Install ChromeDriver (only one thread at a time)
+                    if chrome_version:
+                        print(f"[GOLOGIN WARMUP] Installing ChromeDriver for Chrome {chrome_version}...")
+                        driver_path = ChromeDriverManager(driver_version=chrome_version).install()
+                    else:
+                        print(f"[GOLOGIN WARMUP] Installing ChromeDriver with auto-detection...")
+                        driver_path = ChromeDriverManager().install()
+                
+                    # Cache the path
+                    self.__class__._chromedriver_path[cache_key] = driver_path
+                    print(f"[GOLOGIN WARMUP] ✓ ChromeDriver installed and cached")
+        
+            # Create service with cached driver path
+            service = Service(driver_path)
+            service.log_output = None  # Disable ChromeDriver logs
+        
+            # Create driver
             driver = webdriver.Chrome(service=service, options=chrome_options)
             print(f"[GOLOGIN WARMUP] ✓ Selenium connected to Orbita")
+        
             return driver
+        
         except Exception as e:
             print(f"[GOLOGIN WARMUP] Selenium connection error: {e}")
             import traceback
             traceback.print_exc()
             return None
+
         
     def _cleanup_browser_tabs(self, driver):
         """Close all tabs except first one to avoid crashes"""
@@ -1129,6 +993,17 @@ class GoLoginSeleniumCollectAction(BaseAction):
             ssl_error_sites = set()
 
             while True:
+                # ← THÊM: CHECK DRIVER VALIDITY
+                try:
+                    # Quick check if driver session is alive
+                    driver.current_url
+                except Exception as session_err:
+                    error_msg = str(session_err).lower()
+                    if "invalid session" in error_msg or "session deleted" in error_msg:
+                        print(f"[GOLOGIN WARMUP] ✗ Driver session invalid, stopping browse")
+                        break
+                    # Other errors, continue
+
                 # Check time limit
                 elapsed = time.time() - start_time
                 if elapsed >= total_seconds:
@@ -1151,28 +1026,45 @@ class GoLoginSeleniumCollectAction(BaseAction):
                     print(f"[GOLOGIN WARMUP] [{visit_count+1}] Visiting: {url}")
                 
                     # Set page load timeout (shorter for faster recovery)
-                    driver.set_page_load_timeout(15)
+                    driver.set_page_load_timeout(20)
         
                     # Navigate to URL
                     try:
                         driver.get(url)
-                    
+                        print(f"[GOLOGIN WARMUP] ✓ Page loaded: {url}")  # ← THÊM
                     except TimeoutException:
                         print(f"[GOLOGIN WARMUP] ⚠ Page load timeout: {url}")
-                        # Try to stop page load
+                        # Force stop loading
                         try:
                             driver.execute_script("window.stop();")
+                            print(f"[GOLOGIN WARMUP] ✓ Forced stop page load")  # ← THÊM
                         except:
                             pass
-                        time.sleep(1)
-                        continue
-                    
+        
+                        # ← THÊM: Check if page partially loaded
+                        try:
+                            current_url = driver.current_url
+                            if current_url and current_url != "data:," and current_url != "about:blank":
+                                print(f"[GOLOGIN WARMUP] ✓ Page partially loaded, continuing...")
+                            else:
+                                print(f"[GOLOGIN WARMUP] ✗ Page failed to load, skipping...")
+                                ssl_error_sites.add(url)
+                                continue
+                        except:
+                            print(f"[GOLOGIN WARMUP] ✗ Cannot access page, skipping...")
+                            ssl_error_sites.add(url)
+                            continue
+    
                     except Exception as nav_err:
                         error_msg = str(nav_err).lower()
-                    
-                        # Detect SSL errors
-                        if "ssl" in error_msg or "certificate" in error_msg or "handshake" in error_msg:
-                            print(f"[GOLOGIN WARMUP] ⚠ SSL error on {url}, blacklisted")
+        
+                        print(f"[GOLOGIN WARMUP] ⚠ Navigation error: {str(nav_err)[:100]}")  # ← THÊM
+        
+                        # ← THAY: Detect nhiều loại network errors
+                        if any(keyword in error_msg for keyword in ['ssl', 'certificate', 'handshake', 
+                                                                      'connection_reset', 'connection_timed_out',
+                                                                      'cert_date_invalid', 'net::err_']):
+                            print(f"[GOLOGIN WARMUP] ✗ Network/SSL error on {url}, blacklisting...")
                             ssl_error_sites.add(url)
                             time.sleep(1)
                             continue
@@ -1354,6 +1246,8 @@ class GoLoginSeleniumCollectAction(BaseAction):
                                         pass
                             else:
                                 print(f"[GOLOGIN WARMUP] No clickable link found")
+                                ssl_error_sites.add(url)
+                                continue
     
                         except Exception as deeper_err:
                             print(f"[GOLOGIN WARMUP] ⚠ Deeper navigation error: {str(deeper_err)[:50]}")
@@ -1472,120 +1366,6 @@ class GoLoginSeleniumCollectAction(BaseAction):
         except Exception as e:
             print(f"[GOLOGIN WARMUP] Recovery error: {e}")
             return False
-
-
-    def _save_cookies_direct(self, profile_id, cookies_list):
-        """
-        Save cookies from Selenium directly to JSON file
-        :param profile_id: Profile ID
-        :param cookies_list: List of cookies from driver.get_cookies()
-        :return: File path if success, None if failed
-        """
-        try:
-            if not cookies_list:
-                print(f"[GOLOGIN WARMUP] No cookies provided")
-                return None
-        
-            # Get output folder
-            output_folder = None
-            folder_var = self.params.get("folder_variable", "").strip()
-            if folder_var:
-                output_folder = GlobalVariables().get(folder_var, "")
-                if output_folder:
-                    print(f"[GOLOGIN WARMUP] Using output folder from variable '{folder_var}': {output_folder}")
-        
-            if not output_folder:
-                output_folder = self.params.get("folder_path", "").strip()
-                if output_folder:
-                    print(f"[GOLOGIN WARMUP] Using output folder from direct path: {output_folder}")
-        
-            if not output_folder:
-                print(f"[GOLOGIN WARMUP] No output folder specified")
-                return None
-        
-            # Create folder if not exists
-            if not os.path.exists(output_folder):
-                os.makedirs(output_folder)
-        
-            # Generate filename
-            now = datetime.now()
-            filename = f"cookies_{profile_id}_{now.strftime('%d_%m_%Y_%H_%M_%S')}.json"
-            filepath = os.path.join(output_folder, filename)
-        
-            # Save cookies to file
-            with open(filepath, 'w', encoding='utf-8') as f:
-                json.dump(cookies_list, f, indent=2, ensure_ascii=False)
-        
-            print(f"[GOLOGIN WARMUP] ✓ Saved {len(cookies_list)} cookies to: {filename}")
-            return filepath
-        
-        except Exception as e:
-            print(f"[GOLOGIN WARMUP] Error saving cookies: {e}")
-            return None
-
-
-    def _save_cookies(self, gologin, profile_id):
-        """
-        Save cookies naturally collected by browser
-        Simply get all cookies from GoLogin and save to JSON file in GoLogin format
-        No filtering, no grouping - just raw cookies for later import
-        """
-        try:
-            # Get output folder
-            output_folder = None
-            folder_var = self.params.get("folder_variable", "").strip()
-            if folder_var:
-                output_folder = GlobalVariables().get(folder_var, "")
-                if output_folder:
-                    print(f"[GOLOGIN WARMUP] Using output folder from variable '{folder_var}': {output_folder}")
-        
-            if not output_folder:
-                output_folder = self.params.get("folder_path", "").strip()
-                if output_folder:
-                    print(f"[GOLOGIN WARMUP] Using output folder from direct path: {output_folder}")
-        
-            if not output_folder:
-                print("[GOLOGIN WARMUP] ⚠ No output folder specified, cookies not saved")
-                return None
-        
-            # Create folder if not exists
-            if not os.path.exists(output_folder):
-                os.makedirs(output_folder)
-                print(f"[GOLOGIN WARMUP] Created output folder: {output_folder}")
-        
-            # Get ALL cookies from GoLogin cloud (naturally collected during browsing)
-            print(f"[GOLOGIN WARMUP] Fetching cookies from GoLogin cloud...")
-            success, cookies_data = gologin.get_cookies(profile_id)
-        
-            if not success:
-                print(f"[GOLOGIN WARMUP] ✗ Failed to get cookies: {cookies_data}")
-                return None
-        
-            if not cookies_data or len(cookies_data) == 0:
-                print("[GOLOGIN WARMUP] ⚠ No cookies found in profile")
-                return None
-        
-            print(f"[GOLOGIN WARMUP] ✓ Retrieved {len(cookies_data)} cookies")
-        
-            # Generate filename: profile_id_DD_MM_YYYY_HH_MM_SS.json
-            now = datetime.now()
-            filename = f"cookies_{profile_id}_{now.strftime('%d_%m_%Y_%H_%M_%S')}.json"
-            filepath = os.path.join(output_folder, filename)
-        
-            # Save cookies directly to JSON file (GoLogin format - ready for import)
-            with open(filepath, 'w', encoding='utf-8') as f:
-                json.dump(cookies_data, f, indent=2, ensure_ascii=False)
-        
-            print(f"[GOLOGIN WARMUP] ✓ Saved {len(cookies_data)} cookies to: {filename}")
-            return filepath
-        
-        except Exception as e:
-            print(f"[GOLOGIN WARMUP] Error saving cookies: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
-
-
 
 
     def set_variable(self, success):
