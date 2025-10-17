@@ -58,7 +58,7 @@ class ShowHideProgramAction(BaseAction):
             return random.choice(titles)
         else:  # Sequential by loop
             # Lấy loop index từ global variables (nếu đang trong vòng lặp)
-            loop_var = GlobalVariables().get("LOOP_INDEX", "0")
+            loop_var = GlobalVariables().get("loop_index", "0")
             try:
                 loop_index = int(loop_var)
             except:

@@ -136,7 +136,221 @@ class SeleniumHumanActions:
         """
         self.driver = driver
         self.actions = ActionChains(driver)
-    
+        
+    def accept_cookie_consent(self):
+        """
+        Tự động detect và click nút Accept/Allow cookies consent banner
+        :return: True nếu tìm thấy và click được, False nếu không
+        """
+        try:
+            # Common selectors for cookie consent buttons
+            # Priority: ID > Class > Button text > Link text
+            consent_selectors = [
+                # By ID (most common)
+                "//button[@id='onetrust-accept-btn-handler']",  # OneTrust
+                "//button[@id='accept-cookies']",
+                "//button[@id='acceptAllButton']",
+                "//button[@id='cookie-accept']",
+                "//button[@id='consent-accept']",
+                "//a[@id='cookie-law-accept']",
+            
+                # By Class (common patterns)
+                "//button[contains(@class, 'accept-cookies')]",
+                "//button[contains(@class, 'cookie-accept')]",
+                "//button[contains(@class, 'consent-accept')]",
+                "//button[contains(@class, 'gdpr-accept')]",
+                "//button[contains(@class, 'js-accept')]",
+                "//button[contains(@class, 'agree-button')]",
+            
+                # By button text (multilingual)
+                "//button[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'accept all')]",
+                "//button[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'accept cookies')]",
+                "//button[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'allow all')]",
+                "//button[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'agree')]",
+                "//button[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'got it')]",
+                "//button[contains(text(), 'Chấp nhận tất cả')]",
+                "//button[contains(text(), 'Đồng ý')]",
+            
+                # By link text
+                "//a[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'accept all')]",
+                "//a[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'accept cookies')]",
+            
+                # By role (ARIA)
+                "//button[@role='button' and contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'accept')]",
+            
+                # Generic fallback (risky, only use if nothing else works)
+                "//button[contains(@aria-label, 'Accept')]",
+                "//button[contains(@aria-label, 'Agree')]",
+            ]
+        
+            # Try each selector
+            for selector in consent_selectors:
+                try:
+                    # Wait max 2 seconds for each selector
+                    element = WebDriverWait(self.driver, 2).until(
+                        EC.element_to_be_clickable((By.XPATH, selector))
+                    )
+                
+                    # Found clickable element
+                    print(f"[SELENIUM] ✓ Found cookie consent button")
+                
+                    # Scroll to element if needed
+                    self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
+                    time.sleep(0.3)
+                
+                    # Try normal click first
+                    try:
+                        element.click()
+                        print(f"[SELENIUM] ✓ Clicked cookie consent (normal click)")
+                        time.sleep(1)
+                        return True
+                    except:
+                        # Fallback: JavaScript click
+                        self.driver.execute_script("arguments[0].click();", element)
+                        print(f"[SELENIUM] ✓ Clicked cookie consent (JS click)")
+                        time.sleep(1)
+                        return True
+                    
+                except (TimeoutException, NoSuchElementException):
+                    # This selector didn't work, try next
+                    continue
+                except Exception as e:
+                    # Unexpected error, continue to next selector
+                    continue
+        
+            # No consent button found
+            return False
+        
+        except Exception as e:
+            print(f"[SELENIUM] accept_cookie_consent error: {e}")
+            return False
+
+    def close_popups(self):
+        """
+        Tự động detect và đóng các popup/modal/overlay phổ biến
+        :return: True nếu đóng được popup, False nếu không
+        """
+        try:
+            closed_any = False
+        
+            # 1. Try to close modal with close button (X)
+            close_button_selectors = [
+                # Common close button patterns
+                "//button[contains(@class, 'close')]",
+                "//button[contains(@class, 'modal-close')]",
+                "//button[contains(@class, 'popup-close')]",
+                "//button[contains(@aria-label, 'Close')]",
+                "//button[contains(@title, 'Close')]",
+                "//a[contains(@class, 'close')]",
+                "//div[contains(@class, 'close')][@role='button']",
+                "//span[contains(@class, 'close')][@role='button']",
+            
+                # Icon-based close buttons
+                "//*[name()='svg' and contains(@class, 'close')]",
+                "//*[contains(@class, 'icon-close')]",
+                "//*[contains(@class, 'icon-x')]",
+            
+                # Modal close buttons by position
+                "//button[contains(@class, 'modal')]//button[1]",
+                "//div[contains(@class, 'modal-header')]//button",
+            
+                # Vietnamese
+                "//button[contains(text(), 'Đóng')]",
+                "//button[contains(text(), 'Thoát')]",
+            ]
+        
+            for selector in close_button_selectors:
+                try:
+                    element = WebDriverWait(self.driver, 1).until(
+                        EC.element_to_be_clickable((By.XPATH, selector))
+                    )
+                
+                    # Try to click
+                    try:
+                        element.click()
+                        print(f"[SELENIUM] ✓ Closed popup with close button")
+                        closed_any = True
+                        time.sleep(0.5)
+                        break
+                    except:
+                        # Try JS click
+                        self.driver.execute_script("arguments[0].click();", element)
+                        print(f"[SELENIUM] ✓ Closed popup (JS click)")
+                        closed_any = True
+                        time.sleep(0.5)
+                        break
+                except:
+                    continue
+        
+            # 2. Try to dismiss modal by clicking overlay/backdrop
+            if not closed_any:
+                overlay_selectors = [
+                    "//div[contains(@class, 'modal-backdrop')]",
+                    "//div[contains(@class, 'overlay')]",
+                    "//div[contains(@class, 'popup-overlay')]",
+                    "//div[contains(@class, 'modal-overlay')]",
+                ]
+            
+                for selector in overlay_selectors:
+                    try:
+                        element = WebDriverWait(self.driver, 1).until(
+                            EC.presence_of_element_located((By.XPATH, selector))
+                        )
+                    
+                        # Click overlay to dismiss
+                        try:
+                            element.click()
+                            print(f"[SELENIUM] ✓ Closed popup by clicking overlay")
+                            closed_any = True
+                            time.sleep(0.5)
+                            break
+                        except:
+                            pass
+                    except:
+                        continue
+        
+            # 3. Try pressing ESC key
+            if not closed_any:
+                try:
+                    from selenium.webdriver.common.keys import Keys
+                    body = self.driver.find_element(By.TAG_NAME, "body")
+                    body.send_keys(Keys.ESCAPE)
+                    print(f"[SELENIUM] ✓ Pressed ESC to close popup")
+                    closed_any = True
+                    time.sleep(0.5)
+                except:
+                    pass
+        
+            # 4. Last resort: Hide common popup containers with JavaScript
+            if not closed_any:
+                try:
+                    hide_script = """
+                        // Hide common popup containers
+                        var popups = document.querySelectorAll('.modal, .popup, .overlay, [role="dialog"], .lightbox, .fancybox');
+                        var count = 0;
+                        popups.forEach(function(popup) {
+                            if (popup.style.display !== 'none') {
+                                popup.style.display = 'none';
+                                count++;
+                            }
+                        });
+                        return count;
+                    """
+                
+                    hidden_count = self.driver.execute_script(hide_script)
+                    if hidden_count > 0:
+                        print(f"[SELENIUM] ✓ Hidden {hidden_count} popup(s) with JavaScript")
+                        closed_any = True
+                except:
+                    pass
+        
+            return closed_any
+        
+        except Exception as e:
+            print(f"[SELENIUM] close_popups error: {e}")
+            return False
+
+
     # ============================================================
     # 1. MOVE MOUSE TO ELEMENT (HUMAN-LIKE)
     # ============================================================
@@ -229,25 +443,135 @@ class SeleniumHumanActions:
     # ============================================================
     # 3. CLICK RANDOM LINK
     # ============================================================
-    def click_random_link(self, max_attempts=3):
+    def click_random_link(self):
         """
-        Click vào link ngẫu nhiên trên page
-        :param max_attempts: Số lần thử tối đa
-        :return: True nếu thành công
+        Click random link on page (for deeper browsing)
+        WITH FILTER to avoid notification/popup buttons
         """
-        for _ in range(max_attempts):
-            try:
-                links = self.driver.find_elements(By.TAG_NAME, "a")
-                valid_links = [link for link in links if link.get_attribute("href") and link.is_displayed()]
+        try:
+            # ← THÊM: Blacklist selectors for notification prompts
+            notification_blacklist = [
+                # Button text patterns
+                "allow", "block", "enable", "disable",
+                "accept all", "reject all", "dismiss",
+                "subscribe", "sign up", "log in", "login",
+                "register", "create account", "join now",
+            
+                # Aria labels
+                "[aria-label*='notification']",
+                "[aria-label*='subscribe']",
+                "[aria-label*='sign up']",
+                "[aria-label*='login']",
+            
+                # Common notification button classes
+                ".notification-button",
+                ".notification-action",
+                ".permission-prompt",
+                ".push-notification",
+                "[class*='notif']",
+                "[class*='permission']",
+                "[class*='subscribe']",
+                "[id*='notification']",
+                "[id*='permission']",
+            
+                # Modal/overlay buttons
+                ".modal button",
+                ".overlay button",
+                "[role='dialog'] button",
+                "[role='alertdialog'] button"
+            ]
+        
+            # Get all clickable links
+            links = self.driver.find_elements(By.TAG_NAME, "a")
+        
+            # Filter valid links
+            valid_links = []
+            for link in links:
+                try:
+                    # Check if link is visible and has href
+                    if not link.is_displayed():
+                        continue
                 
-                if not valid_links:
-                    return False
+                    href = link.get_attribute("href")
+                    if not href or href.startswith("javascript:") or href == "#":
+                        continue
                 
-                link = random.choice(valid_links)
-                return self.click_element(link, delay_before=0.5, delay_after=1.0)
-            except:
-                continue
-        return False
+                    # ← FIX: Check if link is inside notification/modal
+                    # Get element text and attributes
+                    link_text = link.text.lower() if link.text else ""
+                    link_class = link.get_attribute("class") or ""
+                    link_id = link.get_attribute("id") or ""
+                    aria_label = link.get_attribute("aria-label") or ""
+                
+                    # Check against blacklist
+                    is_blacklisted = False
+                
+                    # Check text patterns
+                    blacklist_text_patterns = [
+                        "allow", "block", "enable", "disable",
+                        "accept all", "reject all", "dismiss",
+                        "subscribe", "sign up", "log in", "login",
+                        "register", "create account", "join now",
+                        "notification", "permission"
+                    ]
+                
+                    for pattern in blacklist_text_patterns:
+                        if pattern in link_text or pattern in aria_label.lower():
+                            is_blacklisted = True
+                            break
+                
+                    # Check class/id patterns
+                    if not is_blacklisted:
+                        blacklist_attr_patterns = [
+                            "notif", "permission", "subscribe", "modal", "popup",
+                            "dialog", "overlay", "prompt"
+                        ]
+                    
+                        for pattern in blacklist_attr_patterns:
+                            if pattern in link_class.lower() or pattern in link_id.lower():
+                                is_blacklisted = True
+                                break
+                
+                    # Skip blacklisted links
+                    if is_blacklisted:
+                        continue
+                
+                    # ← ADDITIONAL CHECK: Parent element should not be modal/dialog
+                    try:
+                        parent = link.find_element(By.XPATH, "./ancestor::*[@role='dialog' or @role='alertdialog' or contains(@class, 'modal') or contains(@class, 'popup')][1]")
+                        if parent:
+                            # Link is inside modal/dialog, skip
+                            continue
+                    except:
+                        # No modal parent found, safe to click
+                        pass
+                
+                    # Link is valid
+                    valid_links.append(link)
+                
+                except Exception as e:
+                    continue
+        
+            if not valid_links:
+                print(f"[SELENIUM] No valid links found")
+                return False
+        
+            # Click random link
+            link = random.choice(valid_links)
+        
+            # Scroll to link
+            self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", link)
+            time.sleep(0.5)
+        
+            # Click link
+            link.click()
+            print(f"[SELENIUM] Clicked link: {link.get_attribute('href')[:100]}")
+            return True
+        
+        except Exception as e:
+            print(f"[SELENIUM] click_random_link error: {str(e)[:100]}")
+            return False
+
     
     # ============================================================
     # 4. SCROLL PAGE SMOOTHLY
@@ -279,20 +603,85 @@ class SeleniumHumanActions:
     # ============================================================
     def scroll_to_random_position(self):
         """
-        Scroll đến vị trí ngẫu nhiên trong page
+        Scroll đến vị trí ngẫu nhiên trong page (KHÔNG BAO GIỜ xuống cuối hoàn toàn)
         :return: True
         """
         try:
             page_height = self.driver.execute_script("return document.body.scrollHeight")
-            random_position = random.randint(0, page_height)
+            viewport_height = self.driver.execute_script("return window.innerHeight")
+        
+            # Limit scroll range to top 70% of page (avoid instant bottom scroll)
+            max_scroll = int(page_height * 0.7)
+        
+            # Random position in top 70%
+            random_position = random.randint(0, max_scroll)
+        
+            # Get current scroll position
+            current_scroll = self.driver.execute_script("return window.pageYOffset;")
+            distance = abs(random_position - current_scroll)
+        
+            # If distance too large, scroll in chunks (human-like)
+            if distance > viewport_height * 2:
+                # Scroll in 3-5 chunks
+                num_chunks = random.randint(3, 5)
+                chunk_size = (random_position - current_scroll) // num_chunks
             
-            self.driver.execute_script(f"window.scrollTo({{top: {random_position}, behavior: 'smooth'}});")
+                for i in range(num_chunks):
+                    next_position = current_scroll + (chunk_size * (i + 1))
+                    self.driver.execute_script(f"window.scrollTo({{top: {next_position}, behavior: 'smooth'}});")
+                    time.sleep(random.uniform(0.3, 0.8))
+            else:
+                # Small distance, scroll directly
+                self.driver.execute_script(f"window.scrollTo({{top: {random_position}, behavior: 'smooth'}});")
+        
             time.sleep(random.uniform(0.5, 1.5))
             return True
         except Exception as e:
             print(f"[SELENIUM] scroll_to_random_position error: {e}")
             return False
-    
+
+    def scroll_random(self):
+        """
+        Scroll ngẫu nhiên với nhiều behaviors (KHÔNG PHẢI LÚC NÀO CŨNG XUỐNG CUỐI)
+        :return: True
+        """
+        try:
+            viewport_height = self.driver.execute_script("return window.innerHeight")
+        
+            # 4 behaviors: small down, small up, to random position, multiple small
+            behavior = random.choice(['small_down', 'small_up', 'random_pos', 'multiple_small'])
+        
+            if behavior == 'small_down':
+                # Scroll down 0.5-1.5 viewports
+                scroll_amount = random.randint(int(viewport_height * 0.5), int(viewport_height * 1.5))
+                self.driver.execute_script(f"window.scrollBy({{top: {scroll_amount}, behavior: 'smooth'}});")
+                time.sleep(random.uniform(0.5, 1.5))
+        
+            elif behavior == 'small_up':
+                # Scroll up 0.3-1 viewport
+                scroll_amount = random.randint(int(viewport_height * 0.3), viewport_height)
+                self.driver.execute_script(f"window.scrollBy({{top: -{scroll_amount}, behavior: 'smooth'}});")
+                time.sleep(random.uniform(0.5, 1.5))
+        
+            elif behavior == 'random_pos':
+                # Scroll to random position (max 70% page)
+                self.scroll_to_random_position()
+        
+            elif behavior == 'multiple_small':
+                # Multiple small scrolls (2-4 times)
+                num_scrolls = random.randint(2, 4)
+                for i in range(num_scrolls):
+                    scroll_amount = random.randint(150, 400)
+                    direction = random.choice([1, -1])  # 50% up, 50% down
+                    self.driver.execute_script(f"window.scrollBy({{top: {scroll_amount * direction}, behavior: 'smooth'}});")
+                    time.sleep(random.uniform(0.4, 1.0))
+        
+            return True
+        except Exception as e:
+            print(f"[SELENIUM] scroll_random error: {e}")
+            return False
+
+
     # ============================================================
     # 6. HOVER OVER ELEMENT (HUMAN-LIKE)
     # ============================================================
@@ -553,7 +942,7 @@ class SeleniumHumanActions:
         :return: Action name
         """
         actions = [
-            ("scroll", lambda: self.scroll_page("down", random.randint(200, 500))),
+            ("scroll", lambda: self.scroll_random()),
             ("read", lambda: self.read_page(2, 5)),
             ("move_mouse", lambda: self.random_mouse_movement(2)),
             ("hover", lambda: self.hover_element()),

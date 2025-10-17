@@ -25,10 +25,13 @@ class ActionType(str, Enum):
     COPY_FOLDER = "Copy File/Folder"
     RUN_CMD = "Run CMD"
     GOLOGIN_CREATE_PROFILE = "GoLogin Create Profile"
+    GOLOGIN_CLONE_PROFILE = "GoLogin Clone Profile"
     GOLOGIN_START_PROFILE = "GoLogin Start Profile"
     GOLOGIN_STOP_PROFILE = "GoLogin Stop Profile"
     GOLOGIN_GET_COOKIES = "GoLogin Get Cookies"
     GOLOGIN_SELENIUM_COLLECT = "GoLogin Selenium Collect Profiles"
+    GOLOGIN_SELENIUM_START = "GoLogin Selenium Start Profile" 
+    GOLOGIN_SELENIUM_STOP = "GoLogin Selenium Stop Profile"
     GET_NEW_PROXY = "Get New Proxy"
     UPLOAD_SCRIPT = "Upload Script"
     

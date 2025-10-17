@@ -309,6 +309,14 @@ class ActionItemFrame(tk.Frame):
         
         elif action_type == ActionType.GET_NEW_PROXY:  # THÊM DÒNG NÀY
             return "🔌" # Icon plug/connection cho proxy
+        
+        elif action_type == ActionType.GOLOGIN_SELENIUM_START:
+            return "🚀"  # Rocket icon cho "Start"
+        
+        elif action_type == ActionType.GOLOGIN_SELENIUM_STOP:  # ← THÊM BLOCK NÀY
+            return "🛑"  # Stop sign icon
+        elif action_type == ActionType.GOLOGIN_CLONE_PROFILE:
+            return "📋"
         else:
             return "📋"  # Icon mặc định cho các loại khác
     
@@ -440,10 +448,13 @@ class ActionItemFrame(tk.Frame):
             'COPY_FOLDER',
             'RUN_CMD',
             'GOLOGIN_CREATE_PROFILE',
+            'GOLOGIN_CLONE_PROFILE',
             'GOLOGIN_START_PROFILE',
             'GOLOGIN_STOP_PROFILE',
             'GOLOGIN_GET_COOKIES',
             'GOLOGIN_SELENIUM_COLLECT',
+            'GOLOGIN_SELENIUM_START',
+            'GOLOGIN_SELENIUM_STOP',
             'GET_NEW_PROXY',
             'UPLOAD_SCRIPT'
             # Thêm các action khác nếu cần
@@ -910,6 +921,21 @@ class ActionItemFrame(tk.Frame):
             provider = action.parameters.get("provider", "")
             return f"{indent}Provider: {provider}"
         
+        elif action_type_display == ActionType.GOLOGIN_SELENIUM_START:
+            profile_ids = action.parameters.get("profile_ids", "")[:50]  # Truncate if long
+            return f"{indent}Profiles: {profile_ids}..."
+        
+        elif action_type_display == ActionType.GOLOGIN_SELENIUM_STOP:  # ← THÊM BLOCK NÀY
+            api_key_var = action.parameters.get("api_key_variable", "")
+            text = f"{indent}API Key Variable: {api_key_var}"          
+            return text
+        
+        elif action_type_display == ActionType.GOLOGIN_CLONE_PROFILE:
+            profile_id = action.parameters.get("profile_id", "")           
+            profile_id_short = profile_id[:15] + "..." if len(profile_id) > 15 else profile_id
+            return f"{indent}Clone: {profile_id_short}"
+
+    
         return indent  # Trả về ít nhất là indent
 
 

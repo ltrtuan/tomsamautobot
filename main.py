@@ -7,6 +7,39 @@ from views.action_list_view import ActionListView
 from controllers.action_controller import ActionController
 import config as cfg
 from login_window import LoginWindow
+import atexit
+
+# ========== GLOBAL SELENIUM DRIVER REGISTRY ==========
+_active_selenium_drivers = []  # Global list to track all Selenium drivers
+
+def cleanup_all_selenium_drivers():
+    """
+    Cleanup all active Selenium drivers
+    This function is automatically called when Python exits (even if app crashes)
+    """
+    if not _active_selenium_drivers:
+        return
+    
+    print("[CLEANUP] ========== Cleaning up Selenium drivers ==========")
+    cleaned_count = 0
+    
+    for driver in _active_selenium_drivers:
+        try:
+            driver.quit()
+            cleaned_count += 1
+            print(f"[CLEANUP] ✓ ChromeDriver cleaned up")
+        except Exception as e:
+            print(f"[CLEANUP] ⚠ Cleanup warning: {e}")
+    
+    _active_selenium_drivers.clear()
+    print(f"[CLEANUP] ✓ Total cleaned: {cleaned_count} ChromeDriver process(es)")
+    print("[CLEANUP] ========================================")
+
+# Register cleanup function - will run when Python exits
+atexit.register(cleanup_all_selenium_drivers)
+print("[INIT] ✓ Selenium cleanup handler registered")
+# ========== END SELENIUM CLEANUP REGISTRY ==========
+
 
 class TomSamAutobot:
     def __init__(self):

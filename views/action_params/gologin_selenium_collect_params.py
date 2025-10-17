@@ -34,10 +34,7 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         self.create_how_to_get_websites_section()
         
         # ========== DURATION SECTION ==========
-        self.create_duration_section()
-        
-        # ========== OUTPUT FOLDER SECTION ==========
-        self.create_output_folder_section()
+        self.create_duration_section()     
         
         # ========== COMMON PARAMETERS ==========
         self.create_common_params(
@@ -88,7 +85,7 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         entry.pack(anchor=tk.W, padx=5)
     
     def create_profile_ids_section(self):
-        """Profile IDs textarea"""
+        """Profile IDs textarea with All Profiles checkbox"""
         text_frame = tk.LabelFrame(
             self.parent_frame,
             text="Profile IDs",
@@ -97,12 +94,32 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
             padx=10
         )
         text_frame.pack(fill=tk.BOTH, expand=True, pady=10)
-        
+    
+        # ========== THÊM CHECKBOX "ALL PROFILES" ==========
+        self.all_profiles_var = tk.BooleanVar()
+        if self.parameters:
+            self.all_profiles_var.set(self.parameters.get("all_profiles", False))
+        else:
+            self.all_profiles_var.set(False)
+    
+        all_profiles_checkbox = tk.Checkbutton(
+            text_frame,
+            text="✓ Get All Profiles from account (ignore Profile IDs below)",
+            variable=self.all_profiles_var,
+            command=self._toggle_profile_ids_state,
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10, "bold"),
+            fg="#FF6B00"
+        )
+        all_profiles_checkbox.pack(anchor=tk.W, pady=(0, 10))
+    
+        # ========== PROFILE IDS TEXTAREA (EXISTING) ==========
         label_text = (
             "Multiple profile IDs separated by ';'. Special formats:\n"
-            "<variable_name> to use variable value\n"
-            "Example: 68e485dd;<PROFILE_ID>;68e486ab"
+            " <VARIABLE_NAME> to use variable value\n"
+            "Example: 68e485dd;<PROFILE_VAR>;68e486ab"
         )
+    
         label = tk.Label(
             text_frame,
             text=label_text,
@@ -111,7 +128,7 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
             wraplength=400
         )
         label.pack(anchor=tk.W, pady=(0, 5))
-        
+    
         self.profile_ids_input = scrolledtext.ScrolledText(
             text_frame,
             height=4,
@@ -120,10 +137,24 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
             font=("Segoe UI", 10)
         )
         self.profile_ids_input.pack(fill=tk.BOTH, expand=True)
-        
+    
         if self.parameters:
             profile_ids = self.parameters.get("profile_ids", "")
             self.profile_ids_input.insert("1.0", profile_ids)
+    
+        # Initialize state
+        self._toggle_profile_ids_state()
+        
+
+    def _toggle_profile_ids_state(self):
+        """Enable/disable Profile IDs textarea based on All Profiles checkbox"""
+        if self.all_profiles_var.get():
+            # Disable textarea when All Profiles is checked
+            self.profile_ids_input.config(state=tk.DISABLED, bg="#f0f0f0")
+        else:
+            # Enable textarea when unchecked
+            self.profile_ids_input.config(state=tk.NORMAL, bg="white")
+  
     
     def create_how_to_get_profile_section(self):
         """How to get profile selection"""
@@ -179,22 +210,6 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
             font=("Segoe UI", 10)
         )
         refresh_cb.pack(anchor=tk.W, pady=2)
-        
-        # Delete cookies checkbox
-        self.delete_cookies_var = tk.BooleanVar()
-        if self.parameters:
-            self.delete_cookies_var.set(self.parameters.get("delete_cookies", False))
-        else:
-            self.delete_cookies_var.set(False)
-        
-        delete_cb = tk.Checkbutton(
-            options_frame,
-            text="Delete cookies before warming up",
-            variable=self.delete_cookies_var,
-            bg=cfg.LIGHT_BG_COLOR,
-            font=("Segoe UI", 10)
-        )
-        delete_cb.pack(anchor=tk.W, pady=2)
         
 
          # ========== THÊM HEADLESS CHECKBOX ==========
@@ -273,81 +288,7 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
             font=("Segoe UI", 8),
             fg="#666666"
         )
-        workers_hint.pack(side=tk.LEFT, padx=5)
-        
-        # ========== COOKIES IMPORT SECTION ==========
-        cookies_label = tk.Label(
-            options_frame,
-            text="Import Cookies (if not Delete cookies):",
-            bg=cfg.LIGHT_BG_COLOR,
-            font=("Segoe UI", 10, "bold")
-        )
-        cookies_label.pack(anchor=tk.W, pady=(10, 5))
-        
-        # Option 1: Browse cookies folder
-        browse_cookies_label = tk.Label(
-            options_frame,
-            text="Option 1: Cookies Folder Path (will random pick 1 JSON file):",
-            bg=cfg.LIGHT_BG_COLOR,
-            font=("Segoe UI", 9)
-        )
-        browse_cookies_label.pack(anchor=tk.W, pady=(0, 3))
-        
-        cookies_browse_frame = tk.Frame(options_frame, bg=cfg.LIGHT_BG_COLOR)
-        cookies_browse_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        self.cookies_folder_var = tk.StringVar()
-        if self.parameters:
-            self.cookies_folder_var.set(self.parameters.get("cookies_folder", ""))
-        
-        cookies_entry = tk.Entry(
-            cookies_browse_frame,
-            textvariable=self.cookies_folder_var,
-            font=("Segoe UI", 10)
-        )
-        cookies_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
-        
-        def browse_cookies_folder():
-            folder = filedialog.askdirectory(title="Select Cookies Folder")
-            if folder:
-                self.cookies_folder_var.set(folder)
-        
-        browse_cookies_button = ttk.Button(
-            cookies_browse_frame,
-            text="Browse",
-            command=browse_cookies_folder
-        )
-        browse_cookies_button.pack(side=tk.LEFT)
-        
-        # Option 2: Variable name
-        var_cookies_label = tk.Label(
-            options_frame,
-            text="Option 2: Variable name containing cookies folder path:",
-            bg=cfg.LIGHT_BG_COLOR,
-            font=("Segoe UI", 9)
-        )
-        var_cookies_label.pack(anchor=tk.W, pady=(0, 3))
-        
-        self.cookies_folder_variable_var = tk.StringVar()
-        if self.parameters:
-            self.cookies_folder_variable_var.set(self.parameters.get("cookies_folder_variable", ""))
-        
-        cookies_var_entry = tk.Entry(
-            options_frame,
-            textvariable=self.cookies_folder_variable_var,
-            font=("Segoe UI", 10)
-        )
-        cookies_var_entry.pack(fill=tk.X, pady=(0, 5))
-        
-        # Hint
-        cookies_hint = tk.Label(
-            options_frame,
-            text="💡 Will random pick 1 JSON file from folder. Priority: Variable > Direct path",
-            bg=cfg.LIGHT_BG_COLOR,
-            font=("Segoe UI", 8),
-            fg="#666666"
-        )
-        cookies_hint.pack(anchor=tk.W)
+        workers_hint.pack(side=tk.LEFT, padx=5)       
         
         
         # ========== PROXY CONFIGURATION SECTION ==========
@@ -663,82 +604,7 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         )
         hint.pack(side=tk.LEFT, padx=5)
     
-    def create_output_folder_section(self):
-        """Output folder section - giống GoLogin Get Cookies"""
-        folder_frame = tk.LabelFrame(
-            self.parent_frame,
-            text="Output Folder for Cookies",
-            bg=cfg.LIGHT_BG_COLOR,
-            pady=10,
-            padx=10
-        )
-        folder_frame.pack(fill=tk.X, pady=10)
-        
-        # Option 1: Browse folder
-        browse_label = tk.Label(
-            folder_frame,
-            text="Option 1: Browse folder path:",
-            bg=cfg.LIGHT_BG_COLOR,
-            font=("Segoe UI", 9)
-        )
-        browse_label.pack(anchor=tk.W, pady=(0, 3))
-        
-        browse_frame = tk.Frame(folder_frame, bg=cfg.LIGHT_BG_COLOR)
-        browse_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        self.folder_path_var = tk.StringVar()
-        if self.parameters:
-            self.folder_path_var.set(self.parameters.get("folder_path", ""))
-        
-        folder_entry = tk.Entry(
-            browse_frame,
-            textvariable=self.folder_path_var,
-            font=("Segoe UI", 10)
-        )
-        folder_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
-        
-        def browse_folder():
-            folder = filedialog.askdirectory(title="Select Output Folder")
-            if folder:
-                self.folder_path_var.set(folder)
-        
-        browse_button = ttk.Button(
-            browse_frame,
-            text="Browse",
-            command=browse_folder
-        )
-        browse_button.pack(side=tk.LEFT)
-        
-        # Option 2: Variable name
-        var_label = tk.Label(
-            folder_frame,
-            text="Option 2: Variable name containing folder path:",
-            bg=cfg.LIGHT_BG_COLOR,
-            font=("Segoe UI", 9)
-        )
-        var_label.pack(anchor=tk.W, pady=(0, 3))
-        
-        self.folder_variable_var = tk.StringVar()
-        if self.parameters:
-            self.folder_variable_var.set(self.parameters.get("folder_variable", ""))
-        
-        folder_var_entry = tk.Entry(
-            folder_frame,
-            textvariable=self.folder_variable_var,
-            font=("Segoe UI", 10)
-        )
-        folder_var_entry.pack(fill=tk.X, pady=(0, 5))
-        
-        # Hint
-        hint = tk.Label(
-            folder_frame,
-            text="💡 File format: cookies_DD_MM_YYYY_HH_MM_SS.json. Priority: Variable > Direct path",
-            bg=cfg.LIGHT_BG_COLOR,
-            font=("Segoe UI", 8),
-            fg="#666666"
-        )
-        hint.pack(anchor=tk.W)
-    
+       
     def get_parameters(self):
         """Collect parameters"""
         params = super().get_parameters()
@@ -747,21 +613,17 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         params["profile_ids"] = self.profile_ids_input.get("1.0", tk.END).strip()
         params["how_to_get"] = self.how_to_get_var.get()
         
+        params["all_profiles"] = self.all_profiles_var.get()
+        
         # Options
-        params["refresh_fingerprint"] = self.refresh_fingerprint_var.get()
-        params["delete_cookies"] = self.delete_cookies_var.get()
-        params["cookies_folder"] = self.cookies_folder_var.get().strip()
-        params["cookies_folder_variable"] = self.cookies_folder_variable_var.get().strip()
+        params["refresh_fingerprint"] = self.refresh_fingerprint_var.get()       
         
         # Websites params
         params["websites_file"] = self.websites_file_var.get().strip()
         params["websites_variable"] = self.websites_variable_var.get().strip()
         params["how_to_get_websites"] = self.how_to_get_websites_var.get()
-        params["duration_minutes"] = self.duration_var.get().strip()
-        
-        # Output folder (for saving cookies only)
-        params["folder_path"] = self.folder_path_var.get().strip()
-        params["folder_variable"] = self.folder_variable_var.get().strip()
+        params["duration_minutes"] = self.duration_var.get().strip()    
+     
         params["headless"] = self.headless_var.get()
         
         params["enable_threading"] = self.enable_threading_var.get()  # ← THÊM
