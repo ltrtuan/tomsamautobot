@@ -57,6 +57,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
                     self.set_variable(False)
                     return
             
+                random.shuffle(profile_list)  # Xáo trộn list
                 print(f"[GOLOGIN WARMUP] ✓ Fetched {len(profile_list)} profiles from API")
                 print(f"[GOLOGIN WARMUP] Profile IDs: {', '.join(profile_list[:5])}{'...' if len(profile_list) > 5 else ''}")
         
@@ -350,6 +351,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
         WITH TIMEOUT to prevent hanging on cleanup
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
+        import math
     
         # Get max workers
         max_workers_str = self.params.get("max_workers", "3")
@@ -372,10 +374,14 @@ class GoLoginSeleniumCollectAction(BaseAction):
     
         # Timeout = browsing time + 5 minutes buffer for start/stop
         timeout_per_profile = int((duration_minutes + 5) * 60)
-        total_timeout = timeout_per_profile * len(profile_list)  # Total timeout for all profiles
     
-        print(f"[GOLOGIN WARMUP] Timeout per profile: {timeout_per_profile}s")
-        print(f"[GOLOGIN WARMUP] Max total timeout: {total_timeout}s")
+        # ← FIX: Calculate realistic timeout based on batches (not all profiles)
+        batches = math.ceil(len(profile_list) / max_workers)
+        total_timeout = timeout_per_profile * batches
+    
+        print(f"[GOLOGIN WARMUP] Timeout per profile: {timeout_per_profile}s ({timeout_per_profile/60:.1f} min)")
+        print(f"[GOLOGIN WARMUP] Batches: {batches} (with {max_workers} workers)")
+        print(f"[GOLOGIN WARMUP] Total timeout: {total_timeout}s ({total_timeout/60:.1f} min)")
     
         # Store results
         results = []
@@ -389,24 +395,26 @@ class GoLoginSeleniumCollectAction(BaseAction):
             # Submit all profiles to thread pool WITH STAGGER
             future_to_profile = {}
             for i, profile_id in enumerate(profile_list):
-                # ← THÊM: Add 3s delay between each thread start (prevent race condition)
+                # Add delay between submissions to prevent race conditions
                 if i > 0:
-                    time.sleep(3)
-    
+                    time.sleep(2)
+            
                 future = executor.submit(self._warmup_single_profile, profile_id, api_token)
                 future_to_profile[future] = profile_id
                 print(f"[GOLOGIN WARMUP] Submitted thread {i+1}/{len(profile_list)}: {profile_id}")
-
+        
             print(f"[GOLOGIN WARMUP] All threads submitted, waiting for completion...")
         
             # Wait for all threads to complete WITH GLOBAL TIMEOUT
             try:
+                print(f"[GOLOGIN WARMUP] Waiting for threads (timeout: {total_timeout}s)...")
+            
                 for future in as_completed(future_to_profile, timeout=total_timeout):
                     profile_id = future_to_profile[future]
                 
                     try:
-                        # Get result with individual timeout
-                        success = future.result(timeout=60)  # 60s to retrieve result
+                        # Get result with individual timeout (30s)
+                        success = future.result(timeout=30)
                         results.append(success)
                         completed_profiles.append(profile_id)
                     
@@ -423,10 +431,12 @@ class GoLoginSeleniumCollectAction(BaseAction):
                     except Exception as e:
                         print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} exception: {e}")
                         results.append(False)
+            
+                print(f"[GOLOGIN WARMUP] ✓ All futures processed")
         
             except TimeoutError:
                 print(f"[GOLOGIN WARMUP] ⚠ GLOBAL TIMEOUT reached after {total_timeout}s")
-                print(f"[GOLOGIN WARMUP] Some profiles may not have completed")
+                print(f"[GOLOGIN WARMUP] Completed: {len(completed_profiles)}/{len(profile_list)}")
             
                 # Mark remaining profiles as timeout
                 for profile_id in profile_list:
@@ -434,27 +444,44 @@ class GoLoginSeleniumCollectAction(BaseAction):
                         print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} TIMEOUT (global)")
                         results.append(False)
                         timeout_profiles.append(profile_id)
+        
+            except Exception as e:
+                print(f"[GOLOGIN WARMUP] ⚠ Unexpected error in thread pool: {e}")
+                import traceback
+                traceback.print_exc()
+        
+            print(f"[GOLOGIN WARMUP] Exiting try block...")
     
         except Exception as e:
-            print(f"[GOLOGIN WARMUP] ⚠ Unexpected error in thread pool: {e}")
+            print(f"[GOLOGIN WARMUP] ⚠ Outer exception: {e}")
             import traceback
             traceback.print_exc()
     
         finally:
             # CRITICAL: Force shutdown thread pool
+            print(f"[GOLOGIN WARMUP] Entering finally block for cleanup...")
             print(f"[GOLOGIN WARMUP] Forcing thread pool shutdown...")
         
             try:
-                # Try graceful shutdown first (wait max 10s)
-                executor.shutdown(wait=True, timeout=10)
-                print(f"[GOLOGIN WARMUP] ✓ Thread pool gracefully shut down")
-            except:
-                # If timeout not supported (Python < 3.9), use wait=False
-                try:
-                    executor.shutdown(wait=False)
-                    print(f"[GOLOGIN WARMUP] ✓ Thread pool forcefully shut down")
-                except Exception as shutdown_err:
-                    print(f"[GOLOGIN WARMUP] ⚠ Shutdown error: {shutdown_err}")
+                # Force shutdown without waiting for hanging threads
+                executor.shutdown(wait=False)
+                print(f"[GOLOGIN WARMUP] ✓ Thread pool forcefully shut down")
+            except Exception as shutdown_err:
+                print(f"[GOLOGIN WARMUP] ⚠ Shutdown error: {shutdown_err}")
+        
+            # Give threads grace period to cleanup
+            print(f"[GOLOGIN WARMUP] Waiting 3s grace period...")
+            time.sleep(3)
+        
+            # Check if any threads still alive
+            import threading
+            active_count = threading.active_count()
+            print(f"[GOLOGIN WARMUP] Active threads: {active_count}")
+        
+            if active_count > 1:  # > 1 because main thread counts
+                print(f"[GOLOGIN WARMUP] ⚠ Warning: {active_count-1} threads still active after shutdown")
+        
+            print(f"[GOLOGIN WARMUP] Exiting finally block...")
     
         # Summary
         success_count = sum(results) if results else 0
@@ -472,6 +499,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
     
         # Set variable based on overall success
         self.set_variable(success_count > 0)
+
 
 
     def _kill_zombie_chrome_processes(self, profile_id):
@@ -978,12 +1006,12 @@ class GoLoginSeleniumCollectAction(BaseAction):
         try:
             from helpers.selenium_actions import SeleniumHumanActions
             from selenium.common.exceptions import TimeoutException
-
+        
             print(f"[GOLOGIN WARMUP] Starting browsing for {total_seconds}s...")
-
+        
             human = SeleniumHumanActions(driver)
             how_to_get_websites = self.params.get("how_to_get_websites", "Random")
-
+        
             start_time = time.time()
             visit_count = 0
             action_count = 0
@@ -991,25 +1019,23 @@ class GoLoginSeleniumCollectAction(BaseAction):
         
             # Track SSL error sites to avoid retrying
             ssl_error_sites = set()
-
+        
             while True:
-                # ← THÊM: CHECK DRIVER VALIDITY
+                # CHECK DRIVER VALIDITY
                 try:
-                    # Quick check if driver session is alive
                     driver.current_url
                 except Exception as session_err:
                     error_msg = str(session_err).lower()
                     if "invalid session" in error_msg or "session deleted" in error_msg:
                         print(f"[GOLOGIN WARMUP] ✗ Driver session invalid, stopping browse")
                         break
-                    # Other errors, continue
-
+            
                 # Check time limit
                 elapsed = time.time() - start_time
                 if elapsed >= total_seconds:
                     print(f"[GOLOGIN WARMUP] ✓ Browsing completed after {int(elapsed)}s")
                     break
-    
+            
                 # Select URL
                 if how_to_get_websites == "Sequential by loop":
                     url = websites[current_index % len(websites)]
@@ -1021,193 +1047,168 @@ class GoLoginSeleniumCollectAction(BaseAction):
                 if url in ssl_error_sites:
                     print(f"[GOLOGIN WARMUP] Skipping {url} (previous SSL errors)")
                     continue
-    
+            
+                # ========== NAVIGATE TO URL ==========
+                page_loaded_successfully = False  # ← THÊM FLAG
+            
                 try:
-                    print(f"[GOLOGIN WARMUP] [{visit_count+1}] Visiting: {url}")
+                    print(f"[GOLOGIN WARMUP] [{visit_count+1}] Navigating to: {url}")
                 
-                    # Set page load timeout (shorter for faster recovery)
+                    # Set page load timeout
                     driver.set_page_load_timeout(20)
-        
-                    # Navigate to URL
+                
                     try:
                         driver.get(url)
-                        print(f"[GOLOGIN WARMUP] ✓ Page loaded: {url}")  # ← THÊM
+                        print(f"[GOLOGIN WARMUP] ✓ Page loaded: {url}")
+                        page_loaded_successfully = True  # ← SET FLAG
+                    
                     except TimeoutException:
                         print(f"[GOLOGIN WARMUP] ⚠ Page load timeout: {url}")
+                    
                         # Force stop loading
                         try:
                             driver.execute_script("window.stop();")
-                            print(f"[GOLOGIN WARMUP] ✓ Forced stop page load")  # ← THÊM
+                            print(f"[GOLOGIN WARMUP] ✓ Forced stop page load")
                         except:
                             pass
-        
-                        # ← THÊM: Check if page partially loaded
+                    
+                        # Check if page partially loaded
                         try:
                             current_url = driver.current_url
                             if current_url and current_url != "data:," and current_url != "about:blank":
                                 print(f"[GOLOGIN WARMUP] ✓ Page partially loaded, continuing...")
+                                page_loaded_successfully = True  # ← SET FLAG
                             else:
                                 print(f"[GOLOGIN WARMUP] ✗ Page failed to load, skipping...")
                                 ssl_error_sites.add(url)
-                                continue
-                        except:
-                            print(f"[GOLOGIN WARMUP] ✗ Cannot access page, skipping...")
+                                continue  # Skip this site
+                        except Exception as check_err:
+                            print(f"[GOLOGIN WARMUP] ✗ Cannot check page state, skipping...")
+                            ssl_error_sites.add(url)
+                            continue  # Skip this site
+                
+                    # ← FIX: If page didn't load (flag not set), handle errors below
+                    if not page_loaded_successfully:
+                        print(f"[GOLOGIN WARMUP] ✗ Page load failed, trying next...")
+                        ssl_error_sites.add(url)
+                        time.sleep(1)
+                        continue
+                
+                except Exception as nav_err:
+                    error_msg = str(nav_err).lower()
+                
+                    print(f"[GOLOGIN WARMUP] ⚠ Navigation error: {str(nav_err)[:100]}")
+                
+                    # Detect network errors
+                    if any(keyword in error_msg for keyword in ['ssl', 'certificate', 'handshake', 
+                                                                  'connection_reset', 'connection_timed_out',
+                                                                  'cert_date_invalid', 'net::err_']):
+                        print(f"[GOLOGIN WARMUP] ✗ Network/SSL error on {url}, blacklisting...")
+                        ssl_error_sites.add(url)
+                        time.sleep(1)
+                        continue
+                
+                    # Check if tab crashed
+                    if "tab crashed" in error_msg or "session deleted" in error_msg:
+                        print(f"[GOLOGIN WARMUP] ⚠ Tab crashed, attempting recovery...")
+                        recovered = self._recover_from_crash(driver)
+                        if recovered:
+                            print(f"[GOLOGIN WARMUP] ✓ Recovered, continuing...")
                             ssl_error_sites.add(url)
                             continue
-    
-                    except Exception as nav_err:
-                        error_msg = str(nav_err).lower()
-        
-                        print(f"[GOLOGIN WARMUP] ⚠ Navigation error: {str(nav_err)[:100]}")  # ← THÊM
-        
-                        # ← THAY: Detect nhiều loại network errors
-                        if any(keyword in error_msg for keyword in ['ssl', 'certificate', 'handshake', 
-                                                                      'connection_reset', 'connection_timed_out',
-                                                                      'cert_date_invalid', 'net::err_']):
-                            print(f"[GOLOGIN WARMUP] ✗ Network/SSL error on {url}, blacklisting...")
-                            ssl_error_sites.add(url)
-                            time.sleep(1)
-                            continue
-
-                        # Check if tab crashed
-                        if "tab crashed" in error_msg or "session deleted" in error_msg:
-                            print(f"[GOLOGIN WARMUP] ⚠ Tab crashed on navigation, attempting recovery...")
-    
-                            # Try to recover
-                            recovered = self._recover_from_crash(driver)
-    
-                            if recovered:
-                                print(f"[GOLOGIN WARMUP] ✓ Recovered from crash, continuing...")
-                                # Add crashed URL to blacklist
-                                if url not in ssl_error_sites:
-                                    ssl_error_sites.add(url)
-                                    print(f"[GOLOGIN WARMUP] ⚠ Blacklisted {url} (caused tab crash)")
-                                time.sleep(2)
-                                continue  # ← CONTINUE instead of BREAK
-                            else:
-                                print(f"[GOLOGIN WARMUP] ✗ Failed to recover, trying one more time...")
-                                # Try one more recovery attempt
-                                time.sleep(3)
-                                recovered = self._recover_from_crash(driver)
-            
-                                if recovered:
-                                    print(f"[GOLOGIN WARMUP] ✓ Second recovery successful")
-                                    ssl_error_sites.add(url)
-                                    continue
-                                else:
-                                    # Only break if recovery fails twice
-                                    print(f"[GOLOGIN WARMUP] ✗ Recovery failed twice, stopping browse session")
-                                    break
-    
-                            # Retry navigation after recovery
-                            try:
-                                print(f"[GOLOGIN WARMUP] Retrying navigation to: {url}")
-                                driver.get(url)
-                                print(f"[GOLOGIN WARMUP] ✓ Successfully recovered and navigated")
-                            except Exception as retry_err:
-                                print(f"[GOLOGIN WARMUP] ⚠ Retry failed: {str(retry_err)[:100]}")
-                                time.sleep(2)
-                                continue
                         else:
-                            # Other navigation errors
-                            print(f"[GOLOGIN WARMUP] ⚠ Page load error: {str(nav_err)[:100]}")
-                            time.sleep(2)
-                            continue
-        
-                    visit_count += 1
-        
-                    # Wait for page to be ready
-                    try:
-                        driver.execute_script("return document.readyState")
-                    except:
-                        pass
-        
-                    # Wait for page to settle
-                    time.sleep(random.uniform(3, 5))
+                            print(f"[GOLOGIN WARMUP] ✗ Recovery failed, stopping...")
+                            break
+                
+                    # Other errors - skip this site
+                    print(f"[GOLOGIN WARMUP] Skipping {url} due to error")
+                    ssl_error_sites.add(url)
+                    time.sleep(2)
+                    continue
             
-                    # Auto accept cookie consent
+                # ========== PAGE LOADED SUCCESSFULLY - BROWSE ==========
+                visit_count += 1
+            
+                # Wait for page ready
+                try:
+                    driver.execute_script("return document.readyState")
+                except:
+                    pass
+            
+                time.sleep(random.uniform(3, 5))
+            
+                # Auto accept cookie consent
+                try:
+                    if human.accept_cookie_consent():
+                        print(f"[GOLOGIN WARMUP] ✓ Accepted cookie consent banner")
+                        time.sleep(random.uniform(1, 2))
+                except:
+                    pass
+            
+                # Close popups/modals
+                try:
+                    if human.close_popups():
+                        print(f"[GOLOGIN WARMUP] ✓ Closed popup")
+                        time.sleep(random.uniform(0.5, 1.0))
+                except:
+                    pass
+            
+                # Perform search if Google/YouTube
+                search_performed = self._search_on_site(driver, url, keywords)
+                if search_performed:
+                    time.sleep(random.uniform(2, 3))
                     try:
-                        if human.accept_cookie_consent():
-                            print(f"[GOLOGIN WARMUP] ✓ Accepted cookie consent banner")
-                            time.sleep(random.uniform(1, 2))
+                        human.scroll_random()
+                        time.sleep(random.uniform(1, 2))
+                        human.click_random_element()
                     except:
                         pass
+            
+                # Random human-like actions on page
+                actions_on_page = random.randint(1, 3)
+                for _ in range(actions_on_page):
+                    if time.time() - start_time >= total_seconds:
+                        break
+                    try:
+                        human.execute_random_action()
+                        action_count += 1
+                        time.sleep(random.uniform(1.5, 3.0))
+                    except Exception as action_err:
+                        print(f"[GOLOGIN WARMUP] ⚠ Action error")
+                        break
+            
+                # Click deeper logic (50% chance)
+                if random.random() < 0.5 and time.time() - start_time < total_seconds:
+                    print(f"[GOLOGIN WARMUP] Trying to click a link to go deeper...")
+                
+                    try:
+                        main_tab = driver.current_window_handle
+                        tabs_before = len(driver.window_handles)
+                    except:
+                        print(f"[GOLOGIN WARMUP] ⚠ Cannot get window handles")
+                        continue
+                
+                    try:
+                        clicked = human.click_random_link()
                     
-                    # Close popups/modals
-                    try:
-                        if human.close_popups():
-                            print(f"[GOLOGIN WARMUP] ✓ Closed popup")
-                            time.sleep(random.uniform(0.5, 1.0))
-                    except:
-                        pass
-        
-                    # Perform search if Google/YouTube
-                    search_performed = self._search_on_site(driver, url, keywords)
-                    if search_performed:
-                        time.sleep(random.uniform(2, 3))
-                        try:
-                            human.scroll_random()
-                            time.sleep(random.uniform(1, 2))
-                            human.click_random_element()
-                        except:
-                            pass
-        
-                    # Random human-like actions on page
-                    actions_on_page = random.randint(1, 3)
-                    for _ in range(actions_on_page):
-                        if time.time() - start_time >= total_seconds:
-                            break
-                        try:
-                            human.execute_random_action()
-                            action_count += 1
-                            time.sleep(random.uniform(1.5, 3.0))
-                        except Exception as action_err:
-                            print(f"[GOLOGIN WARMUP] ⚠ Action error")
-                            break
-        
-                    # Click deeper logic (50% chance)
-                    if random.random() < 0.5 and time.time() - start_time < total_seconds:
-                        print(f"[GOLOGIN WARMUP] Trying to click a link to go deeper...")
-                
-                        # Remember main tab before clicking
-                        try:
-                            main_tab = driver.current_window_handle
-                            tabs_before = len(driver.window_handles)
-                        except:
-                            print(f"[GOLOGIN WARMUP] ⚠ Cannot get window handles")
-                            continue
-                
-                        try:
-                            clicked = human.click_random_link()
-                            if clicked:
-                                print(f"[GOLOGIN WARMUP] ✓ Clicked deeper link")
+                        if not clicked:
+                            print(f"[GOLOGIN WARMUP] ⚠ No clickable link found on {url}")
+                            # Don't add to blacklist, just skip deeper navigation
+                        else:
+                            print(f"[GOLOGIN WARMUP] ✓ Clicked deeper link")
                         
-                                # Wait and check if new tab opened
-                                time.sleep(2)
-                                tabs_after = len(driver.window_handles)
+                            # Wait and check if new tab opened
+                            time.sleep(2)
+                            tabs_after = len(driver.window_handles)
                         
-                                if tabs_after > tabs_before:
-                                    print(f"[GOLOGIN WARMUP] New tab opened, switching to it...")
-                                    new_tab = driver.window_handles[-1]
-                                    driver.switch_to.window(new_tab)
-                        
-                                # Wait for page to load
+                            if tabs_after > tabs_before:
+                                print(f"[GOLOGIN WARMUP] New tab opened, switching to it...")
+                                new_tab = driver.window_handles[-1]
+                                driver.switch_to.window(new_tab)
+                            
                                 time.sleep(random.uniform(3.0, 5.0))
-                        
-                                # Check if page loaded successfully
-                                try:
-                                    current_url = driver.current_url
-                                    driver.title
-                                    print(f"[GOLOGIN WARMUP] ✓ Navigated to deeper page")
-                                except:
-                                    print(f"[GOLOGIN WARMUP] ⚠ Deeper page not accessible, skipping")
-                                    try:
-                                        driver.switch_to.window(main_tab)
-                                    except:
-                                        pass
-                                    continue
-                        
-                                # Do a few more actions on new page
+                            
+                                # Do actions on new page
                                 deeper_actions = random.randint(1, 3)
                                 for i in range(deeper_actions):
                                     if time.time() - start_time >= total_seconds:
@@ -1216,79 +1217,50 @@ class GoLoginSeleniumCollectAction(BaseAction):
                                         human.execute_random_action()
                                         action_count += 1
                                         time.sleep(random.uniform(1.0, 2.5))
-                                    except Exception as action_err:
-                                        print(f"[GOLOGIN WARMUP] ⚠ Deeper action {i+1} failed")
+                                    except:
                                         break
-                        
-                                # Check if still on main tab, if not switch back
+                            
+                                # Close deeper tab and switch back
                                 try:
-                                    current_tab = driver.current_window_handle
-                                    if current_tab != main_tab:
-                                        print(f"[GOLOGIN WARMUP] Switching back to main tab...")
-                                
-                                        # Close the deeper tab first
-                                        if tabs_after > tabs_before:
-                                            try:
-                                                driver.close()
-                                                print(f"[GOLOGIN WARMUP] ✓ Closed deeper tab")
-                                            except:
-                                                pass
-                                
-                                        # Switch back to main tab
-                                        driver.switch_to.window(main_tab)
-                                        time.sleep(random.uniform(0.5, 1.0))
+                                    print(f"[GOLOGIN WARMUP] Switching back to main tab...")
+                                    if tabs_after > tabs_before:
+                                        driver.close()
+                                    driver.switch_to.window(main_tab)
                                 except Exception as switch_err:
-                                    print(f"[GOLOGIN WARMUP] ⚠ Tab switch error: {str(switch_err)[:50]}")
-                                    # Force switch to first tab as fallback
+                                    print(f"[GOLOGIN WARMUP] ⚠ Tab switch error")
                                     try:
                                         driver.switch_to.window(driver.window_handles[0])
                                     except:
                                         pass
-                            else:
-                                print(f"[GOLOGIN WARMUP] No clickable link found")
-                                ssl_error_sites.add(url)
-                                continue
-    
-                        except Exception as deeper_err:
-                            print(f"[GOLOGIN WARMUP] ⚠ Deeper navigation error: {str(deeper_err)[:50]}")
-                            # Make sure we're back on main tab
+                
+                    except Exception as deeper_err:
+                        print(f"[GOLOGIN WARMUP] ⚠ Deeper navigation error")
+                        try:
+                            driver.switch_to.window(main_tab)
+                        except:
                             try:
-                                driver.switch_to.window(main_tab)
+                                driver.switch_to.window(driver.window_handles[0])
                             except:
-                                try:
-                                    driver.switch_to.window(driver.window_handles[0])
-                                except:
-                                    pass
+                                pass
+            
+                # Stay on page
+                stay_time = random.uniform(10.0, 20.0)
+                print(f"[GOLOGIN WARMUP] Staying on page for {stay_time:.1f}s...")
+                time.sleep(stay_time)
+            
+                # Check if time is up
+                if time.time() - start_time >= total_seconds:
+                    print(f"[GOLOGIN WARMUP] ✓ Time limit reached")
+                    break
         
-                    # Stay on page để cookies được set
-                    stay_time = random.uniform(10.0, 20.0)
-                    print(f"[GOLOGIN WARMUP] Staying on page for {stay_time:.1f}s...")
-                    time.sleep(stay_time)
-            
-                    # Check if time is up
-                    if time.time() - start_time >= total_seconds:
-                        print(f"[GOLOGIN WARMUP] ✓ Time limit reached")
-                        break
-        
-                except Exception as e:
-                    error_msg = str(e).lower()
-            
-                    # Check if tab crashed or session deleted
-                    if "tab crashed" in error_msg or "session deleted" in error_msg:
-                        print(f"[GOLOGIN WARMUP] ✗ Browser tab crashed, stopping browse session")
-                        break
-            
-                    print(f"[GOLOGIN WARMUP] Error browsing {url}: {str(e)[:100]}")
-                    time.sleep(2)
-                    continue
-
             print(f"[GOLOGIN WARMUP] ✓ Visited {visit_count} pages, performed {action_count} actions")
             print(f"[GOLOGIN WARMUP] SSL error sites: {len(ssl_error_sites)}")
-
+        
         except Exception as e:
             print(f"[GOLOGIN WARMUP] Error during browsing: {e}")
             import traceback
             traceback.print_exc()
+
 
             
 

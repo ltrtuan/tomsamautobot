@@ -443,25 +443,135 @@ class SeleniumHumanActions:
     # ============================================================
     # 3. CLICK RANDOM LINK
     # ============================================================
-    def click_random_link(self, max_attempts=3):
+    def click_random_link(self):
         """
-        Click vào link ngẫu nhiên trên page
-        :param max_attempts: Số lần thử tối đa
-        :return: True nếu thành công
+        Click random link on page (for deeper browsing)
+        WITH FILTER to avoid notification/popup buttons
         """
-        for _ in range(max_attempts):
-            try:
-                links = self.driver.find_elements(By.TAG_NAME, "a")
-                valid_links = [link for link in links if link.get_attribute("href") and link.is_displayed()]
+        try:
+            # ← THÊM: Blacklist selectors for notification prompts
+            notification_blacklist = [
+                # Button text patterns
+                "allow", "block", "enable", "disable",
+                "accept all", "reject all", "dismiss",
+                "subscribe", "sign up", "log in", "login",
+                "register", "create account", "join now",
+            
+                # Aria labels
+                "[aria-label*='notification']",
+                "[aria-label*='subscribe']",
+                "[aria-label*='sign up']",
+                "[aria-label*='login']",
+            
+                # Common notification button classes
+                ".notification-button",
+                ".notification-action",
+                ".permission-prompt",
+                ".push-notification",
+                "[class*='notif']",
+                "[class*='permission']",
+                "[class*='subscribe']",
+                "[id*='notification']",
+                "[id*='permission']",
+            
+                # Modal/overlay buttons
+                ".modal button",
+                ".overlay button",
+                "[role='dialog'] button",
+                "[role='alertdialog'] button"
+            ]
+        
+            # Get all clickable links
+            links = self.driver.find_elements(By.TAG_NAME, "a")
+        
+            # Filter valid links
+            valid_links = []
+            for link in links:
+                try:
+                    # Check if link is visible and has href
+                    if not link.is_displayed():
+                        continue
                 
-                if not valid_links:
-                    return False
+                    href = link.get_attribute("href")
+                    if not href or href.startswith("javascript:") or href == "#":
+                        continue
                 
-                link = random.choice(valid_links)
-                return self.click_element(link, delay_before=0.5, delay_after=1.0)
-            except:
-                continue
-        return False
+                    # ← FIX: Check if link is inside notification/modal
+                    # Get element text and attributes
+                    link_text = link.text.lower() if link.text else ""
+                    link_class = link.get_attribute("class") or ""
+                    link_id = link.get_attribute("id") or ""
+                    aria_label = link.get_attribute("aria-label") or ""
+                
+                    # Check against blacklist
+                    is_blacklisted = False
+                
+                    # Check text patterns
+                    blacklist_text_patterns = [
+                        "allow", "block", "enable", "disable",
+                        "accept all", "reject all", "dismiss",
+                        "subscribe", "sign up", "log in", "login",
+                        "register", "create account", "join now",
+                        "notification", "permission"
+                    ]
+                
+                    for pattern in blacklist_text_patterns:
+                        if pattern in link_text or pattern in aria_label.lower():
+                            is_blacklisted = True
+                            break
+                
+                    # Check class/id patterns
+                    if not is_blacklisted:
+                        blacklist_attr_patterns = [
+                            "notif", "permission", "subscribe", "modal", "popup",
+                            "dialog", "overlay", "prompt"
+                        ]
+                    
+                        for pattern in blacklist_attr_patterns:
+                            if pattern in link_class.lower() or pattern in link_id.lower():
+                                is_blacklisted = True
+                                break
+                
+                    # Skip blacklisted links
+                    if is_blacklisted:
+                        continue
+                
+                    # ← ADDITIONAL CHECK: Parent element should not be modal/dialog
+                    try:
+                        parent = link.find_element(By.XPATH, "./ancestor::*[@role='dialog' or @role='alertdialog' or contains(@class, 'modal') or contains(@class, 'popup')][1]")
+                        if parent:
+                            # Link is inside modal/dialog, skip
+                            continue
+                    except:
+                        # No modal parent found, safe to click
+                        pass
+                
+                    # Link is valid
+                    valid_links.append(link)
+                
+                except Exception as e:
+                    continue
+        
+            if not valid_links:
+                print(f"[SELENIUM] No valid links found")
+                return False
+        
+            # Click random link
+            link = random.choice(valid_links)
+        
+            # Scroll to link
+            self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", link)
+            time.sleep(0.5)
+        
+            # Click link
+            link.click()
+            print(f"[SELENIUM] Clicked link: {link.get_attribute('href')[:100]}")
+            return True
+        
+        except Exception as e:
+            print(f"[SELENIUM] click_random_link error: {str(e)[:100]}")
+            return False
+
     
     # ============================================================
     # 4. SCROLL PAGE SMOOTHLY

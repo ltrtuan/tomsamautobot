@@ -1,5 +1,6 @@
 ﻿# models/gologin_api.py
 from gologin import GoLogin
+from gologin import getRandomPort
 import requests
 import time
 import tempfile
@@ -108,12 +109,14 @@ class GoLoginAPI:
             for attempt in range(max_retries):
                 try:
                     # Initialize GoLogin with tmpdir and extra_params
+                    random_port = getRandomPort()
                     gologin_config = {
                         "token": self.api_token,
                         "profile_id": profile_id,
                         "tmpdir": self.tmpdir,
                         "writeCookesFromServer": True,
-                        "uploadCookiesToServer": True
+                        "uploadCookiesToServer": True,
+                        "port": random_port
                     }
                 
                     # Add extra_params if provided (for headless mode)
@@ -215,27 +218,72 @@ class GoLoginAPI:
         # Run gl.stop() in separate thread with 60s timeout
         stop_thread = threading.Thread(target=_stop_internal, daemon=True)
         stop_thread.start()
-    
         print(f"[GOLOGIN] Waiting for gl.stop() to complete (max 60s)...")
         stop_thread.join(timeout=60)
     
         # Check if thread completed
         if not stop_result["completed"]:
-            print(f"[GOLOGIN] ⚠ gl.stop() TIMEOUT after 60s, forcing cleanup...")
+            # TIMEOUT - Force kill immediately
+            print(f"[GOLOGIN] ⚠ gl.stop() TIMEOUT after 60s")
+            print(f"[GOLOGIN] Force killing browser processes due to timeout...")
+        
+            try:
+                self._force_kill_browser_processes(profile_id)
+            except Exception as kill_err:
+                print(f"[GOLOGIN] ⚠ Force kill error: {kill_err}")
+        
             stop_result["success"] = False
             stop_result["message"] = "Stop timeout - forced cleanup"
     
-        # Wait for sync (only if stop succeeded)
-        if stop_result["success"]:
-            print(f"[GOLOGIN] Waiting 5s for cloud sync...")
-            time.sleep(5)
-    
-        # ALWAYS force kill browser processes (even on timeout)
-        print(f"[GOLOGIN] Force killing browser processes...")
-        try:
-            self._force_kill_browser_processes(profile_id)
-        except Exception as kill_err:
-            print(f"[GOLOGIN] ⚠ Force kill error: {kill_err}")
+        else:
+            # Thread completed - check if successful or error
+            if stop_result["success"]:
+                # gl.stop() completed successfully
+                print(f"[GOLOGIN] ✓ gl.stop() completed successfully")
+                print(f"[GOLOGIN] Waiting 10s for cloud sync to complete...")
+                time.sleep(10)  # Increased from 5s to 10s
+            
+                # Verify browser closed naturally
+                print(f"[GOLOGIN] Verifying browser closed...")
+                time.sleep(2)
+            
+                # Check if browser processes still exist (shouldn't happen)
+                try:
+                    import psutil
+                    profile_folder = f"gologin_{profile_id}".lower()
+                    browser_still_running = False
+                
+                    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                        try:
+                            proc_name = proc.info['name'].lower() if proc.info['name'] else ''
+                            is_browser = any(name in proc_name for name in ['orbita', 'chrome', 'chromium'])
+                        
+                            if is_browser and proc.info['cmdline']:
+                                cmdline = ' '.join(proc.info['cmdline']).lower()
+                                if profile_folder in cmdline:
+                                    browser_still_running = True
+                                    print(f"[GOLOGIN] ⚠ Browser process {proc.info['pid']} still running after gl.stop()")
+                                    break
+                        except:
+                            pass
+                
+                    if browser_still_running:
+                        print(f"[GOLOGIN] ⚠ Browser didn't close naturally, force killing...")
+                        self._force_kill_browser_processes(profile_id)
+                    else:
+                        print(f"[GOLOGIN] ✓ Browser closed naturally, no need to force kill")
+                    
+                except Exception as verify_err:
+                    print(f"[GOLOGIN] ⚠ Verification warning: {verify_err}")
+        
+            else:
+                # gl.stop() completed but with error
+                print(f"[GOLOGIN] ⚠ gl.stop() completed with error: {stop_result['message']}")
+                print(f"[GOLOGIN] Force killing browser processes...")
+                try:
+                    self._force_kill_browser_processes(profile_id)
+                except Exception as kill_err:
+                    print(f"[GOLOGIN] ⚠ Force kill error: {kill_err}")
     
         # Remove from active profiles
         try:
@@ -251,12 +299,13 @@ class GoLoginAPI:
             # Still return True because profile is cleaned up
             return True, f"Stopped with warnings: {stop_result['message']}"
 
+
     
         
     def _force_kill_browser_processes(self, profile_id):
         """
-        Force kill Orbita/Chrome processes ONLY related to GoLogin profile
-        SAFE: Will NOT kill user's personal Chrome browser
+        Force kill Orbita/Chrome processes ONLY related to THIS SPECIFIC GoLogin profile
+        SAFE: Will NOT kill user's personal Chrome browser or OTHER profiles' browsers
         """
         try:
             import psutil
@@ -264,6 +313,10 @@ class GoLoginAPI:
         
             # Get tmpdir path to identify GoLogin processes
             tmpdir_lower = self.tmpdir.lower()
+        
+            # ← FIX: Build profile-specific identifier
+            profile_folder = f"gologin_{profile_id}".lower()
+            print(f"[GOLOGIN] [{profile_id}] Looking for processes with folder: {profile_folder}")
         
             for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'exe']):
                 try:
@@ -275,13 +328,18 @@ class GoLoginAPI:
                     if is_browser and proc.info['cmdline']:
                         cmdline = ' '.join(proc.info['cmdline']).lower()
                     
-                        # CRITICAL CHECK: Only kill if related to GoLogin
-                        # Must have at least 2 of these conditions:
-                        is_gologin_process = False
+                        # ← FIX: Check if this process belongs to THIS profile
+                        belongs_to_this_profile = profile_folder in cmdline
+                    
+                        if not belongs_to_this_profile:
+                            # This process belongs to different profile or user's Chrome
+                            continue
+                    
+                        # Additional safety checks (must have at least 2 of these)
                         match_count = 0
                     
-                        # Check 1: Profile ID in command line
-                        if profile_id.lower() in cmdline:
+                        # Check 1: Profile folder in command line (already checked above)
+                        if profile_folder in cmdline:
                             match_count += 1
                     
                         # Check 2: "gologin" keyword in command line or exe path
@@ -302,27 +360,27 @@ class GoLoginAPI:
                         elif proc.info['exe'] and 'orbita' in proc.info['exe'].lower():
                             match_count += 1
                     
-                        # Only kill if at least 2 conditions match
-                        is_gologin_process = match_count >= 2
-                    
-                        if is_gologin_process:
-                            print(f"[GOLOGIN] Force killing GoLogin {proc_name} process: {proc.info['pid']} (matches: {match_count})")
+                        # Only kill if at least 2 conditions match AND belongs to this profile
+                        if match_count >= 2:
+                            print(f"[GOLOGIN] [{profile_id}] Force killing browser process: {proc.info['pid']} (matches: {match_count})")
                             proc.kill()
                             killed_count += 1
                         else:
-                            # This is likely user's personal Chrome - DO NOT KILL
+                            # Safety check failed - don't kill
                             pass
+                        
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     pass
         
             if killed_count > 0:
-                print(f"[GOLOGIN] ✓ Killed {killed_count} GoLogin browser process(es)")
+                print(f"[GOLOGIN] [{profile_id}] ✓ Killed {killed_count} browser process(es) for THIS profile")
                 time.sleep(2)  # Wait for processes to die
             else:
-                print(f"[GOLOGIN] No GoLogin browser processes to kill")
+                print(f"[GOLOGIN] [{profile_id}] No browser processes found for this profile")
             
         except Exception as e:
-            print(f"[GOLOGIN] ⚠ Process kill warning: {e}")
+            print(f"[GOLOGIN] [{profile_id}] ⚠ Process kill warning: {e}")
+
 
 
     # def stop_profile(self, profile_id, clean_profile=False):
@@ -747,38 +805,33 @@ class GoLoginAPI:
 
     def get_all_profiles(self):
         """
-        Get ALL profiles from GoLogin account with pagination + duplicate detection
+        Get ALL profiles from GoLogin account with pagination
         API: GET https://api.gologin.com/browser/v2
         Documentation: https://gologin.com/docs/api-reference/profile/get-all-profiles
-    
-        Strategy: Stop IMMEDIATELY when first duplicate is detected (API bug workaround)
     
         Returns:
             tuple: (success: bool, all_profiles: list or error message)
         """
         try:
             all_profiles = []
-            seen_profile_ids = set()  # Track seen profile IDs
-            skip = 0
-            limit = 30
+            seen_profile_ids = set()
             page = 1
-            max_pages = 100  # Safety limit
+            limit = 30  # Maximum allowed by GoLogin API
+            max_pages = 100
         
             print(f"[GOLOGIN] Fetching ALL profiles with pagination...")
         
             while page <= max_pages:
                 url = f"{self.base_url}/browser/v2"
-            
                 params = {
                     "limit": limit,
-                    "skip": skip
+                    "page": page  # Use "page" parameter instead of "skip"
                 }
             
-                print(f"[GOLOGIN] Fetching page {page} (skip={skip}, limit={limit})...")
+                print(f"[GOLOGIN] Fetching page {page} (limit={limit})...")
                 print(f"[DEBUG] GET {url}")
             
                 response = requests.get(url, headers=self.headers, params=params, timeout=30)
-            
                 print(f"[DEBUG] Response Status: {response.status_code}")
             
                 if response.status_code == 200:
@@ -786,7 +839,6 @@ class GoLoginAPI:
                 
                     # Parse response
                     profiles_page = []
-                
                     if isinstance(data, list):
                         profiles_page = data
                     elif isinstance(data, dict):
@@ -796,40 +848,40 @@ class GoLoginAPI:
                 
                     # STOP CONDITION 1: Empty page
                     if len(profiles_page) == 0:
-                        print(f"[GOLOGIN] Empty page, stopping")
+                        print(f"[GOLOGIN] Empty page, stopping pagination")
                         break
                 
                     # Process profiles one by one
-                    has_duplicate = False
                     new_profiles_count = 0
+                    duplicates_in_this_page = 0
                 
                     for profile in profiles_page:
                         profile_id = profile.get("id")
-                    
                         if not profile_id:
                             continue
                     
                         # Check if this profile was seen before
                         if profile_id in seen_profile_ids:
-                            # DUPLICATE DETECTED - STOP IMMEDIATELY
-                            print(f"[GOLOGIN] ⚠ Duplicate profile detected: {profile_id}")
-                            print(f"[GOLOGIN] Reached end of unique data, stopping pagination")
-                            has_duplicate = True
-                            break  # Break inner loop
+                            duplicates_in_this_page += 1
+                            continue
                     
-                        # New unique profile
+                        # New unique profile - add it
                         all_profiles.append(profile)
                         seen_profile_ids.add(profile_id)
                         new_profiles_count += 1
                 
-                    print(f"[GOLOGIN] Page {page}: Added {new_profiles_count} new profile(s)")
+                    # Log page results
+                    if duplicates_in_this_page > 0:
+                        print(f"[GOLOGIN] Page {page}: Added {new_profiles_count} new profile(s), skipped {duplicates_in_this_page} duplicate(s)")
+                    else:
+                        print(f"[GOLOGIN] Page {page}: Added {new_profiles_count} new profile(s)")
                 
-                    # STOP CONDITION 2: Duplicate found
-                    if has_duplicate:
-                        break  # Break outer loop
+                    # STOP CONDITION 2: Page has ONLY duplicates (reached end)
+                    if new_profiles_count == 0 and duplicates_in_this_page > 0:
+                        print(f"[GOLOGIN] ⚠ Page {page} contains only duplicates ({duplicates_in_this_page}), stopping pagination")
+                        break
                 
                     # Move to next page
-                    skip += limit
                     page += 1
                 
                 else:
@@ -848,13 +900,12 @@ class GoLoginAPI:
         
             print(f"[GOLOGIN] ✓ SUCCESS: Retrieved {len(all_profiles)} unique profile(s)")
             return True, all_profiles
-            
+        
         except Exception as e:
             print(f"[GOLOGIN] Get profiles error: {e}")
             import traceback
             traceback.print_exc()
             return False, str(e)
-
 
 
 
