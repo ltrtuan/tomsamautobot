@@ -18,6 +18,12 @@ class GoLoginSeleniumStartParams(BaseActionParams):
         # ========== API KEY VARIABLE SECTION ==========
         self.create_api_key_variable_section()
         
+        # ========== ACTION TYPE SECTION ==========
+        self.create_action_type_section()
+        
+        # ========== KEYWORDS SECTION ==========
+        self.create_keywords_section()
+        
         # ========== PROFILE IDs SECTION ==========
         self.create_profile_ids_section()
         
@@ -76,44 +82,6 @@ class GoLoginSeleniumStartParams(BaseActionParams):
         )
         entry.pack(anchor=tk.W, padx=5)
     
-    def create_profile_ids_section(self):
-        """Profile IDs textarea"""
-        text_frame = tk.LabelFrame(
-            self.parent_frame,
-            text="Profile IDs",
-            bg=cfg.LIGHT_BG_COLOR,
-            pady=10,
-            padx=10
-        )
-        text_frame.pack(fill=tk.BOTH, expand=True, pady=10)
-        
-        label_text = (
-            "Multiple profile IDs separated by ';'. Special formats:\n"
-            "<VARIABLE_NAME> to use variable value\n"
-            "Example: 68e485dd;<PROFILE_ID>;68e486ab"
-        )
-        
-        label = tk.Label(
-            text_frame,
-            text=label_text,
-            bg=cfg.LIGHT_BG_COLOR,
-            justify=tk.LEFT,
-            wraplength=400
-        )
-        label.pack(anchor=tk.W, pady=(0, 5))
-        
-        self.profile_ids_input = scrolledtext.ScrolledText(
-            text_frame,
-            height=4,
-            width=50,
-            wrap=tk.WORD,
-            font=("Segoe UI", 10)
-        )
-        self.profile_ids_input.pack(fill=tk.BOTH, expand=True)
-        
-        if self.parameters:
-            profile_ids = self.parameters.get("profile_ids", "")
-            self.profile_ids_input.insert("1.0", profile_ids)
     
     def create_how_to_get_profile_section(self):
         """How to get profile selection"""
@@ -142,6 +110,88 @@ class GoLoginSeleniumStartParams(BaseActionParams):
             width=20
         )
         combo.pack(side=tk.LEFT, padx=5)
+        
+    def create_keywords_section(self):
+        """Keywords file browse section"""
+        keywords_frame = tk.LabelFrame(
+            self.parent_frame,
+            text="Search Keywords (for YouTube/Google)",
+            bg=cfg.LIGHT_BG_COLOR,
+            pady=10,
+            padx=10
+        )
+        keywords_frame.pack(fill=tk.X, pady=10)
+
+        # Option 1: Browse keywords TXT file
+        keywords_browse_label = tk.Label(
+            keywords_frame,
+            text="Option 1: Keywords TXT file (one keyword per line):",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9)
+        )
+        keywords_browse_label.pack(anchor=tk.W, pady=(0, 3))
+
+        keywords_browse_frame = tk.Frame(keywords_frame, bg=cfg.LIGHT_BG_COLOR)
+        keywords_browse_frame.pack(fill=tk.X, pady=(0, 10))
+
+        self.keywords_file_var = tk.StringVar()
+        if self.parameters:
+            self.keywords_file_var.set(self.parameters.get("keywords_file", ""))
+
+        keywords_entry = tk.Entry(
+            keywords_browse_frame,
+            textvariable=self.keywords_file_var,
+            font=("Segoe UI", 10)
+        )
+        keywords_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+
+        def browse_keywords_file():
+            filename = filedialog.askopenfilename(
+                title="Select Keywords TXT File",
+                filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+            )
+            if filename:
+                self.keywords_file_var.set(filename)
+
+        browse_keywords_button = ttk.Button(
+            keywords_browse_frame,
+            text="Browse",
+            command=browse_keywords_file
+        )
+        browse_keywords_button.pack(side=tk.LEFT)
+
+        # Option 2: Variable name
+        keywords_var_label = tk.Label(
+            keywords_frame,
+            text="Option 2: Variable name containing keywords TXT file path:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9)
+        )
+        keywords_var_label.pack(anchor=tk.W, pady=(0, 3))
+
+        self.keywords_variable_var = tk.StringVar()
+        if self.parameters:
+            self.keywords_variable_var.set(self.parameters.get("keywords_variable", ""))
+
+        keywords_var_entry = tk.Entry(
+            keywords_frame,
+            textvariable=self.keywords_variable_var,
+            font=("Segoe UI", 10)
+        )
+        keywords_var_entry.pack(fill=tk.X, pady=(0, 5))
+
+        # Hint
+        keywords_hint = tk.Label(
+            keywords_frame,
+            text="💡 Keywords will be used when Action Type is YouTube or Google. Random keyword per search.",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 8),
+            fg="#666666",
+            wraplength=500,
+            justify=tk.LEFT
+        )
+        keywords_hint.pack(anchor=tk.W)
+
     
     def create_options_section(self):
         """Options checkboxes and cookies import - BỎ HEADLESS VÀ MULTI-THREADING"""
@@ -257,6 +307,217 @@ class GoLoginSeleniumStartParams(BaseActionParams):
             justify=tk.LEFT
         )
         proxy_hint.pack(anchor=tk.W, pady=(2,0))
+        
+
+        # ========== THÊM MULTI-THREADING SECTION ==========
+        separator = ttk.Separator(options_frame, orient='horizontal')
+        separator.pack(fill=tk.X, pady=10)
+
+        threading_label = tk.Label(
+            options_frame,
+            text="Multi-Threading (Parallel Start):",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10, "bold")
+        )
+        threading_label.pack(anchor=tk.W, pady=(5, 2))
+
+        # Enable multi-threading checkbox
+        self.enable_threading_var = tk.BooleanVar()
+        if self.parameters:
+            self.enable_threading_var.set(self.parameters.get("enable_threading", False))
+        else:
+            self.enable_threading_var.set(False)
+
+        threading_cb = tk.Checkbutton(
+            options_frame,
+            text="Enable Multi-Threading (start multiple profiles simultaneously)",
+            variable=self.enable_threading_var,
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10)
+        )
+        threading_cb.pack(anchor=tk.W, pady=2)
+
+        # Max workers input
+        workers_frame = tk.Frame(options_frame, bg=cfg.LIGHT_BG_COLOR)
+        workers_frame.pack(fill=tk.X, pady=5)
+
+        workers_label = tk.Label(
+            workers_frame,
+            text="Max parallel profiles:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9)
+        )
+        workers_label.pack(side=tk.LEFT, padx=(20, 5))
+
+        self.max_workers_var = tk.StringVar()
+        if self.parameters:
+            self.max_workers_var.set(self.parameters.get("max_workers", "3"))
+        else:
+            self.max_workers_var.set("3")
+
+        workers_entry = ttk.Entry(
+            workers_frame,
+            textvariable=self.max_workers_var,
+            width=5
+        )
+        workers_entry.pack(side=tk.LEFT, padx=5)
+
+        workers_hint = tk.Label(
+            workers_frame,
+            text="(Recommended: 3-5 for normal PC)",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 8),
+            fg="#666666"
+        )
+        workers_hint.pack(side=tk.LEFT, padx=5)
+
+        
+    def create_action_type_section(self):
+        """Action type selection: None, Youtube, Google"""
+        action_frame = tk.LabelFrame(
+            self.parent_frame,
+            text="Action Type",
+            bg=cfg.LIGHT_BG_COLOR,
+            pady=10,
+            padx=10
+        )
+        action_frame.pack(fill=tk.X, pady=10)
+    
+        self.action_type_var = tk.StringVar()
+        if self.parameters:
+            self.action_type_var.set(self.parameters.get("action_type", "None"))
+        else:
+            self.action_type_var.set("None")
+    
+        radio_frame = tk.Frame(action_frame, bg=cfg.LIGHT_BG_COLOR)
+        radio_frame.pack(anchor=tk.W)
+    
+        tk.Radiobutton(
+            radio_frame,
+            text="None (just start profile)",
+            variable=self.action_type_var,
+            value="None",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10)
+        ).pack(side=tk.LEFT, padx=10)
+    
+        tk.Radiobutton(
+            radio_frame,
+            text="YouTube Search",
+            variable=self.action_type_var,
+            value="Youtube",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10)
+        ).pack(side=tk.LEFT, padx=10)
+    
+        tk.Radiobutton(
+            radio_frame,
+            text="Google Search",
+            variable=self.action_type_var,
+            value="Google",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10)
+        ).pack(side=tk.LEFT, padx=10)
+
+
+    def create_profile_ids_section(self):
+        """Profile IDs textarea with range selection"""
+        text_frame = tk.LabelFrame(
+            self.parent_frame,
+            text="Profile IDs",
+            bg=cfg.LIGHT_BG_COLOR,
+            pady=10,
+            padx=10
+        )
+        text_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+
+        # ========== THAY THẾ: 2 TEXTBOX INTEGER RANGE ==========
+        range_frame = tk.Frame(text_frame, bg=cfg.LIGHT_BG_COLOR)
+        range_frame.pack(fill=tk.X, pady=(0, 10))
+
+        # How many profiles
+        tk.Label(
+            range_frame,
+            text="How many profiles to use:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10)
+        ).pack(side=tk.LEFT, padx=(0, 5))
+
+        self.profile_count_var = tk.StringVar()
+        if self.parameters:
+            self.profile_count_var.set(self.parameters.get("profile_count", "30"))
+        else:
+            self.profile_count_var.set("30")
+
+        count_entry = ttk.Entry(
+            range_frame,
+            textvariable=self.profile_count_var,
+            width=10
+        )
+        count_entry.pack(side=tk.LEFT, padx=5)
+
+        # From profile index
+        tk.Label(
+            range_frame,
+            text="From profile index:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10)
+        ).pack(side=tk.LEFT, padx=(15, 5))
+
+        self.profile_start_index_var = tk.StringVar()
+        if self.parameters:
+            self.profile_start_index_var.set(self.parameters.get("profile_start_index", "0"))
+        else:
+            self.profile_start_index_var.set("0")
+
+        start_entry = ttk.Entry(
+            range_frame,
+            textvariable=self.profile_start_index_var,
+            width=10
+        )
+        start_entry.pack(side=tk.LEFT, padx=5)
+
+        # Hint
+        hint_label = tk.Label(
+            text_frame,
+            text="💡 Example: Count=30, Start=10 → Use profiles from index 10 to 39 (30 profiles total)",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 8),
+            fg="#666666",
+            wraplength=500,
+            justify=tk.LEFT
+        )
+        hint_label.pack(anchor=tk.W, pady=(0, 10))
+
+        # ========== PROFILE IDS TEXTAREA (EXISTING) ==========
+        label_text = (
+            "OR manually enter Profile IDs separated by ';'. Special formats:\n"
+            " <variable_name> to use variable value\n"
+            "Example: 68e485dd;<profile_var>;68e486ab\n"
+            "(Leave empty to use range above)"
+        )
+        label = tk.Label(
+            text_frame,
+            text=label_text,
+            bg=cfg.LIGHT_BG_COLOR,
+            justify=tk.LEFT,
+            wraplength=500
+        )
+        label.pack(anchor=tk.W, pady=(0, 5))
+
+        self.profile_ids_input = scrolledtext.ScrolledText(
+            text_frame,
+            height=4,
+            width=50,
+            wrap=tk.WORD,
+            font=("Segoe UI", 10)
+        )
+        self.profile_ids_input.pack(fill=tk.BOTH, expand=True)
+
+        if self.parameters:
+            profile_ids = self.parameters.get("profile_ids", "")
+            self.profile_ids_input.insert("1.0", profile_ids)
+
     
     
     def get_parameters(self):
@@ -276,5 +537,13 @@ class GoLoginSeleniumStartParams(BaseActionParams):
         params["proxy_port_variable"] = self.proxy_port_var.get().strip()
         params["proxy_username_variable"] = self.proxy_username_var.get().strip()
         params["proxy_password_variable"] = self.proxy_password_var.get().strip()
+        
+        params["profile_count"] = self.profile_count_var.get().strip()
+        params["profile_start_index"] = self.profile_start_index_var.get().strip()
+        params["action_type"] = self.action_type_var.get()
+        params["keywords_file"] = self.keywords_file_var.get().strip()
+        params["keywords_variable"] = self.keywords_variable_var.get().strip()
+        params["enable_threading"] = self.enable_threading_var.get()
+        params["max_workers"] = self.max_workers_var.get().strip()
         
         return params

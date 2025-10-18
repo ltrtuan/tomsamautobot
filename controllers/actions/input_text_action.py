@@ -131,3 +131,29 @@ class InputTextAction(BaseAction):
                 if self.should_stop():
                     break
                 pyautogui.write(char, interval=random.uniform(0.05, 0.15))
+                
+    @staticmethod
+    def input_text_static(text, how_to_input="Press Keyboard"):
+        """
+        Static method để input text từ action khác
+    
+        Args:
+            text: Text cần input
+            how_to_input: "Press Keyboard" hoặc "Copy & Paste"
+        """
+        import pyautogui
+        import pyperclip
+        import random
+        import time
+    
+        if how_to_input == "Copy & Paste":
+            # Copy & Paste
+            pyperclip.copy(text)
+            time.sleep(0.1)
+            pyautogui.hotkey('ctrl', 'v')
+        
+        else:  # Press Keyboard (default)
+            # Type character by character
+            for char in text:
+                pyautogui.write(char, interval=random.uniform(0.05, 0.15))
+

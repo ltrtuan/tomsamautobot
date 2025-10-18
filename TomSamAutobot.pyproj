@@ -64,6 +64,9 @@
     <Compile Include="core\interfaces.py" />
     <Compile Include="exceptions\loop_exceptions.py" />
     <Compile Include="exceptions\__init__.py" />
+    <Compile Include="helpers\flow_google.py" />
+    <Compile Include="helpers\flow_youtube.py" />
+    <Compile Include="helpers\gologin_profile_helper.py" />
     <Compile Include="helpers\selenium_actions.py" />
     <Compile Include="helpers\selenium_registry.py" />
     <Compile Include="login_window.py" />
