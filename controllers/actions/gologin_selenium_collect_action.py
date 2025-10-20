@@ -6,7 +6,8 @@ from models.gologin_api import get_gologin_api
 import random
 import os
 import time
-
+import threading
+gologin_focus_lock = threading.Lock()
 # Import helpers
 from helpers.gologin_profile_helper import GoLoginProfileHelper
 from helpers.selenium_registry import register_selenium_driver, unregister_selenium_driver
@@ -315,18 +316,25 @@ class GoLoginSeleniumCollectAction(BaseAction):
                     driver = None
         
             print(f"[GOLOGIN WARMUP] [{profile_id}] Waiting for Chrome process cleanup...")
-            time.sleep(5)
+            time.sleep(15)
         
             if gologin:
                 try:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] Stopping profile and syncing cookies...")
-                    success, msg = gologin.stop_profile(profile_id)
-                    if success:
-                        print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Profile stopped and data synced")
-                        print(f"[GOLOGIN WARMUP] [{profile_id}] Waiting for cloud sync to complete...")
-                        time.sleep(5)
-                    else:
-                        print(f"[GOLOGIN WARMUP] [{profile_id}] ✗ Stop failed: {msg}")
+                    print(f"[GOLOGIN WARMUP] [{profile_id}] Requesting profile stop (async)...")
+                    def async_stop():
+                        with gologin_focus_lock:
+                            try:
+                                # Gọi stop_profile trong thread riêng, tránh block main thread
+                                success, msg = gologin.stop_profile(profile_id)
+                                if success:
+                                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Profile stopped and data synced")
+                                else:
+                                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✗ Stop failed: {msg}")
+                            except Exception as stop_ex:
+                                print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Stop error: {stop_ex}")
+
+                    threading.Thread(target=async_stop, daemon=True).start()
+                    time.sleep(2)  # chờ sync nhẹ để thread stop bắt đầu
                 except Exception as stop_err:
                     print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Stop profile error: {stop_err}")
         

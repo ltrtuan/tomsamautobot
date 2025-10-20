@@ -437,6 +437,10 @@ class GoLoginSeleniumStartAction(BaseAction):
                     except Exception as e:
                         print(f"[CLEANUP][{profile_id}]   ⚠ Failed to quit driver: {e}")
             
+                # Wait for driver cleanup to complete (critical for parallel execution)
+                print(f"[CLEANUP][{profile_id}] Waiting 5s for driver cleanup...")
+                time.sleep(5)  # Give browser time to close gracefully
+                
                 # Step 3: Stop profile qua API
                 try:
                     self.gologin_api.stop_profile(profile_id)

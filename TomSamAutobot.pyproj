@@ -64,12 +64,16 @@
     <Compile Include="core\interfaces.py" />
     <Compile Include="exceptions\loop_exceptions.py" />
     <Compile Include="exceptions\__init__.py" />
+    <Compile Include="helpers\actions\base_flow_action.py" />
     <Compile Include="helpers\actions\base_youtube_action.py" />
+    <Compile Include="helpers\actions\youtube_click_ad_action.py" />
     <Compile Include="helpers\actions\youtube_click_video_action.py" />
     <Compile Include="helpers\actions\youtube_mouse_move_action.py" />
     <Compile Include="helpers\actions\youtube_navigate_action.py" />
+    <Compile Include="helpers\actions\youtube_pause_resume_action.py" />
     <Compile Include="helpers\actions\youtube_scroll_action.py" />
     <Compile Include="helpers\actions\youtube_search_action.py" />
+    <Compile Include="helpers\actions\youtube_seek_video_action.py" />
     <Compile Include="helpers\actions\youtube_skip_ads_action.py" />
     <Compile Include="helpers\action_chain_manager.py" />
     <Compile Include="helpers\flow_google.py" />
