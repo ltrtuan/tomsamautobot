@@ -142,6 +142,9 @@ class SeleniumHumanActions:
         Tự động detect và click nút Accept/Allow cookies consent banner
         :return: True nếu tìm thấy và click được, False nếu không
         """
+        import time  # ← THÊM nếu chưa có ở đầu file
+        start_time = time.time()  # ← THÊM
+        timeout_seconds = 5  # ← THÊM: Chỉ tìm tối đa 5 giây
         try:
             # Common selectors for cookie consent buttons
             # Priority: ID > Class > Button text > Link text
@@ -185,6 +188,9 @@ class SeleniumHumanActions:
         
             # Try each selector
             for selector in consent_selectors:
+                if time.time() - start_time > timeout_seconds:
+                    print(f"[SELENIUM] ⏱ Cookie consent search timeout ({timeout_seconds}s), no button found")
+                    return False
                 try:
                     # Wait max 2 seconds for each selector
                     element = WebDriverWait(self.driver, 2).until(
@@ -230,6 +236,9 @@ class SeleniumHumanActions:
         Tự động detect và đóng các popup/modal/overlay phổ biến
         :return: True nếu đóng được popup, False nếu không
         """
+        import time  # ← THÊM nếu chưa có
+        start_time = time.time()  # ← THÊM
+        timeout_seconds = 5  # ← THÊM: Chỉ tìm tối đa 5 giây
         try:
             closed_any = False
         
@@ -260,6 +269,9 @@ class SeleniumHumanActions:
             ]
         
             for selector in close_button_selectors:
+                if time.time() - start_time > timeout_seconds:
+                    print(f"[SELENIUM] ⏱ Popup search timeout ({timeout_seconds}s)")
+                    break  # Thoát vòng lặp, tiếp tục try overlay và ESC
                 try:
                     element = WebDriverWait(self.driver, 1).until(
                         EC.element_to_be_clickable((By.XPATH, selector))
@@ -348,6 +360,101 @@ class SeleniumHumanActions:
         
         except Exception as e:
             print(f"[SELENIUM] close_popups error: {e}")
+            return False
+
+    def click_random_link_with_retry(self):
+        """
+        Click RANDOM link from ALL available links on page
+        - Randomly SELECT which link to click (not always first one)
+        - Filter out non-interactable elements
+        - Returns: bool - True if successful
+        """
+        try:
+            from selenium.webdriver.common.by import By
+        
+            # Find ALL links on page
+            all_links = self.driver.find_elements(By.TAG_NAME, 'a')
+        
+            print(f"Found {len(all_links)} total links on page")
+        
+            # Filter: Only visible, interactable elements with size > 0
+            clickable_links = []
+            for link in all_links:
+                try:
+                    # Check if element is displayed and enabled
+                    if not link.is_displayed() or not link.is_enabled():
+                        continue
+                
+                    # Check size and location
+                    size = link.size
+                    location = link.location
+                
+                    # Must have positive size and valid location
+                    if size['width'] > 0 and size['height'] > 0 and \
+                       location['x'] >= 0 and location['y'] >= 0:
+                    
+                        # Additional check: element must have href
+                        href = link.get_attribute('href')
+                        if href and href not in ['#', 'javascript:void(0)', 'javascript:;'] and not href.startswith('mailto:') and not href.startswith('tel:') and not href.startswith('sms:'):
+                            clickable_links.append(link)
+                        
+                except Exception as filter_err:
+                    # Element became stale or not accessible
+                    continue
+        
+            print(f"Filtered to {len(clickable_links)} clickable links")
+        
+            if not clickable_links:
+                print("No clickable links found")
+                return False
+        
+            # ========== RANDOM SELECT LINK (KEY CHANGE) ==========
+            # Randomly pick ONE link from all clickable links
+            target_link = random.choice(clickable_links)
+        
+            # Get link info for logging
+            try:
+                link_text = target_link.text[:50] if target_link.text else "No text"
+                link_href = target_link.get_attribute('href')[:100] if target_link.get_attribute('href') else "No href"
+                print(f"Selected random link: '{link_text}' -> {link_href}")
+            except:
+                print("Selected random link (info unavailable)")
+            # ====================================================
+        
+            # Scroll element into view
+            try:
+                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'smooth'});", target_link)
+                time.sleep(0.5)
+            except:
+                pass
+        
+            # Highlight element briefly (optional, for debugging)
+            try:
+                original_style = target_link.get_attribute('style')
+                self.driver.execute_script("arguments[0].setAttribute('style', 'border: 2px solid red;');", target_link)
+                time.sleep(0.3)
+                self.driver.execute_script(f"arguments[0].setAttribute('style', '{original_style}');", target_link)
+            except:
+                pass
+        
+            # Click the link
+            try:
+                target_link.click()
+                print("✓ Link clicked successfully")
+                return True
+            except Exception as click_err:
+                # Try JavaScript click as fallback
+                print(f"Normal click failed, trying JavaScript click: {click_err}")
+                try:
+                    self.driver.execute_script("arguments[0].click();", target_link)
+                    print("✓ Link clicked via JavaScript")
+                    return True
+                except Exception as js_err:
+                    print(f"JavaScript click also failed: {js_err}")
+                    return False
+        
+        except Exception as e:
+            print(f"click_random_link_with_retry error: {e}")
             return False
 
 

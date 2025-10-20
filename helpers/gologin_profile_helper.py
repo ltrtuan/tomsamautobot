@@ -3,10 +3,16 @@
 from models.global_variables import GlobalVariables
 from models.gologin_api import get_gologin_api
 import random
-
+import threading
+import time
+_chromedriver_lock = threading.Lock()
+_window_focus_lock = threading.Lock()
 class GoLoginProfileHelper:
     """Helper class for common GoLogin profile operations"""
-    
+     # ========== THÊM CLASS VARIABLES ĐỂ CACHE ==========
+    _keywords_cache = {}   # Cache: {file_path: [keywords]}
+    _websites_cache = {}   # Cache: {file_path: [websites]}
+    # ==================================================
     @staticmethod
     def get_profile_list(params, api_token, log_prefix="[GOLOGIN]"):
         """
@@ -122,36 +128,124 @@ class GoLoginProfileHelper:
     
     @staticmethod
     def load_keywords(params, log_prefix="[GOLOGIN]"):
-        """Load keywords from file for YouTube/Google search"""
+        """
+        Load keywords from file with caching
+    
+        Args:
+            params: Dict containing keywords_file or keywords_variable
+            log_prefix: Prefix for log messages
+        
+        Returns:
+            list: List of keywords
+        """
         try:
-            # Get keywords file path
+            # Get keywords file - priority: variable > direct path
             keywords_file = None
             keywords_var = params.get("keywords_variable", "").strip()
             if keywords_var:
                 keywords_file = GlobalVariables().get(keywords_var, "")
-            
+        
             if not keywords_file:
                 keywords_file = params.get("keywords_file", "").strip()
-            
+        
             if not keywords_file:
                 return []
-            
+        
             import os
             if not os.path.exists(keywords_file):
                 print(f"{log_prefix} Keywords file not found: {keywords_file}")
                 return []
-            
-            # Read keywords
+        
+            # ========== CHECK CACHE FIRST ==========
+            if keywords_file in GoLoginProfileHelper._keywords_cache:
+                cached = GoLoginProfileHelper._keywords_cache[keywords_file]
+                print(f"{log_prefix} ✓ Using cached {len(cached)} keywords")
+                return cached
+            # ======================================
+        
+            # Load from file (first time only)
+            print(f"{log_prefix} Loading keywords from file (first time)...")
             with open(keywords_file, 'r', encoding='utf-8') as f:
                 keywords = [line.strip() for line in f if line.strip() and not line.startswith('#')]
-            
-            if keywords:
-                print(f"{log_prefix} Loaded {len(keywords)} keywords from file")
+        
+            if not keywords:
+                print(f"{log_prefix} ✗ No valid keywords found in file")
+                return []
+        
+            # ========== SAVE TO CACHE ==========
+            GoLoginProfileHelper._keywords_cache[keywords_file] = keywords
+            print(f"{log_prefix} ✓ Loaded and cached {len(keywords)} keywords")
+            # ==================================
+        
             return keywords
         except Exception as e:
             print(f"{log_prefix} Error loading keywords: {e}")
             return []
-    
+        
+
+    @staticmethod
+    def load_websites(params, log_prefix="[GOLOGIN]"):
+        """
+        Load websites from file with caching
+        
+        Args:
+            params: Dict containing websites_file or websites_variable
+            log_prefix: Prefix for log messages
+            
+        Returns:
+            list: List of website URLs
+        """
+        try:
+            import os
+            
+            # Get websites file - priority: variable > direct path
+            websites_file = None
+            websites_var = params.get("websites_variable", "").strip()
+            if websites_var:
+                from models.global_variables import GlobalVariables
+                websites_file = GlobalVariables().get(websites_var, "")
+            
+            if not websites_file:
+                websites_file = params.get("websites_file", "").strip()
+            
+            if not websites_file or not os.path.exists(websites_file):
+                print(f"{log_prefix} ✗ Websites file not found: {websites_file}")
+                return []
+            
+            # ========== CHECK CACHE FIRST ==========
+            if websites_file in GoLoginProfileHelper._websites_cache:
+                cached = GoLoginProfileHelper._websites_cache[websites_file]
+                print(f"{log_prefix} ✓ Using cached {len(cached)} websites")
+                return cached
+            # ======================================
+            
+            # Load from file (first time only)
+            print(f"{log_prefix} Loading websites from file (first time)...")
+            websites = []
+            with open(websites_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    url = line.strip()
+                    if url and not url.startswith('#'):
+                        # Fix URL: add https:// if missing protocol
+                        if not url.startswith(('http://', 'https://')):
+                            url = 'https://' + url
+                        websites.append(url)
+            
+            if not websites:
+                print(f"{log_prefix} ✗ No valid URLs found in file")
+                return []
+            
+            # ========== SAVE TO CACHE ==========
+            GoLoginProfileHelper._websites_cache[websites_file] = websites
+            print(f"{log_prefix} ✓ Loaded and cached {len(websites)} websites")
+            # ==================================
+            
+            return websites
+        except Exception as e:
+            print(f"{log_prefix} Error loading websites: {e}")
+            return []
+        
+
     @staticmethod
     def cleanup_browser_tabs(driver, log_prefix="[GOLOGIN]"):
         """Close all tabs except first one"""
@@ -200,44 +294,88 @@ class GoLoginProfileHelper:
     
     @staticmethod
     def connect_selenium(debugger_address, log_prefix="[GOLOGIN]"):
-        """Connect Selenium to GoLogin Orbita browser"""
+        """Connect Selenium to GoLogin Orbita browser with thread-safe ChromeDriver management"""
         try:
             from selenium import webdriver
             from selenium.webdriver.chrome.service import Service
             from selenium.webdriver.chrome.options import Options
             from webdriver_manager.chrome import ChromeDriverManager
-            
+            import time
+        
             chrome_options = Options()
             chrome_options.add_experimental_option("debuggerAddress", debugger_address)
-            
+        
             # Detect Chrome version
             chrome_version = GoLoginProfileHelper.get_chrome_version_from_debugger(
                 debugger_address, log_prefix
             )
+        
+            # ========== ACQUIRE LOCK FOR CHROMEDRIVER OPERATIONS ==========
+            # This prevents multiple threads from downloading/accessing ChromeDriver simultaneously
+            print(f"{log_prefix} Acquiring ChromeDriver lock...")
+            with _chromedriver_lock:
+                print(f"{log_prefix} ✓ Lock acquired")
             
-            if chrome_version:
-                print(f"{log_prefix} Installing ChromeDriver for Chrome {chrome_version}...")
-                service = Service(ChromeDriverManager(driver_version=chrome_version).install())
-            else:
-                print(f"{log_prefix} Installing ChromeDriver with auto-detection...")
-                service = Service(ChromeDriverManager().install())
+                try:
+                    if chrome_version:
+                        print(f"{log_prefix} Installing ChromeDriver for Chrome {chrome_version}...")
+                        chromedriver_path = ChromeDriverManager(driver_version=chrome_version).install()
+                    else:
+                        print(f"{log_prefix} Installing ChromeDriver with auto-detection...")
+                        chromedriver_path = ChromeDriverManager().install()
+                
+                    print(f"{log_prefix} ChromeDriver path: {chromedriver_path}")
+                
+                    # Small delay to ensure file is fully written
+                    time.sleep(0.5)
+                
+                    # Create service
+                    service = Service(chromedriver_path)
+                    service.log_output = None
+                
+                except Exception as install_err:
+                    print(f"{log_prefix} ✗ ChromeDriver install error: {install_err}")
+                    raise
+        
+            # ========== LOCK RELEASED - NOW CREATE WEBDRIVER ==========
+            print(f"{log_prefix} Creating WebDriver instance...")
+        
+            # Retry logic for "file being used" error
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    driver = webdriver.Chrome(service=service, options=chrome_options)
+                    print(f"{log_prefix} ✓ Selenium connected to Orbita")
+                    return driver
             
-            # Disable ChromeDriver logs
-            service.log_output = None
-            
-            driver = webdriver.Chrome(service=service, options=chrome_options)
-            print(f"{log_prefix} ✓ Selenium connected to Orbita")
-            return driver
+                except Exception as create_err:
+                    error_msg = str(create_err)
+                    if "being used by another process" in error_msg or "wrong permissions" in error_msg:
+                        if attempt < max_retries - 1:
+                            wait_time = 2 + (attempt * 2)
+                            print(f"{log_prefix} ⚠ ChromeDriver in use, retrying in {wait_time}s... (attempt {attempt+1}/{max_retries})")
+                            time.sleep(wait_time)
+                            continue
+                        else:
+                            print(f"{log_prefix} ✗ ChromeDriver still in use after {max_retries} attempts")
+                            raise
+                    else:
+                        # Other error, raise immediately
+                        raise
+        
+            return None
+    
         except Exception as e:
             print(f"{log_prefix} Selenium connection error: {e}")
             import traceback
             traceback.print_exc()
             return None
+
     
     @staticmethod
     def bring_profile_to_front(profile_id, driver=None, log_prefix="[GOLOGIN]"):
         """
-        Bring GoLogin profile window to front AND maximize it
+        Bring GoLogin profile window to front AND maximize it - THREAD SAFE
         Support 2 modes:
         - With driver: Use Selenium to maximize (faster, more reliable)
         - Without driver: Use win32gui to bring to front + maximize (for multi-threading)
@@ -246,93 +384,109 @@ class GoLoginProfileHelper:
             profile_id: Profile ID
             driver: Optional Selenium WebDriver instance (for maximize)
             log_prefix: Prefix for log messages
-        
+    
         Returns:
             bool: True if successful
         """
-        try:
-            # MODE 1: If driver provided, use Selenium maximize (RECOMMENDED)
-            if driver:
-                try:
-                    driver.maximize_window()
-                    print(f"{log_prefix} [{profile_id}] ✓ Browser maximized via Selenium")
-                
-                    # Optional: Verify window size
-                    import time
-                    time.sleep(0.5)
-                    window_size = driver.get_window_size()
-                    print(f"{log_prefix} [{profile_id}] Window size: {window_size['width']}x{window_size['height']}")
-                
-                    return True
-                except Exception as e:
-                    print(f"{log_prefix} [{profile_id}] ⚠ Selenium maximize failed: {e}")
-                    # Continue to MODE 2 as fallback
+    
+        # ========== ACQUIRE WINDOW FOCUS LOCK TO PREVENT CONFLICTS ==========
+        with _window_focus_lock:
+            print(f"{log_prefix} [{profile_id}] Acquiring window focus lock...")
         
-            # MODE 2: Use win32gui to bring to front + maximize (for multi-threading or fallback)
-            import psutil
-            import platform
-        
-            if platform.system() != "Windows":
-                print(f"{log_prefix} [{profile_id}] ℹ Window control not implemented for this OS")
-                return False
-        
-            # Find GoLogin Chrome process for this profile
-            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-                try:
-                    cmdline = proc.info.get('cmdline', [])
-                    if not cmdline:
-                        continue
-                
-                    cmdline_str = ' '.join(cmdline).lower()
-                
-                    # Check if this is the main browser process for this profile
-                    if profile_id.lower() in cmdline_str and '--type=renderer' not in cmdline_str:
-                        pid = proc.info['pid']
+            try:
+                # MODE 1: If driver provided, use Selenium maximize (RECOMMENDED)
+                if driver:
+                    try:
+                        driver.maximize_window()
+                        print(f"{log_prefix} [{profile_id}] ✓ Browser maximized via Selenium")
                     
-                        try:
-                            import win32gui
-                            import win32con
-                            import win32process
+                        # Optional: Verify window size
+                        import time
+                        time.sleep(0.5)
+                    
+                        window_size = driver.get_window_size()
+                        print(f"{log_prefix} [{profile_id}] Window size: {window_size['width']}x{window_size['height']}")
+                    
+                        # Delay before releasing lock (let window settle)
+                        time.sleep(1)
+                        return True
+                    
+                    except Exception as e:
+                        print(f"{log_prefix} [{profile_id}] ⚠ Selenium maximize failed: {e}")
+                        # Continue to MODE 2 as fallback
+            
+                # MODE 2: Use win32gui to bring to front + maximize (for multi-threading or fallback)
+                import psutil
+                import platform
+            
+                if platform.system() != "Windows":
+                    print(f"{log_prefix} [{profile_id}] ℹ Window control not implemented for this OS")
+                    return False
+            
+                # Find GoLogin Chrome process for this profile
+                for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                    try:
+                        cmdline = proc.info.get('cmdline', [])
+                        if not cmdline:
+                            continue
+                    
+                        cmdline_str = ' '.join(cmdline).lower()
+                    
+                        # Check if this is the main browser process for this profile
+                        if profile_id.lower() in cmdline_str and '--type=renderer' not in cmdline_str:
+                            pid = proc.info['pid']
                         
-                            def enum_windows_callback(hwnd, pid_list):
-                                if win32gui.IsWindowVisible(hwnd):
-                                    _, found_pid = win32process.GetWindowThreadProcessId(hwnd)
-                                    if found_pid == pid:
-                                        pid_list.append(hwnd)
-                                return True
+                            try:
+                                import win32gui
+                                import win32con
+                                import win32process
+                            
+                                def enum_windows_callback(hwnd, pid_list):
+                                    if win32gui.IsWindowVisible(hwnd):
+                                        _, found_pid = win32process.GetWindowThreadProcessId(hwnd)
+                                        if found_pid == pid:
+                                            pid_list.append(hwnd)
+                                    return True
+                            
+                                windows = []
+                                win32gui.EnumWindows(enum_windows_callback, windows)
+                            
+                                if windows:
+                                    hwnd = windows[0]
+                                
+                                    # Step 1: Restore window (in case minimized)
+                                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                                
+                                    # Step 2: Maximize window
+                                    win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+                                
+                                    # Step 3: Bring to foreground
+                                    win32gui.SetForegroundWindow(hwnd)
+                                
+                                    print(f"{log_prefix} [{profile_id}] ✓ Brought to front and maximized via win32gui")
+                                
+                                    # Delay before releasing lock
+                                    time.sleep(1)
+                                    return True
                         
-                            windows = []
-                            win32gui.EnumWindows(enum_windows_callback, windows)
-                        
-                            if windows:
-                                hwnd = windows[0]
-                            
-                                # Step 1: Restore window (in case minimized)
-                                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                            
-                                # Step 2: Maximize window
-                                win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
-                            
-                                # Step 3: Bring to foreground
-                                win32gui.SetForegroundWindow(hwnd)
-                            
-                                print(f"{log_prefix} [{profile_id}] ✓ Brought to front and maximized via win32gui")
-                                return True
-                        except ImportError:
-                            print(f"{log_prefix} [{profile_id}] ⚠ win32gui not available")
-                            return False
-                        
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    continue
-        
-            print(f"{log_prefix} [{profile_id}] ⚠ Could not find browser window")
-            return False
-        
-        except Exception as e:
-            print(f"{log_prefix} [{profile_id}] ⚠ Error: {e}")
-            return False
+                            except ImportError:
+                                print(f"{log_prefix} [{profile_id}] ⚠ win32gui not available")
+                                return False
+                
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        continue
+            
+                print(f"{log_prefix} [{profile_id}] ⚠ Could not find browser window")
+                return False
+            
+            except Exception as e:
+                print(f"{log_prefix} [{profile_id}] ⚠ Error: {e}")
+                return False
+        # ===================================================================
 
 
+
+   
     @staticmethod
     def check_and_fix_crashed_tabs(driver, debugger_address, log_prefix="[GOLOGIN]"):
         """
@@ -354,13 +508,13 @@ class GoLoginProfileHelper:
         
             print(f"{log_prefix} Checking for crashed tabs...")
         
-            # Try to detect if current tab is crashed
             crashed = False
             crashed_handle = None
         
+            # Try to detect if current tab is crashed
             try:
                 # Try to execute simple script
-                driver.execute_script("return 1")
+                driver.execute_script("return 1;")
                 print(f"{log_prefix} ✓ No crashed tabs detected")
                 return True
             except WebDriverException as e:
@@ -374,31 +528,27 @@ class GoLoginProfileHelper:
                     except:
                         pass
                 else:
-                    print(f"{log_prefix} ✓ No crash detected (other error ignored)")
+                    print(f"{log_prefix} ℹ No crash detected (other error ignored)")
                     return True
+            except Exception as e:
+                print(f"{log_prefix} ℹ Crash check error: {e}")
+                return True  # Continue anyway
         
             if not crashed:
                 return True
         
-            # ========== TAB IS CRASHED - USE RAW HTTP TO CREATE NEW TAB ==========
+            # TAB IS CRASHED - USE RAW HTTP TO CREATE NEW TAB
             print(f"{log_prefix} ✗ Tab crashed, creating new tab via DevTools HTTP API...")
         
             try:
-                # Parse debugger address
-                if ":" in debugger_address:
-                    host, port = debugger_address.split(":")
-                else:
-                    host = "127.0.0.1"
-                    port = debugger_address
-            
-                base_url = f"http://{host}:{port}"
+                base_url = f"http://{debugger_address}"
             
                 # Step 1: Get all targets BEFORE (for comparison)
                 print(f"{log_prefix} Querying existing targets...")
                 try:
                     response_before = requests.get(f"{base_url}/json", timeout=5)
                     targets_before = response_before.json() if response_before.status_code == 200 else []
-                    target_ids_before = set(t.get('id') for t in targets_before if t.get('type') == 'page')
+                    target_ids_before = set([t.get("id") for t in targets_before if t.get("type") == "page"])
                     print(f"{log_prefix} Found {len(target_ids_before)} existing page target(s)")
                 except Exception as e:
                     print(f"{log_prefix} ⚠ Could not query targets: {e}")
@@ -407,23 +557,21 @@ class GoLoginProfileHelper:
                 # Step 2: Create new page via HTTP PUT (ALWAYS CREATE NEW)
                 print(f"{log_prefix} Creating new tab via HTTP PUT...")
                 new_page_response = requests.put(f"{base_url}/json/new?about:blank", timeout=5)
-            
                 if new_page_response.status_code not in [200, 201]:
                     print(f"{log_prefix} ✗ Failed to create new page: {new_page_response.status_code}")
                     print(f"{log_prefix} Response: {new_page_response.text}")
                     return False
             
                 new_page = new_page_response.json()
-                new_page_id = new_page.get('id')
+                new_page_id = new_page.get("id")
                 print(f"{log_prefix} ✓ Created new page with ID: {new_page_id[:12]}...")
-            
                 time.sleep(1.5)
             
                 # Step 3: Get all targets AFTER
                 try:
                     response_after = requests.get(f"{base_url}/json", timeout=5)
                     targets_after = response_after.json() if response_after.status_code == 200 else []
-                    target_ids_after = set(t.get('id') for t in targets_after if t.get('type') == 'page')
+                    target_ids_after = set([t.get("id") for t in targets_after if t.get("type") == "page"])
                     print(f"{log_prefix} Found {len(target_ids_after)} page target(s) after creation")
                 
                     # Verify new tab was created
@@ -432,103 +580,92 @@ class GoLoginProfileHelper:
                 except Exception as e:
                     print(f"{log_prefix} ⚠ Could not verify new tab: {e}")
             
-                # Step 4: Activate the new page
-                try:
-                    activate_url = f"{base_url}/json/activate/{new_page_id}"
-                    activate_response = requests.get(activate_url, timeout=3)
-                    if activate_response.status_code == 200:
-                        print(f"{log_prefix} ✓ Activated new page")
-                    else:
-                        print(f"{log_prefix} ⚠ Activate returned {activate_response.status_code}")
-                except Exception as activate_err:
-                    print(f"{log_prefix} ⚠ Could not activate: {activate_err}")
+                # Step 4: Activate the new page - PROTECTED BY LOCK
+                with _window_focus_lock:  # ← THÊM LOCK Ở ĐÂY
+                    try:
+                        activate_url = f"{base_url}/json/activate/{new_page_id}"
+                        activate_response = requests.get(activate_url, timeout=3)
+                        if activate_response.status_code == 200:
+                            print(f"{log_prefix} ✓ Activated new page")
+                        else:
+                            print(f"{log_prefix} ⚠ Activate returned: {activate_response.status_code}")
+                    except Exception as activate_err:
+                        print(f"{log_prefix} ⚠ Could not activate: {activate_err}")
+                
+                    time.sleep(0.5)  # Let window settle inside lock
+                # ← KẾT THÚC LOCK
             
-                time.sleep(1)
+                # Step 5: Get fresh window handles
+                handles = driver.window_handles
+                print(f"{log_prefix} Found {len(handles)} Selenium handle(s)")
             
-                # Step 5: Try to switch Selenium to new tab
-                print(f"{log_prefix} Switching Selenium to new tab...")
-                try:
-                    # Get fresh window handles
-                    handles = driver.window_handles
-                    print(f"{log_prefix} Found {len(handles)} Selenium handle(s)")
+                if len(handles) == 0:
+                    print(f"{log_prefix} ✗ No handles available")
+                    return False
+            
+                # Step 6: Try each handle until we find one that works
+                working_handle = None
+                for i, handle in enumerate(handles):
+                    try:
+                        driver.switch_to.window(handle)
+                        # Test if this handle works
+                        driver.execute_script("return 1;")
+                        working_handle = handle
+                        print(f"{log_prefix} ✓ Found working handle at index {i}")
+                        break
+                    except WebDriverException:
+                        print(f"{log_prefix} ℹ Handle {i} is crashed, trying next...")
+                        continue
+            
+                if working_handle:
+                    # Navigate to about:blank to ensure clean state
+                    try:
+                        driver.get("about:blank")
+                        print(f"{log_prefix} ✓ Successfully switched to working tab")
+                    except Exception as nav_err:
+                        print(f"{log_prefix} ⚠ Navigate error: {nav_err}")
                 
-                    if len(handles) == 0:
-                        print(f"{log_prefix} ✗ No handles available")
-                        return False
+                    # Step 7: Close crashed handles
+                    print(f"{log_prefix} Closing crashed tab(s)...")
+                    closed_count = 0
+                    for handle in handles:
+                        if handle != working_handle:
+                            try:
+                                driver.switch_to.window(handle)
+                                driver.close()
+                                closed_count += 1
+                                print(f"{log_prefix} ✓ Closed crashed tab")
+                            except Exception:
+                                pass
                 
-                    # Try each handle until we find one that works
-                    working_handle = None
-                    for i, handle in enumerate(handles):
-                        try:
-                            driver.switch_to.window(handle)
-                            # Test if this handle works
-                            driver.execute_script("return 1")
-                            working_handle = handle
-                            print(f"{log_prefix} ✓ Found working handle at index {i}")
-                            break
-                        except WebDriverException:
-                            print(f"{log_prefix} Handle {i} is crashed, trying next...")
-                            continue
-                
-                    if working_handle:
-                        # Navigate to about:blank to ensure clean state
-                        try:
-                            driver.get("about:blank")
-                            print(f"{log_prefix} ✓ Successfully switched to working tab")
-                        except Exception as nav_err:
-                            print(f"{log_prefix} ⚠ Navigate error: {nav_err}")
-                    
-                        # Step 6: Close crashed handles
-                        print(f"{log_prefix} Closing crashed tab(s)...")
-                        closed_count = 0
-                        for handle in handles:
-                            if handle != working_handle:
-                                try:
-                                    driver.switch_to.window(handle)
-                                    driver.close()
-                                    closed_count += 1
-                                    print(f"{log_prefix} ✓ Closed crashed tab")
-                                except Exception:
-                                    # May already be closed or unreachable
-                                    pass
-                    
-                        # Switch back to working handle
-                        try:
-                            driver.switch_to.window(working_handle)
-                        except:
-                            # Use remaining handles
-                            remaining = driver.window_handles
-                            if remaining:
-                                driver.switch_to.window(remaining[0])
-                    
+                    # Switch back to working handle
+                    remaining = driver.window_handles
+                    if remaining:
+                        driver.switch_to.window(remaining[0])
                         print(f"{log_prefix} ✓ Fixed crashed tab(s) - created 1 new, closed {closed_count} crashed")
                         return True
                     else:
                         print(f"{log_prefix} ✗ All handles are crashed")
                         return False
-            
-                except Exception as selenium_err:
-                    print(f"{log_prefix} ✗ Selenium operations failed: {selenium_err}")
-                    # New tab was created via HTTP, but Selenium can't access it
-                    # This might require reconnecting Selenium
-                    print(f"{log_prefix} ℹ New tab exists in browser, but Selenium session may need reconnect")
+                else:
+                    print(f"{log_prefix} ✗ All handles are crashed")
                     return False
-        
+                
             except requests.exceptions.RequestException as http_err:
                 print(f"{log_prefix} ✗ HTTP request failed: {http_err}")
                 return False
-        
             except Exception as fix_err:
                 print(f"{log_prefix} ✗ Fix failed: {fix_err}")
                 import traceback
                 traceback.print_exc()
                 return False
-    
+            
         except Exception as e:
-            print(f"{log_prefix} ⚠ Crash check error: {e}")
+            print(f"{log_prefix} ✗ Crash check error: {e}")
             import traceback
             traceback.print_exc()
             return True  # Continue anyway
+
 
 
 

@@ -34,6 +34,10 @@ class GoLoginSeleniumStartAction(BaseAction):
             
             print(f"[GOLOGIN START] Using API token from variable: {api_key_variable}")
             
+            # ========== INITIALIZE GOLOGIN API INSTANCE ==========
+            self.gologin_api = get_gologin_api(api_token)
+            # ====================================================
+            
             # ========== GET PROFILE LIST USING HELPER ==========
             success, result = GoLoginProfileHelper.get_profile_list(
                 self.params, api_token, "[GOLOGIN START]"
@@ -56,7 +60,7 @@ class GoLoginSeleniumStartAction(BaseAction):
             if enable_threading and len(profile_list) > 1:
                 # PARALLEL MODE
                 print("[GOLOGIN START] ========== PARALLEL MODE ==========")
-                self._start_parallel(profile_list, api_token)
+                self._start_parallel(profile_list)
             else:
                 # SEQUENTIAL MODE - Select 1 profile and start
                 print("[GOLOGIN START] ========== SEQUENTIAL MODE ==========")
@@ -65,9 +69,9 @@ class GoLoginSeleniumStartAction(BaseAction):
                 print(f"[GOLOGIN START] Selected profile ID: {profile_id}")
                 
                 # Start single profile
-                success = self._start_single_profile(profile_id, api_token)
+                success = self._start_single_profile(profile_id)
                 self.set_variable(success)
-        
+                
         except Exception as e:
             print(f"[GOLOGIN START] Error: {e}")
             import traceback
@@ -129,267 +133,159 @@ class GoLoginSeleniumStartAction(BaseAction):
                 print(f"[GOLOGIN START] ⚠ Warning: {proxy_message}")
             
             print("[GOLOGIN START] ===================================")
+            
         except Exception as e:
             print(f"[GOLOGIN START] ⚠ Proxy update error: {e}")
     
-    def _start_single_profile(self, profile_id, api_token):
-        """Start a single profile and execute actions"""
-        driver = None
-        gologin = None
+    def _start_parallel(self, profile_list):
+        """Start multiple profiles in parallel - NO TIMEOUT"""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
         
+        max_workers = min(int(self.params.get("max_workers", "3")), len(profile_list))
+        print(f"[GOLOGIN START] Starting {len(profile_list)} profiles with {max_workers} threads")
+        
+        results = []
+        success_count = [0]  # Use list for mutable counter
+        
+        executor = ThreadPoolExecutor(max_workers=max_workers)
         try:
-            print(f"\n[GOLOGIN START] [{profile_id}] Starting profile...")
-            GoLoginProfileHelper.kill_zombie_chrome_processes(profile_id, "[GOLOGIN START]")
-            # Get options
-            refresh_fingerprint = self.params.get("refresh_fingerprint", False)
+            # Submit all threads
+            future_to_profile = {}
+            for i, profile_id in enumerate(profile_list):
+                if i > 0:
+                    time.sleep(3)  # Stagger 3s
+                
+                future = executor.submit(self._start_single_profile, profile_id)
+                future_to_profile[future] = profile_id
+                print(f"[GOLOGIN START] Submitted {i+1}/{len(profile_list)}: {profile_id}")
             
-            # Get GoLogin API instance
-            gologin = get_gologin_api(api_token)
-            
-            # Refresh fingerprint if requested
-            if refresh_fingerprint:
-                print(f"[GOLOGIN START] [{profile_id}] Refreshing fingerprint...")
-                success = gologin.refresh_fingerprint(profile_id)
-                if success:
-                    print(f"[GOLOGIN START] [{profile_id}] ✓ Fingerprint refreshed")
-                else:
-                    print(f"[GOLOGIN START] [{profile_id}] ⚠ Failed to refresh fingerprint")
-            
-            # Start profile
-            extra_params = [
-                "--enable-logging",
-                "--v=1",
-                "--disk-cache-size=0",
-                "--media-cache-size=0",
-                "--enable-features=NetworkService",
-                "--disable-features=CookiesWithoutSameSiteMustBeSecure"
-            ]
-            
-            success, debugger_address = gologin.start_profile(profile_id, extra_params=extra_params)
-            
+            # Wait for all threads WITHOUT TIMEOUT
+            for future in as_completed(future_to_profile):
+                profile_id = future_to_profile[future]
+                try:
+                    success = future.result()  # No timeout - wait indefinitely
+                    results.append(success)
+                    if success:
+                        success_count[0] += 1
+                    print(f"[GOLOGIN START] {'✓' if success else '✗'} Profile {profile_id} completed")
+                except Exception as e:
+                    print(f"[GOLOGIN START] ✗ Profile {profile_id} exception: {e}")
+                    results.append(False)
+        
+        finally:
+            executor.shutdown(wait=True)
+        
+        # Summary
+        print(f"\n[GOLOGIN START] ========== SUMMARY ==========")
+        print(f"[GOLOGIN START] Success: {success_count[0]}/{len(profile_list)}")
+        print(f"[GOLOGIN START] ============================\n")
+        
+        self.set_variable(success_count[0] > 0)
+    
+    def _start_single_profile(self, profile_id):
+        """Start profile and execute action - Profile stays alive"""
+        driver = None
+        try:
+            # ========== START PROFILE USING GOLOGIN API ==========
+            print(f"[GOLOGIN START] [{profile_id}] Starting profile...")
+            success, result = self.gologin_api.start_profile(profile_id)
+        
             if not success:
-                print(f"[GOLOGIN START] [{profile_id}] ✗ Failed to start profile: {debugger_address}")
+                print(f"[GOLOGIN START] [{profile_id}] ✗ Failed to start: {result}")
                 return False
-            
-            print(f"[GOLOGIN START] [{profile_id}] ✓ Profile started: {debugger_address}")
-            
-            # Connect Selenium using helper
+        
+            # result is debugger_address string, not dict
+            debugger_address = result
+            print(f"[GOLOGIN START] [{profile_id}] ✓ Got debugger: {debugger_address}")
+            # ====================================================
+        
+            # Connect Selenium
             driver = GoLoginProfileHelper.connect_selenium(debugger_address, "[GOLOGIN START]")
-            
             if not driver:
                 print(f"[GOLOGIN START] [{profile_id}] ✗ Failed to connect Selenium")
-                gologin.stop_profile(profile_id)
+                # Stop profile if connection failed
+                self.gologin_api.stop_profile(profile_id)
                 return False
+        
+            # Register driver
+            register_selenium_driver(driver, profile_id)
             
-            # Register driver for auto-cleanup
-            register_selenium_driver(driver)
-            
-            # Check and fix crashed tabs FIRST (before any other action)
-            if not GoLoginProfileHelper.check_and_fix_crashed_tabs(driver, debugger_address, "[GOLOGIN START]"):
-                print(f"[GOLOGIN START] [{profile_id}] ✗ Could not fix crashed tabs")
-                gologin.stop_profile(profile_id)
-                return False
-            
-            # Bring to front and maximize browser window
-            GoLoginProfileHelper.bring_profile_to_front(profile_id, driver=driver, log_prefix="[GOLOGIN START]")
-            
-            # Clean up old tabs using helper
+        
+            # Cleanup tabs (after crash fix)
+            print(f"[GOLOGIN START] [{profile_id}] Checking browser tabs...")
             GoLoginProfileHelper.cleanup_browser_tabs(driver, "[GOLOGIN START]")
+            time.sleep(2)        
             
-            # Wait for browser to settle
-            time.sleep(2)
-            
-            # ========== EXECUTE ACTION BASED ON TYPE ==========
+        
+            # Execute action chain
             action_type = self.params.get("action_type", "None")
-            action_success = self._execute_action(driver, profile_id, action_type)
-            
-            if not action_success:
-                print(f"[GOLOGIN START] [{profile_id}] ⚠ Action execution had issues")
-            
-            # Save profile info to global variables
-            GlobalVariables().set("GOLOGIN_PROFILE_ID", profile_id)
-            GlobalVariables().set("GOLOGIN_DEBUGGER_ADDRESS", debugger_address)
-            print(f"[GOLOGIN START] ✓ Saved profile info to variables")
-            
-            return True
+            action_success = self._execute_action(driver, profile_id, action_type, debugger_address)
+        
+            print(f"[GOLOGIN START] [{profile_id}] ✓ Profile continues running")
+            return action_success
         
         except Exception as e:
             print(f"[GOLOGIN START] [{profile_id}] ✗ Error: {e}")
             import traceback
             traceback.print_exc()
-            return False
         
-        finally:
-            # CLEANUP DRIVER (browser stays open)
+            # Cleanup on error (giống collect action)
             if driver:
                 try:
-                    unregister_selenium_driver(driver)
+                    unregister_selenium_driver(profile_id)
+                except:
+                    pass
+                try:
                     driver.quit()
-                    print(f"[GOLOGIN START] ✓ ChromeDriver cleaned up (browser stays open)")
-                except Exception as e:
-                    print(f"[GOLOGIN START] ⚠ Cleanup warning: {e}")
-    
-    def _execute_action(self, driver, profile_id, action_type):
-        """
-        Execute action based on action_type parameter using switch-case logic
+                except:
+                    pass
         
-        Args:
-            driver: Selenium WebDriver instance
-            profile_id: Profile ID for logging
-            action_type: Type of action (None, Youtube, Google)
-            
-        Returns:
-            bool: True if successful, False otherwise
-        """
+            # Try to stop profile if started
+            try:
+                self.gologin_api.stop_profile(profile_id)
+            except:
+                pass
+        
+            return False
+    
+        finally:
+            # Unregister driver but DON'T close it (profile stays alive)
+            if driver:
+                try:
+                    unregister_selenium_driver(profile_id)
+                except:
+                    pass
+
+    
+    def _execute_action(self, driver, profile_id, action_type, debugger_address):
+        """Execute action based on type"""
         try:
-            # Switch-case logic for action types
             if action_type == "None":
-                print(f"[GOLOGIN START] [{profile_id}] No action required, profile started")
+                print(f"[GOLOGIN START] [{profile_id}] No action required")
                 return True
             
             elif action_type == "Youtube":
-                # Load keywords using helper
                 keywords = GoLoginProfileHelper.load_keywords(self.params, "[GOLOGIN START]")
                 if not keywords:
-                    print(f"[GOLOGIN START] [{profile_id}] ✗ No keywords available for YouTube")
                     return False
-                
-                # Pick random keyword
                 keyword = random.choice(keywords)
-                
-                # Execute YouTube flow
-                return YouTubeFlow.execute(driver, keyword, profile_id)
+                return YouTubeFlow.execute_main_flow(driver, keyword, profile_id, debugger_address, "[GOLOGIN START]")
             
             elif action_type == "Google":
-                # Load keywords using helper
                 keywords = GoLoginProfileHelper.load_keywords(self.params, "[GOLOGIN START]")
                 if not keywords:
-                    print(f"[GOLOGIN START] [{profile_id}] ✗ No keywords available for Google")
                     return False
-                
-                # Pick random keyword
                 keyword = random.choice(keywords)
-                
-                # Execute Google flow
-                return GoogleFlow.execute(driver, keyword, profile_id)
+                return GoogleFlow.execute_main_flow(driver, keyword, profile_id, debugger_address, "[GOLOGIN START]")
             
             else:
-                print(f"[GOLOGIN START] [{profile_id}] ✗ Unknown action type: {action_type}")
+                print(f"[GOLOGIN START] [{profile_id}] ✗ Unknown action type")
                 return False
-        
+                
         except Exception as e:
             print(f"[GOLOGIN START] [{profile_id}] ✗ Error executing action: {e}")
             import traceback
             traceback.print_exc()
-            return False
-    
-    def _start_parallel(self, profile_list, api_token):
-        """Start multiple profiles in parallel using threading"""
-        from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
-        
-        max_workers_str = self.params.get("max_workers", "3")
-        try:
-            max_workers = int(max_workers_str)
-        except:
-            max_workers = 2
-        
-        max_workers = min(max_workers, len(profile_list))
-        
-        print(f"[GOLOGIN START] Starting {len(profile_list)} profiles with {max_workers} parallel threads")
-        
-        # Store results
-        results = []
-        completed_profiles = []
-        timeout_profiles = []
-        
-        # Create thread pool
-        executor = ThreadPoolExecutor(max_workers=max_workers)
-        
-        try:
-            # Submit all profiles to thread pool
-            future_to_profile = {}
-            for i, profile_id in enumerate(profile_list):
-                if i > 0:
-                    time.sleep(2)  # Stagger submissions
-                
-                future = executor.submit(
-                    self._start_single_profile_with_focus, 
-                    profile_id, 
-                    api_token
-                )
-                future_to_profile[future] = profile_id
-                print(f"[GOLOGIN START] Submitted thread {i+1}/{len(profile_list)}: {profile_id}")
-            
-            # Wait for all threads to complete
-            for future in as_completed(future_to_profile, timeout=600):
-                profile_id = future_to_profile[future]
-                try:
-                    success = future.result(timeout=60)
-                    results.append(success)
-                    completed_profiles.append(profile_id)
-                    
-                    if success:
-                        print(f"[GOLOGIN START] ✓ Profile {profile_id} completed successfully")
-                    else:
-                        print(f"[GOLOGIN START] ✗ Profile {profile_id} failed")
-                
-                except TimeoutError:
-                    print(f"[GOLOGIN START] ✗ Profile {profile_id} TIMEOUT")
-                    results.append(False)
-                    timeout_profiles.append(profile_id)
-                
-                except Exception as e:
-                    print(f"[GOLOGIN START] ✗ Profile {profile_id} exception: {e}")
-                    results.append(False)
-        
-        except Exception as e:
-            print(f"[GOLOGIN START] ⚠ Parallel execution error: {e}")
-        
-        finally:
-            executor.shutdown(wait=False)
-        
-        # Summary
-        success_count = sum(results) if results else 0
-        print(f"\n[GOLOGIN START] ========== SUMMARY ==========")
-        print(f"[GOLOGIN START] Total: {len(profile_list)} profiles")
-        print(f"[GOLOGIN START] Success: {success_count}")
-        print(f"[GOLOGIN START] Failed: {len(results) - success_count}")
-        print(f"[GOLOGIN START] Timeout: {len(timeout_profiles)}")
-        print(f"[GOLOGIN START] ============================\n")
-        
-        self.set_variable(success_count > 0)
-    
-    def _start_single_profile_with_focus(self, profile_id, api_token):
-        """
-        Start single profile and bring to front (for parallel mode)
-        
-        Args:
-            profile_id: Profile ID to start
-            api_token: GoLogin API token
-            
-        Returns:
-            bool: True if successful
-        """
-        """Start a single profile and execute actions"""
-        
-        try:
-            # Start profile normally
-            success = self._start_single_profile(profile_id, api_token)
-            
-            if not success:
-                return False
-            
-            # Bring window to front if action is not None
-            action_type = self.params.get("action_type", "None")
-            if action_type != "None":
-                time.sleep(1)  # Wait for window to fully open
-                GoLoginProfileHelper.bring_profile_to_front(profile_id, driver=None, log_prefix="[GOLOGIN START]")
-                time.sleep(1)  # Wait after bringing to front
-            
-            return True
-        
-        except Exception as e:
-            print(f"[GOLOGIN START] [{profile_id}] Error in parallel start: {e}")
             return False
     
     def set_variable(self, success):

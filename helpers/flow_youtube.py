@@ -3,525 +3,427 @@
 import time
 import random
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import WebDriverException
-# Import TomSamAutobot's human-like actions
+from helpers.action_chain_manager import ActionChainManager
+
+# Import modular actions
+from helpers.actions.youtube_navigate_action import YouTubeNavigateAction
+from helpers.actions.youtube_search_action import YouTubeSearchAction
+from helpers.actions.youtube_skip_ads_action import YouTubeSkipAdsAction
+from helpers.actions.youtube_click_video_action import YouTubeClickVideoAction
+from helpers.actions.youtube_scroll_action import YouTubeScrollAction
+from helpers.actions.youtube_mouse_move_action import YouTubeMouseMoveAction
+
+# Import TomSamAutobot actions
 from controllers.actions.mouse_move_action import MouseMoveAction
 from controllers.actions.keyboard_action import KeyboardAction
+from helpers.gologin_profile_helper import GoLoginProfileHelper
 
 class YouTubeFlow:
-    """Flow for YouTube search and browsing actions with human-like behavior"""
-    
-    # ========== THÊM METHOD NÀY ==========
-    @staticmethod
-    def _is_tab_crashed(exception):
-        """Check if exception is a tab crash error"""
-        if isinstance(exception, WebDriverException):
-            error_msg = str(exception).lower()
-            return "tab crashed" in error_msg or "target closed" in error_msg
-        return False
+    """
+    YouTube Flow Orchestrator - Natural interaction mode
+    Profiles perform interactions whenever they get lock, organically
+    """
     
     @staticmethod
-    def _handle_crashed_tab(driver, profile_id, log_prefix):
-        """Handle crashed tab during flow execution"""
-        try:
-            print(f"{log_prefix} [{profile_id}] ⚠ Tab crashed during flow, opening new tab...")
-        
-            # Open new tab
-            driver.execute_script("window.open('about:blank', '_blank');")
-            import time
-            time.sleep(1)
-        
-            # Switch to new tab
-            handles = driver.window_handles
-            if len(handles) > 1:
-                driver.switch_to.window(handles[-1])
-                print(f"{log_prefix} [{profile_id}] ✓ Switched to new tab")
-                return True
-            else:
-                print(f"{log_prefix} [{profile_id}] ✗ Could not open new tab")
-                return False
-        except Exception as e:
-            print(f"{log_prefix} [{profile_id}] ✗ Recovery failed: {e}")
-            return False
-
-    # =====================================
-    
-    @staticmethod
-    def execute(driver, keyword, profile_id, log_prefix="[YOUTUBE]"):
+    def execute_main_flow(driver, keyword, profile_id, debugger_address, log_prefix="[YOUTUBE]"):
         """
-        Execute YouTube search flow with advanced human-like actions
-        Includes retry logic for tab crashes
-        """
-        max_retries = 2
+        MAIN FLOW - Natural mode:
+        1. Search & Click video (LOCKED)
+        2. Release lock
+        3. Periodic interactions (LOCKED when active, compete with other profiles)
+        4. Thread completes when interaction cycles done (video may still be playing - that's OK!)
         
-        for attempt in range(max_retries):
-            try:
-                if attempt > 0:
-                    print(f"{log_prefix} [{profile_id}] Retry attempt {attempt+1}/{max_retries}")
-                
-                print(f"{log_prefix} [{profile_id}] Starting YouTube flow with keyword: '{keyword}'")
-                
-                # Navigate to YouTube
-                url = "https://www.youtube.com"
-                print(f"{log_prefix} [{profile_id}] Navigating to {url}...")
-                
-                try:
-                    driver.get(url)
-                except WebDriverException as e:
-                    if YouTubeFlow._is_tab_crashed(e):
-                        print(f"{log_prefix} [{profile_id}] ✗ TAB CRASHED during navigation")
-                        
-                        # Try to recover
-                        if YouTubeFlow._handle_crashed_tab(driver, profile_id, log_prefix):
-                            # Retry navigation
-                            time.sleep(2)
-                            driver.get(url)
-                        else:
-                            # Cannot recover, try next attempt
-                            if attempt < max_retries - 1:
-                                time.sleep(3)
-                                continue
-                            else:
-                                raise
-                    else:
-                        raise
-                
-                # Wait for page to fully load
-                if not YouTubeFlow._wait_for_page_load(driver, profile_id, log_prefix):
-                    if attempt < max_retries - 1:
-                        print(f"{log_prefix} [{profile_id}] ⚠ Page load failed, retrying...")
-                        time.sleep(3)
-                        continue
-                    return False
-                
-                # Random initial sleep (1-5s) after page load
-                initial_sleep = random.uniform(1, 5)
-                print(f"{log_prefix} [{profile_id}] Page loaded, waiting {initial_sleep:.1f}s...")
-                time.sleep(initial_sleep)
-                
-                # ========== RANDOM PRE-SEARCH ACTIONS ==========
-                print(f"{log_prefix} [{profile_id}] Performing pre-search random actions...")
-                YouTubeFlow._perform_random_actions_loop(driver, profile_id, log_prefix)
-                
-                # ========== SEARCH FOR KEYWORD ==========
-                if not YouTubeFlow._search_keyword(driver, keyword, profile_id, log_prefix):
-                    if attempt < max_retries - 1:
-                        print(f"{log_prefix} [{profile_id}] ⚠ Search failed, retrying...")
-                        time.sleep(3)
-                        continue
-                    return False
-                
-                # Wait for search results
-                if not YouTubeFlow._wait_for_page_load(driver, profile_id, log_prefix):
-                    if attempt < max_retries - 1:
-                        print(f"{log_prefix} [{profile_id}] ⚠ Search results load failed, retrying...")
-                        time.sleep(3)
-                        continue
-                    return False
-                
-                result_sleep = random.uniform(2, 4)
-                print(f"{log_prefix} [{profile_id}] Search results loaded, waiting {result_sleep:.1f}s...")
-                time.sleep(result_sleep)
-                
-                # ========== RANDOM POST-SEARCH ACTIONS ==========
-                print(f"{log_prefix} [{profile_id}] Performing post-search random actions...")
-                YouTubeFlow._perform_random_actions_loop(driver, profile_id, log_prefix)
-                
-                # ========== OPTIONAL: CLICK RANDOM VIDEO ==========
-                if random.random() < 0.7:  # 70% chance to click video
-                    YouTubeFlow._click_random_video(driver, profile_id, log_prefix)
-                
-                print(f"{log_prefix} [{profile_id}] ✓ YouTube flow completed")
-                return True
-                
-            except WebDriverException as e:
-                if YouTubeFlow._is_tab_crashed(e):
-                    print(f"{log_prefix} [{profile_id}] ✗ TAB CRASHED: {str(e)[:100]}")
-                    if attempt < max_retries - 1:
-                        print(f"{log_prefix} [{profile_id}] ⚠ Will retry after 5 seconds...")
-                        time.sleep(5)
-                        continue
-                    else:
-                        print(f"{log_prefix} [{profile_id}] ✗ Max retries reached, giving up")
-                        return False
-                else:
-                    raise
-            
-            except Exception as e:
-                print(f"{log_prefix} [{profile_id}] ✗ Error in YouTube flow: {e}")
-                import traceback
-                traceback.print_exc()
-                
-                if attempt < max_retries - 1:
-                    print(f"{log_prefix} [{profile_id}] ⚠ Will retry after 3 seconds...")
-                    time.sleep(3)
-                    continue
-                return False
-        
-        # If all retries failed
-        print(f"{log_prefix} [{profile_id}] ✗ All retry attempts failed")
-        return False
-    
-    @staticmethod
-    def _wait_for_page_load(driver, profile_id, log_prefix, timeout=20):
-        """Wait for page to fully load using Selenium"""
-        try:
-            print(f"{log_prefix} [{profile_id}] Waiting for page to load...")
-        
-            # Check if tab is crashed first
-            try:
-                current_url = driver.current_url
-            except WebDriverException as e:
-                if YouTubeFlow._is_tab_crashed(e):
-                    print(f"{log_prefix} [{profile_id}] ✗ Tab is crashed")
-                    return False
-                raise
-        
-            # Wait for document.readyState == 'complete'
-            wait = WebDriverWait(driver, timeout)
-            wait.until(lambda d: d.execute_script("return document.readyState") == "complete")
-        
-            # Additional check: wait for body element
-            wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-        
-            print(f"{log_prefix} [{profile_id}] ✓ Page fully loaded")
-            return True
-        except WebDriverException as e:
-            if YouTubeFlow._is_tab_crashed(e):
-                print(f"{log_prefix} [{profile_id}] ✗ Tab crashed during page load check")
-            else:
-                print(f"{log_prefix} [{profile_id}] ⚠ Page load timeout: {e}")
-            return False
-        except Exception as e:
-            print(f"{log_prefix} [{profile_id}] ⚠ Page load error: {e}")
-            return False
-
-    
-    @staticmethod
-    def _get_random_click_position(element, driver):
-        """
-        Get random click position within element bounds
-        Shrink clickable area by 5px on each side to avoid clicking edges
-        
-        Args:
-            element: Selenium WebElement
-            driver: WebDriver instance
-            
         Returns:
-            tuple: (screen_x, screen_y) coordinates for clicking
+            bool: True if successful
         """
-        # Get element position and size
-        location = element.location  # {'x': 100, 'y': 200}
-        size = element.size  # {'width': 300, 'height': 50}
+     
+        # ========== PHASE 1: SEARCH & START VIDEO (LOCKED) ==========
+        chain_success = ActionChainManager.execute_chain(
+            profile_id,
+            YouTubeFlow._search_and_start_video_chain,
+            driver, keyword, profile_id, debugger_address, log_prefix
+        )
         
-        # Get browser window position
-        window_x = driver.execute_script("return window.screenX")
-        window_y = driver.execute_script("return window.screenY")
-        
-        # Calculate element bounds (shrink by 5px on each side)
-        margin = 5
-        safe_width = size['width'] - (margin * 2)
-        safe_height = size['height'] - (margin * 2)
-        
-        # Ensure safe dimensions are positive
-        if safe_width <= 0:
-            safe_width = size['width'] * 0.6  # Use 60% of width if too small
-            margin = (size['width'] - safe_width) / 2
-        
-        if safe_height <= 0:
-            safe_height = size['height'] * 0.6  # Use 60% of height if too small
-            margin_y = (size['height'] - safe_height) / 2
-        else:
-            margin_y = margin
-        
-        # Random position within safe area (local coordinates)
-        local_x = location['x'] + margin + random.uniform(0, safe_width)
-        local_y = location['y'] + margin_y + random.uniform(0, safe_height)
-        
-        # Convert to screen coordinates
-        screen_x = int(window_x + local_x)
-        screen_y = int(window_y + local_y + 100)  # +100 for browser chrome/toolbar
-        
-        return screen_x, screen_y
-    
-    @staticmethod
-    def _perform_random_actions_loop(driver, profile_id, log_prefix):
-        """
-        Perform random actions in a loop with random repetitions
-        Each action is executed 1-4 times with random sleep between
-        """
-        # List of available actions
-        available_actions = [
-            YouTubeFlow._action_move_mouse_random,
-            YouTubeFlow._action_scroll_page,
-            YouTubeFlow._action_move_to_element,
-        ]
-        
-        # Random number of different actions to perform (2-4 actions)
-        num_actions = random.randint(2, 4)
-        print(f"{log_prefix} [{profile_id}] Will perform {num_actions} different action types")
-        
-        # Shuffle actions to randomize order
-        random.shuffle(available_actions)
-        
-        for i in range(num_actions):
-            action_func = available_actions[i % len(available_actions)]
-            
-            # Random repetitions for this action (1-4 times)
-            repetitions = random.randint(1, 4)
-            print(f"{log_prefix} [{profile_id}] Action {i+1}: {action_func.__name__} x{repetitions} times")
-            
-            for rep in range(repetitions):
-                try:
-                    # Execute action
-                    action_func(driver, profile_id, log_prefix)
-                    
-                    # Random sleep after each repetition (0.5-2s)
-                    sleep_time = random.uniform(0.5, 2.0)
-                    time.sleep(sleep_time)
-                except Exception as e:
-                    print(f"{log_prefix} [{profile_id}] ⚠ Action error: {e}")
-                    continue
-    
-    @staticmethod
-    def _action_move_mouse_random(driver, profile_id, log_prefix):
-        """
-        Move mouse to random position using pyautogui (physical mouse movement)
-        Optionally click (30% chance)
-        """
-        try:
-            import pyautogui
-            
-            # Get viewport size from Selenium
-            viewport_width = driver.execute_script("return window.innerWidth")
-            viewport_height = driver.execute_script("return window.innerHeight")
-            
-            # Get browser window position
-            window_x = driver.execute_script("return window.screenX")
-            window_y = driver.execute_script("return window.screenY")
-            
-            # Random position within browser viewport (avoid edges by 100px)
-            local_x = random.randint(100, viewport_width - 100)
-            local_y = random.randint(100, viewport_height - 100)
-            
-            # Convert to screen coordinates
-            screen_x = window_x + local_x
-            screen_y = window_y + local_y + 100  # +100 for browser chrome/toolbar
-            
-            # Use TomSamAutobot's human-like mouse movement
-            click_type = "single_click" if random.random() < 0.3 else None
-            MouseMoveAction.move_and_click_static(screen_x, screen_y, click_type=click_type, fast=False)
-            
-            if click_type:
-                print(f"{log_prefix} [{profile_id}] ✓ Moved mouse to ({screen_x}, {screen_y}) and clicked")
-            else:
-                print(f"{log_prefix} [{profile_id}] ✓ Moved mouse to ({screen_x}, {screen_y})")
-            
-            return True
-        except Exception as e:
-            print(f"{log_prefix} [{profile_id}] ⚠ Mouse move error: {e}")
+        if not chain_success:
+            print(f"{log_prefix} [{profile_id}] ✗ Initial chain failed")
             return False
+        
+        # ========== PHASE 2: NATURAL INTERACTION CYCLES ==========
+        print(f"{log_prefix} [{profile_id}] ========== VIDEO PLAYING, ENTERING NATURAL INTERACTION MODE ==========")
+        
+        # Random number of interaction cycles (3-6 times)
+        num_interaction_cycles = random.randint(3, 6)
+        print(f"{log_prefix} [{profile_id}] Will perform {num_interaction_cycles} interaction cycles")
+        
+        for cycle in range(num_interaction_cycles):
+            # NO SLEEP HERE - Profile tries to acquire lock immediately
+            # Other profiles may get lock first, that's natural!
+            
+            print(f"{log_prefix} [{profile_id}] [Cycle {cycle+1}/{num_interaction_cycles}] Competing for lock...")
+            
+            # Execute interaction cycle (LOCKED - will wait for lock if needed)
+            interaction_success = ActionChainManager.execute_chain(
+                profile_id,
+                YouTubeFlow._video_interaction_chain,
+                driver, profile_id, debugger_address, log_prefix, cycle + 1
+            )
+            
+            if not interaction_success:
+                print(f"{log_prefix} [{profile_id}] ⚠ Interaction cycle {cycle+1} failed, continuing...")
+        
+        print(f"{log_prefix} [{profile_id}] ✓ Finished all interaction cycles (video may still be playing - that's natural)")
+        return True
     
     @staticmethod
-    def _action_scroll_page(driver, profile_id, log_prefix):
+    def _search_and_start_video_chain(driver, keyword, profile_id, debugger_address, log_prefix):
         """
-        Scroll page using pyautogui keyboard (physical keyboard input)
-        Random method: Page Down/Up or Arrow keys
-        Random speed and distance
+        LOCKED CHAIN: Navigate → Search → Click video → Wait for playing
+        Lock is released immediately after video starts playing
         """
+        print(f"{log_prefix} [{profile_id}] ========== LOCKED CHAIN START: SEARCH & PLAY ==========")
+        
         try:
-            # Random scroll method: 50% Page keys, 50% Arrow keys
-            use_page_keys = random.random() < 0.5
+            # THÊM ĐOẠN NÀY VÀO ĐẦU (TRONG LOCK)
+            # Fix crashed tabs INSIDE lock to prevent window focus conflicts
+            print(f"{log_prefix} [{profile_id}] Checking for crashed tabs...")
+            if not GoLoginProfileHelper.check_and_fix_crashed_tabs(driver, debugger_address, log_prefix):
+                print(f"{log_prefix} [{profile_id}] ⚠ Could not fix crashed tab, continuing anyway...")
+                return False
+        
+            # Bring window to front AFTER fixing crashed tabs
+            GoLoginProfileHelper.bring_profile_to_front(profile_id, driver=driver, log_prefix=log_prefix)
+            time.sleep(2)
             
-            # Random direction: 80% down, 20% up
-            direction_down = random.random() < 0.8
+            # Step 1: Navigate to YouTube
+            YouTubeFlow._navigate_to_youtube(driver, profile_id, debugger_address, log_prefix)
             
-            if use_page_keys:
-                # Page Down/Up
-                key = "Down" if direction_down else "Up"
-                times = random.randint(1, 3)
-                
-                # Use TomSamAutobot's keyboard action (multiple presses with delay)
-                key_sequence = ";".join([key] * times)  # "Down;Down;Down"
-                KeyboardAction.press_key_static(key_sequence)
-                
-                print(f"{log_prefix} [{profile_id}] ✓ Scrolled with Page {key} x{times}")
-            else:
-                # Arrow keys (smaller scroll)
-                key = "Down" if direction_down else "Up"
-                times = random.randint(3, 8)
-                
-                # Use TomSamAutobot's keyboard action
-                key_sequence = ";".join([key] * times)
-                KeyboardAction.press_key_static(key_sequence)
-                
-                print(f"{log_prefix} [{profile_id}] ✓ Scrolled with Arrow {key} x{times}")
+            # Step 2: Pre-search random actions
+            # YouTubeFlow._random_actions(driver, profile_id, debugger_address, log_prefix, num_actions=2)
             
-            return True
-        except Exception as e:
-            print(f"{log_prefix} [{profile_id}] ⚠ Scroll error: {e}")
-            return False
-    
-    @staticmethod
-    def _action_move_to_element(driver, profile_id, log_prefix):
-        """
-        Use Selenium to find element coordinates, then use pyautogui to move mouse to RANDOM position within element
-        """
-        try:
-            # Find random visible element (prefer video thumbnails, buttons)
-            selectors = [
-                'a#video-title',
-                'ytd-thumbnail',
-                'button',
-                'a[href]',
-            ]
             
-            random.shuffle(selectors)
+            # Step 3: Search keyword
+            YouTubeSearchAction(driver, profile_id, keyword, log_prefix, debugger_address).execute()
+            time.sleep(random.uniform(2, 4))
             
-            for selector in selectors:
-                try:
-                    elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                    visible_elements = [el for el in elements if el.is_displayed()]
-                    
-                    if visible_elements:
-                        # Pick random element
-                        target = random.choice(visible_elements[:10])  # Limit to first 10
-                        
-                        # Get RANDOM click position within element (shrunk by 5px)
-                        screen_x, screen_y = YouTubeFlow._get_random_click_position(target, driver)
-                        
-                        # Use TomSamAutobot's human-like mouse movement (no click, just hover)
-                        MouseMoveAction.move_and_click_static(screen_x, screen_y, click_type=None, fast=False)
-                        
-                        print(f"{log_prefix} [{profile_id}] ✓ Moved mouse to random position in element: {selector}")
-                        return True
-                except:
-                    continue
+            # Step 4: Post-search scroll
+            YouTubeScrollAction(driver, profile_id, log_prefix, debugger_address, direction="down", times=2).execute()
+            time.sleep(random.uniform(1, 2))
             
-            print(f"{log_prefix} [{profile_id}] ⚠ No hoverable elements found")
-            return False
-        except Exception as e:
-            print(f"{log_prefix} [{profile_id}] ⚠ Move to element error: {e}")
-            return False
-    
-    @staticmethod
-    def _search_keyword(driver, keyword, profile_id, log_prefix):
-        """
-        Search for keyword on YouTube using physical keyboard input
-        Click on RANDOM position within search box (not center)
-        """
-        try:
-            # Find search box using Selenium
-            search_box = None
-            selectors = ['input#search', 'input[name="search_query"]', 'input[placeholder*="Search"]']
+            # Step 5: Skip ads if present
+            YouTubeSkipAdsAction(driver, profile_id, log_prefix, debugger_address, wait_time=1).execute()
             
-            for selector in selectors:
-                try:
-                    search_box = driver.find_element(By.CSS_SELECTOR, selector)
-                    if search_box and search_box.is_displayed():
-                        break
-                except:
-                    continue
+            # Step 6: Click video and WAIT FOR IT TO START PLAYING
+            print(f"{log_prefix} [{profile_id}] Clicking video and waiting for playback...")
+            video_action = YouTubeClickVideoAction(
+                driver, profile_id, log_prefix, debugger_address,
+                video_index_range=(1, 10)
+            )
             
-            if not search_box:
-                print(f"{log_prefix} [{profile_id}] ✗ Search box not found")
+            if not video_action.execute():
+                print(f"{log_prefix} [{profile_id}] ✗ Failed to start video playback")
                 return False
             
-            # Get RANDOM click position within search box (shrunk by 5px to avoid edges)
-            screen_x, screen_y = YouTubeFlow._get_random_click_position(search_box, driver)
-            
-            # Move mouse to search box and click using pyautogui
-            print(f"{log_prefix} [{profile_id}] Moving to search box (random position: {screen_x}, {screen_y})...")
-            MouseMoveAction.move_and_click_static(screen_x, screen_y, click_type="single_click", fast=False)
-            time.sleep(random.uniform(0.3, 0.7))
-            
-            # Clear search box first (Ctrl+A then Delete)
-            KeyboardAction.press_key_static("Ctrl+a")
-            time.sleep(0.1)
-            KeyboardAction.press_key_static("Del")
-            time.sleep(random.uniform(0.2, 0.5))
-            
-            # Type keyword with human-like delay using pyautogui
-            print(f"{log_prefix} [{profile_id}] Typing keyword: '{keyword}'")
-            import pyautogui
-            for char in keyword:
-                pyautogui.write(char)
-                # Random typing speed: 70% fast, 30% slow
-                if random.random() < 0.7:
-                    time.sleep(random.uniform(0.05, 0.1))  # Fast typing
-                else:
-                    time.sleep(random.uniform(0.1, 0.2))  # Slow typing
-            
-            # Random pause before submit (0.5-1.5s)
-            time.sleep(random.uniform(0.5, 1.5))
-            
-            # Press Enter using TomSamAutobot's keyboard action
-            KeyboardAction.press_key_static("Enter")
-            print(f"{log_prefix} [{profile_id}] ✓ Search submitted")
-            
+            # VIDEO IS PLAYING - CHAIN COMPLETE
+            print(f"{log_prefix} [{profile_id}] ========== LOCKED CHAIN END: VIDEO PLAYING ==========")
             return True
+            
         except Exception as e:
-            print(f"{log_prefix} [{profile_id}] ✗ Search error: {e}")
+            print(f"{log_prefix} [{profile_id}] ✗ Error in chain: {e}")
             import traceback
             traceback.print_exc()
             return False
     
     @staticmethod
-    def _click_random_video(driver, profile_id, log_prefix):
+    def _video_interaction_chain(driver, profile_id, debugger_address, log_prefix, cycle_number):
         """
-        Click a random video from search results using physical mouse click
-        Click on RANDOM position within video thumbnail (not center)
+        LOCKED CHAIN: Perform human-like interactions
+        Random selection and random repetitions = organic watch time
+        
+        Possible actions:
+        - Move mouse randomly
+        - Click video timeline (seek)
+        - Pause/Resume video
+        - Fullscreen toggle
+        - Click on ad (open new tab, scroll, close)
+        - Scroll page
+        - Volume control
         """
+        print(f"{log_prefix} [{profile_id}] ========== INTERACTION CHAIN START: CYCLE {cycle_number} ==========")
+        
         try:
-            print(f"{log_prefix} [{profile_id}] Looking for videos to click...")
+            # Check if video ended or autoplayed to next video - that's OK!
+            try:
+                current_url = driver.current_url
+                print(f"{log_prefix} [{profile_id}] Current URL: {current_url}")
+            except:
+                pass
             
-            # Wait a bit for videos to load
-            time.sleep(random.uniform(1, 2))
+            # Random number of interactions in this cycle (1-4)
+            num_interactions_this_cycle = random.randint(1, 4)
             
-            # Find video links using Selenium
-            video_links = driver.find_elements(By.CSS_SELECTOR, 'a#video-title')
+            # Random selection of interaction types
+            interaction_types = [
+                'mouse_move',
+                'seek_video',
+                'pause_resume',
+                'click_ad',
+                'scroll_page'
+            ]
             
-            if not video_links or len(video_links) == 0:
-                print(f"{log_prefix} [{profile_id}] ⚠ No videos found")
-                return False
+            selected_interactions = random.sample(
+                interaction_types, 
+                min(num_interactions_this_cycle, len(interaction_types))
+            )
             
-            # Filter visible videos (skip first one to avoid ads)
-            clickable_videos = [v for v in video_links[1:10] if v.is_displayed()]
+            print(f"{log_prefix} [{profile_id}] Will perform {num_interactions_this_cycle} interactions: {selected_interactions}")
             
-            if not clickable_videos:
-                print(f"{log_prefix} [{profile_id}] ⚠ No clickable videos found")
-                return False
+            for interaction in selected_interactions:
+                if interaction == 'mouse_move':
+                    YouTubeFlow._interaction_mouse_move(driver, profile_id, log_prefix)
+                
+                elif interaction == 'seek_video':
+                    YouTubeFlow._interaction_seek_video(driver, profile_id, log_prefix)
+                
+                elif interaction == 'pause_resume':
+                    YouTubeFlow._interaction_pause_resume(driver, profile_id, log_prefix)
+                
+                elif interaction == 'click_ad':
+                    YouTubeFlow._interaction_click_ad(driver, profile_id, log_prefix)
+                
+                elif interaction == 'scroll_page':
+                    YouTubeFlow._interaction_scroll_page(driver, profile_id, log_prefix)
+                
+                # Random wait between interactions (organic timing)
+                wait_time = random.uniform(1, 5)
+                print(f"{log_prefix} [{profile_id}] Waiting {wait_time:.1f}s before next interaction...")
+                time.sleep(wait_time)
             
-            # Pick random video
-            target_video = random.choice(clickable_videos)
-            
-            # Scroll video into view using Selenium
-            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", target_video)
-            time.sleep(random.uniform(0.5, 1.5))
-            
-            # Get RANDOM click position within video element (shrunk by 5px)
-            hover_x, hover_y = YouTubeFlow._get_random_click_position(target_video, driver)
-            
-            # Move mouse to video (hover first at random position)
-            MouseMoveAction.move_and_click_static(hover_x, hover_y, click_type=None, fast=False)
-            time.sleep(random.uniform(0.3, 0.8))
-            
-            # Get another RANDOM position for clicking (more natural)
-            click_x, click_y = YouTubeFlow._get_random_click_position(target_video, driver)
-            
-            # Click video at random position
-            MouseMoveAction.move_and_click_static(click_x, click_y, click_type="single_click", fast=False)
-            print(f"{log_prefix} [{profile_id}] ✓ Clicked random video at position ({click_x}, {click_y})")
-            
-            # Wait for video to load
-            time.sleep(random.uniform(3, 6))
-            
-            # Random actions on video page
-            YouTubeFlow._perform_random_actions_loop(driver, profile_id, log_prefix)
-            
+            print(f"{log_prefix} [{profile_id}] ========== INTERACTION CHAIN END: CYCLE {cycle_number} ==========")
             return True
+            
         except Exception as e:
-            print(f"{log_prefix} [{profile_id}] ⚠ Video click error: {e}")
+            print(f"{log_prefix} [{profile_id}] ✗ Error in interaction chain: {e}")
             return False
+    
+    # ========== INTERACTION METHODS (KEEP EXISTING) ==========
+    
+    @staticmethod
+    def _interaction_mouse_move(driver, profile_id, log_prefix):
+        """Move mouse randomly on video player area"""
+        try:
+            print(f"{log_prefix} [{profile_id}] 🖱️ Moving mouse randomly...")
+            
+            # Random number of mouse moves (1-3)
+            num_moves = random.randint(1, 3)
+            
+            for i in range(num_moves):
+                viewport_width = driver.execute_script("return window.innerWidth")
+                viewport_height = driver.execute_script("return window.innerHeight")
+                viewport_offset_x = driver.execute_script("return window.screenX + (window.outerWidth - window.innerWidth);")
+                viewport_offset_y = driver.execute_script("return window.screenY + (window.outerHeight - window.innerHeight);")
+                
+                random_x = random.randint(int(viewport_width * 0.3), int(viewport_width * 0.7))
+                random_y = random.randint(int(viewport_height * 0.3), int(viewport_height * 0.6))
+                
+                screen_x = int(viewport_offset_x + random_x)
+                screen_y = int(viewport_offset_y + random_y)
+                
+                MouseMoveAction.move_and_click_static(screen_x, screen_y, click_type=None, fast=False)
+                print(f"{log_prefix} [{profile_id}] ✓ Mouse moved to ({screen_x}, {screen_y})")
+                
+                if i < num_moves - 1:
+                    time.sleep(random.uniform(0.5, 1.5))
+            
+        except Exception as e:
+            print(f"{log_prefix} [{profile_id}] ⚠ Mouse move error: {e}")
+    
+    @staticmethod
+    def _interaction_seek_video(driver, profile_id, log_prefix):
+        """Click on video timeline to seek to different position"""
+        try:
+            print(f"{log_prefix} [{profile_id}] ⏩ Seeking video position...")
+            
+            # Get current video time and duration
+            current_time = driver.execute_script("return document.querySelector('video.html5-main-video') ? document.querySelector('video.html5-main-video').currentTime : null")
+            duration = driver.execute_script("return document.querySelector('video.html5-main-video') ? document.querySelector('video.html5-main-video').duration : null")
+            
+            if current_time is not None and duration and duration > 30:
+                # Seek to random position
+                if random.random() < 0.7:
+                    # Seek forward (70% chance)
+                    new_time = current_time + random.uniform(5, 30)
+                else:
+                    # Seek backward (30% chance)
+                    new_time = max(0, current_time - random.uniform(5, 15))
+                
+                new_time = min(new_time, duration - 5)
+                
+                driver.execute_script(f"document.querySelector('video.html5-main-video').currentTime = {new_time}")
+                print(f"{log_prefix} [{profile_id}] ✓ Seeked from {current_time:.1f}s to {new_time:.1f}s")
+                time.sleep(random.uniform(1, 2))
+            else:
+                print(f"{log_prefix} [{profile_id}] ℹ Video player not found or video too short to seek")
+            
+        except Exception as e:
+            print(f"{log_prefix} [{profile_id}] ⚠ Seek error: {e}")
+    
+    @staticmethod
+    def _interaction_pause_resume(driver, profile_id, log_prefix):
+        """Pause video for a few seconds then resume"""
+        try:
+            print(f"{log_prefix} [{profile_id}] ⏸️ Pausing video...")
+            
+            viewport_width = driver.execute_script("return window.innerWidth")
+            viewport_height = driver.execute_script("return window.innerHeight")
+            viewport_offset_x = driver.execute_script("return window.screenX + (window.outerWidth - window.innerWidth);")
+            viewport_offset_y = driver.execute_script("return window.screenY + (window.outerHeight - window.innerHeight);")
+            
+            center_x = int(viewport_offset_x + viewport_width / 2)
+            center_y = int(viewport_offset_y + viewport_height / 2)
+            
+            # Click to pause
+            MouseMoveAction.move_and_click_static(center_x, center_y, click_type="single_click", fast=False)
+            print(f"{log_prefix} [{profile_id}] ✓ Video paused")
+            
+            # Wait 2-5 seconds
+            pause_duration = random.uniform(2, 5)
+            print(f"{log_prefix} [{profile_id}] Waiting {pause_duration:.1f}s...")
+            time.sleep(pause_duration)
+            
+            # Click to resume
+            MouseMoveAction.move_and_click_static(center_x, center_y, click_type="single_click", fast=False)
+            print(f"{log_prefix} [{profile_id}] ▶️ Video resumed")
+            
+        except Exception as e:
+            print(f"{log_prefix} [{profile_id}] ⚠ Pause/resume error: {e}")
+    
+    @staticmethod
+    def _interaction_click_ad(driver, profile_id, log_prefix):
+        """Click on ad (if present), open new tab, scroll, then close"""
+        try:
+            print(f"{log_prefix} [{profile_id}] 🎯 Looking for ads to click...")
+            
+            ad_selectors = [
+                '.ytp-ad-overlay-image',
+                '.ytp-ad-text-overlay',
+                'div.ytp-ad-button',
+                'a[href*="googleadservices"]',
+                'div[class*="ad-container"] a'
+            ]
+            
+            ad_clicked = False
+            main_tab = driver.current_window_handle
+            
+            for selector in ad_selectors:
+                try:
+                    ad_elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                    visible_ads = [ad for ad in ad_elements if ad.is_displayed()]
+                    
+                    if visible_ads:
+                        target_ad = random.choice(visible_ads)
+                        
+                        location = target_ad.location
+                        size = target_ad.size
+                        viewport_offset_x = driver.execute_script("return window.screenX + (window.outerWidth - window.innerWidth);")
+                        viewport_offset_y = driver.execute_script("return window.screenY + (window.outerHeight - window.innerHeight);")
+                        
+                        random_x = location['x'] + size['width'] * random.uniform(0.3, 0.7)
+                        random_y = location['y'] + size['height'] * random.uniform(0.3, 0.7)
+                        screen_x = int(viewport_offset_x + random_x)
+                        screen_y = int(viewport_offset_y + random_y)
+                        
+                        MouseMoveAction.move_and_click_static(screen_x, screen_y, click_type="single_click", fast=False)
+                        print(f"{log_prefix} [{profile_id}] ✓ Clicked ad")
+                        ad_clicked = True
+                        time.sleep(3)
+                        break
+                except:
+                    continue
+            
+            if ad_clicked:
+                if len(driver.window_handles) > 1:
+                    new_tab = driver.window_handles[-1]
+                    driver.switch_to.window(new_tab)
+                    print(f"{log_prefix} [{profile_id}] ✓ Switched to ad tab")
+                    
+                    scroll_duration = random.uniform(10, 20)
+                    print(f"{log_prefix} [{profile_id}] Scrolling ad page for {scroll_duration:.1f}s...")
+                    
+                    num_scrolls = random.randint(3, 6)
+                    for i in range(num_scrolls):
+                        scroll_amount = random.randint(200, 500)
+                        driver.execute_script(f"window.scrollBy(0, {scroll_amount});")
+                        time.sleep(scroll_duration / num_scrolls)
+                    
+                    driver.close()
+                    driver.switch_to.window(main_tab)
+                    print(f"{log_prefix} [{profile_id}] ✓ Closed ad tab, back to YouTube")
+                    
+                    time.sleep(1)
+                    is_paused = driver.execute_script("return document.querySelector('video.html5-main-video') ? document.querySelector('video.html5-main-video').paused : false")
+                    if is_paused:
+                        print(f"{log_prefix} [{profile_id}] Video paused, resuming...")
+                        viewport_width = driver.execute_script("return window.innerWidth")
+                        viewport_height = driver.execute_script("return window.innerHeight")
+                        viewport_offset_x = driver.execute_script("return window.screenX + (window.outerWidth - window.innerWidth);")
+                        viewport_offset_y = driver.execute_script("return window.screenY + (window.outerHeight - window.innerHeight);")
+                        
+                        center_x = int(viewport_offset_x + viewport_width / 2)
+                        center_y = int(viewport_offset_y + viewport_height / 2)
+                        
+                        MouseMoveAction.move_and_click_static(center_x, center_y, click_type="single_click", fast=False)
+                        print(f"{log_prefix} [{profile_id}] ✓ Video resumed")
+            else:
+                print(f"{log_prefix} [{profile_id}] ℹ No ads found to click")
+                
+        except Exception as e:
+            print(f"{log_prefix} [{profile_id}] ⚠ Ad click error: {e}")
+            try:
+                driver.switch_to.window(driver.window_handles[0])
+            except:
+                pass
+    
+    @staticmethod
+    def _interaction_scroll_page(driver, profile_id, log_prefix):
+        """Scroll page up/down randomly multiple times"""
+        try:
+            print(f"{log_prefix} [{profile_id}] 📜 Scrolling page...")
+            
+            # Random number of scrolls (1-3)
+            num_scrolls = random.randint(1, 3)
+            
+            for i in range(num_scrolls):
+                scroll_amount = random.randint(200, 800)
+                direction = random.choice([-1, 1])
+                
+                driver.execute_script(f"window.scrollBy(0, {scroll_amount * direction});")
+                print(f"{log_prefix} [{profile_id}] ✓ Scrolled {'down' if direction > 0 else 'up'} {scroll_amount}px")
+                
+                if i < num_scrolls - 1:
+                    time.sleep(random.uniform(0.5, 1.5))
+            
+        except Exception as e:
+            print(f"{log_prefix} [{profile_id}] ⚠ Scroll error: {e}")
+    
+    # ========== HELPER METHODS ==========
+    
+    @staticmethod
+    def _navigate_to_youtube(driver, profile_id, debugger_address, log_prefix):
+        """Navigate to YouTube homepage"""
+        YouTubeNavigateAction(driver, profile_id, log_prefix, debugger_address).execute()
+        time.sleep(random.uniform(2, 4))
+    
+    @staticmethod
+    def _random_actions(driver, profile_id, debugger_address, log_prefix, num_actions=2):
+        """Perform random scroll/mouse move actions"""
+        print(f"{log_prefix} [{profile_id}] Performing {num_actions} random actions...")
+        
+        for i in range(num_actions):
+            action_type = random.choice(['scroll', 'mouse_move'])
+            
+            if action_type == 'scroll':
+                YouTubeScrollAction(driver, profile_id, log_prefix, debugger_address, direction="down").execute()
+            else:
+                YouTubeMouseMoveAction(driver, profile_id, log_prefix, debugger_address, click=False).execute()
+            
+            time.sleep(random.uniform(1, 2))
