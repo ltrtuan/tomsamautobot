@@ -85,7 +85,7 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         entry.pack(anchor=tk.W, padx=5)
     
     def create_profile_ids_section(self):
-        """Profile IDs textarea with All Profiles checkbox"""
+        """Profile IDs textarea with range selection"""
         text_frame = tk.LabelFrame(
             self.parent_frame,
             text="Profile IDs",
@@ -95,37 +95,77 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         )
         text_frame.pack(fill=tk.BOTH, expand=True, pady=10)
     
-        # ========== THÊM CHECKBOX "ALL PROFILES" ==========
-        self.all_profiles_var = tk.BooleanVar()
-        if self.parameters:
-            self.all_profiles_var.set(self.parameters.get("all_profiles", False))
-        else:
-            self.all_profiles_var.set(False)
+        # ========== THAY THẾ: 2 TEXTBOX INTEGER RANGE ==========
+        range_frame = tk.Frame(text_frame, bg=cfg.LIGHT_BG_COLOR)
+        range_frame.pack(fill=tk.X, pady=(0, 10))
     
-        all_profiles_checkbox = tk.Checkbutton(
-            text_frame,
-            text="✓ Get All Profiles from account (ignore Profile IDs below)",
-            variable=self.all_profiles_var,
-            command=self._toggle_profile_ids_state,
+        # How many profiles
+        tk.Label(
+            range_frame,
+            text="How many profiles to use:",
             bg=cfg.LIGHT_BG_COLOR,
-            font=("Segoe UI", 10, "bold"),
-            fg="#FF6B00"
+            font=("Segoe UI", 10)
+        ).pack(side=tk.LEFT, padx=(0, 5))
+    
+        self.profile_count_var = tk.StringVar()
+        if self.parameters:
+            self.profile_count_var.set(self.parameters.get("profile_count", "30"))
+        else:
+            self.profile_count_var.set("30")
+    
+        count_entry = ttk.Entry(
+            range_frame,
+            textvariable=self.profile_count_var,
+            width=10
         )
-        all_profiles_checkbox.pack(anchor=tk.W, pady=(0, 10))
+        count_entry.pack(side=tk.LEFT, padx=5)
+    
+        # From profile index
+        tk.Label(
+            range_frame,
+            text="From profile index:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10)
+        ).pack(side=tk.LEFT, padx=(15, 5))
+    
+        self.profile_start_index_var = tk.StringVar()
+        if self.parameters:
+            self.profile_start_index_var.set(self.parameters.get("profile_start_index", "0"))
+        else:
+            self.profile_start_index_var.set("0")
+    
+        start_entry = ttk.Entry(
+            range_frame,
+            textvariable=self.profile_start_index_var,
+            width=10
+        )
+        start_entry.pack(side=tk.LEFT, padx=5)
+    
+        # Hint
+        hint_label = tk.Label(
+            text_frame,
+            text="💡 Example: Count=30, Start=10 → Use profiles from index 10 to 39 (30 profiles total)",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 8),
+            fg="#666666",
+            wraplength=500,
+            justify=tk.LEFT
+        )
+        hint_label.pack(anchor=tk.W, pady=(0, 10))
     
         # ========== PROFILE IDS TEXTAREA (EXISTING) ==========
         label_text = (
-            "Multiple profile IDs separated by ';'. Special formats:\n"
-            " <VARIABLE_NAME> to use variable value\n"
-            "Example: 68e485dd;<PROFILE_VAR>;68e486ab"
+            "OR manually enter Profile IDs separated by ';'. Special formats:\n"
+            " <var_name> to use variable value\n"
+            "Example: 68e485dd;<profile_var>;68e486ab\n"
+            "(Leave empty to use range above)"
         )
-    
         label = tk.Label(
             text_frame,
             text=label_text,
             bg=cfg.LIGHT_BG_COLOR,
             justify=tk.LEFT,
-            wraplength=400
+            wraplength=500
         )
         label.pack(anchor=tk.W, pady=(0, 5))
     
@@ -141,19 +181,7 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         if self.parameters:
             profile_ids = self.parameters.get("profile_ids", "")
             self.profile_ids_input.insert("1.0", profile_ids)
-    
-        # Initialize state
-        self._toggle_profile_ids_state()
-        
 
-    def _toggle_profile_ids_state(self):
-        """Enable/disable Profile IDs textarea based on All Profiles checkbox"""
-        if self.all_profiles_var.get():
-            # Disable textarea when All Profiles is checked
-            self.profile_ids_input.config(state=tk.DISABLED, bg="#f0f0f0")
-        else:
-            # Enable textarea when unchecked
-            self.profile_ids_input.config(state=tk.NORMAL, bg="white")
   
     
     def create_how_to_get_profile_section(self):
@@ -613,7 +641,8 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         params["profile_ids"] = self.profile_ids_input.get("1.0", tk.END).strip()
         params["how_to_get"] = self.how_to_get_var.get()
         
-        params["all_profiles"] = self.all_profiles_var.get()
+        params["profile_count"] = self.profile_count_var.get().strip()
+        params["profile_start_index"] = self.profile_start_index_var.get().strip()
         
         # Options
         params["refresh_fingerprint"] = self.refresh_fingerprint_var.get()       

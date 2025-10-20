@@ -114,3 +114,50 @@ class KeyboardAction(BaseAction):
             return random.uniform(0.2, 0.5)  # Typing nhanh
         else:
             return random.uniform(0.6, 0.9)   # Suy nghĩ/pause
+        
+    @staticmethod
+    def press_key_static(key_sequence):
+        """
+        Static method để press key từ action khác
+    
+        Args:
+            key_sequence: "Enter" hoặc "Ctrl+C" hoặc "Esc;Enter"
+        """
+        import pyautogui
+        import time
+        import random
+    
+        # Map phím
+        key_mapping = {
+            "Window": "win", "Ctrl": "ctrl", "Shift": "shift", "Alt": "alt",
+            "Enter": "enter", "Esc": "escape", "Del": "delete", 
+            "BackSpace": "backspace", "Space": "space",
+            "Up": "up", "Down": "down", "Left": "left", "Right": "right"
+        }
+    
+        # Tách rows (nếu có dấu ;)
+        rows = [row.strip() for row in key_sequence.split(";") if row.strip()]
+    
+        for i, row in enumerate(rows):
+            # Tách keys trong row (nếu có dấu +)
+            keys = [key.strip() for key in row.split("+") if key.strip()]
+        
+            # Convert keys
+            pyautogui_keys = []
+            for key in keys:
+                if key in key_mapping:
+                    pyautogui_keys.append(key_mapping[key])
+                elif key.startswith("F") and len(key) <= 3:  # F1-F12
+                    pyautogui_keys.append(key.lower())
+                else:
+                    pyautogui_keys.append(key.lower())
+        
+            # Press keys
+            if len(pyautogui_keys) == 1:
+                pyautogui.press(pyautogui_keys[0])
+            else:
+                pyautogui.hotkey(*pyautogui_keys)
+        
+            # Delay between rows
+            if i < len(rows) - 1:
+                time.sleep(random.uniform(0.2, 0.5))

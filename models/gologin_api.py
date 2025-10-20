@@ -241,11 +241,8 @@ class GoLoginAPI:
                 # gl.stop() completed successfully
                 print(f"[GOLOGIN] ✓ gl.stop() completed successfully")
                 print(f"[GOLOGIN] Waiting 10s for cloud sync to complete...")
-                time.sleep(10)  # Increased from 5s to 10s
-            
-                # Verify browser closed naturally
-                print(f"[GOLOGIN] Verifying browser closed...")
-                time.sleep(2)
+                time.sleep(5)  # Increased from 5s to 10s           
+           
             
                 # Check if browser processes still exist (shouldn't happen)
                 try:
@@ -803,88 +800,60 @@ class GoLoginAPI:
             traceback.print_exc()
             return False, str(e)
 
-    def get_all_profiles(self):
+    def get_all_profiles(self, count=None, start_index=0):
         """
-        Get ALL profiles from GoLogin account with pagination
-        API: GET https://api.gologin.com/browser/v2
-        Documentation: https://gologin.com/docs/api-reference/profile/get-all-profiles
+        Get profiles from GoLogin account with PRECISE range support
+        API: GET https://api.gologin.com/browser/v2?page={page}&limit={limit}
+    
+        Args:
+            count: Number of profiles to fetch (None = all)
+            start_index: Start from this profile index (0-based)
     
         Returns:
-            tuple: (success: bool, all_profiles: list or error message)
+            tuple: (success: bool, profiles: list or error message)
+    
+        Examples:
+            get_all_profiles()              → Fetch ALL profiles
+            get_all_profiles(30, 10)        → Fetch 30 profiles from index 10 (profiles 10-39)
+            get_all_profiles(50, 0)         → Fetch first 50 profiles
         """
         try:
+            # ========== CALCULATE API PARAMS ==========
+            limit = 30  # GoLogin API max limit per page
+        
+            if count is None:
+                # Fetch ALL profiles (old behavior)
+                print(f"[GOLOGIN] Fetching ALL profiles with pagination...")
+                return self._fetch_all_profiles_paginated()
+        
+            # ========== OPTIMIZED: FETCH ONLY NEEDED PROFILES ==========
+            print(f"[GOLOGIN] Fetching {count} profiles starting from index {start_index}")
+        
+            # Calculate which pages to fetch
+            # Example: start_index=10, count=30
+            #   → Need profiles 10-39
+            #   → Page 1 has profiles 0-29 (need 10-29 = 20 profiles)
+            #   → Page 2 has profiles 30-59 (need 30-39 = 10 profiles)
+        
+            start_page = (start_index // limit) + 1  # Page numbers start from 1
+            end_index = start_index + count - 1
+            end_page = (end_index // limit) + 1
+        
+            print(f"[GOLOGIN] Calculated: Need pages {start_page} to {end_page}")
+        
             all_profiles = []
-            seen_profile_ids = set()
-            page = 1
-            limit = 30  # Maximum allowed by GoLogin API
-            max_pages = 100
         
-            print(f"[GOLOGIN] Fetching ALL profiles with pagination...")
-        
-            while page <= max_pages:
+            for page in range(start_page, end_page + 1):
                 url = f"{self.base_url}/browser/v2"
                 params = {
                     "limit": limit,
-                    "page": page  # Use "page" parameter instead of "skip"
+                    "page": page
                 }
             
                 print(f"[GOLOGIN] Fetching page {page} (limit={limit})...")
-                print(f"[DEBUG] GET {url}")
-            
                 response = requests.get(url, headers=self.headers, params=params, timeout=30)
-                print(f"[DEBUG] Response Status: {response.status_code}")
             
-                if response.status_code == 200:
-                    data = response.json()
-                
-                    # Parse response
-                    profiles_page = []
-                    if isinstance(data, list):
-                        profiles_page = data
-                    elif isinstance(data, dict):
-                        profiles_page = data.get("profiles", data.get("data", []))
-                
-                    print(f"[DEBUG] Retrieved {len(profiles_page)} profiles in this page")
-                
-                    # STOP CONDITION 1: Empty page
-                    if len(profiles_page) == 0:
-                        print(f"[GOLOGIN] Empty page, stopping pagination")
-                        break
-                
-                    # Process profiles one by one
-                    new_profiles_count = 0
-                    duplicates_in_this_page = 0
-                
-                    for profile in profiles_page:
-                        profile_id = profile.get("id")
-                        if not profile_id:
-                            continue
-                    
-                        # Check if this profile was seen before
-                        if profile_id in seen_profile_ids:
-                            duplicates_in_this_page += 1
-                            continue
-                    
-                        # New unique profile - add it
-                        all_profiles.append(profile)
-                        seen_profile_ids.add(profile_id)
-                        new_profiles_count += 1
-                
-                    # Log page results
-                    if duplicates_in_this_page > 0:
-                        print(f"[GOLOGIN] Page {page}: Added {new_profiles_count} new profile(s), skipped {duplicates_in_this_page} duplicate(s)")
-                    else:
-                        print(f"[GOLOGIN] Page {page}: Added {new_profiles_count} new profile(s)")
-                
-                    # STOP CONDITION 2: Page has ONLY duplicates (reached end)
-                    if new_profiles_count == 0 and duplicates_in_this_page > 0:
-                        print(f"[GOLOGIN] ⚠ Page {page} contains only duplicates ({duplicates_in_this_page}), stopping pagination")
-                        break
-                
-                    # Move to next page
-                    page += 1
-                
-                else:
+                if response.status_code != 200:
                     error_msg = f"HTTP {response.status_code}"
                     try:
                         error_data = response.json()
@@ -894,9 +863,120 @@ class GoLoginAPI:
                 
                     print(f"[GOLOGIN] ✗ Get profiles failed: {error_msg}")
                     return False, error_msg
+            
+                # Parse response
+                data = response.json()
+                profiles_page = []
+                if isinstance(data, list):
+                    profiles_page = data
+                elif isinstance(data, dict):
+                    profiles_page = data.get("profiles", data.get("data", []))
+            
+                print(f"[GOLOGIN] Page {page}: Retrieved {len(profiles_page)} profiles")
+            
+                if not profiles_page:
+                    print(f"[GOLOGIN] Empty page, stopping")
+                    break
+            
+                all_profiles.extend(profiles_page)
         
-            if page > max_pages:
-                print(f"[GOLOGIN] ⚠ Reached max page limit ({max_pages})")
+            # ========== SLICE TO EXACT RANGE ==========
+            # We may have fetched extra profiles at edges, slice precisely
+            # Example: Fetched pages 1-2 (60 profiles), need profiles 10-39
+            #   → Slice: all_profiles[10:40] from concatenated list
+        
+            # Calculate offset within fetched data
+            offset_in_fetched = start_index - ((start_page - 1) * limit)
+            selected_profiles = all_profiles[offset_in_fetched:offset_in_fetched + count]
+        
+            # Extract only profile IDs (or return full profile objects)
+            print(f"[GOLOGIN] ✓ SUCCESS: Selected {len(selected_profiles)} profiles")
+            return True, selected_profiles
+        
+        except Exception as e:
+            print(f"[GOLOGIN] Get profiles error: {e}")
+            import traceback
+            traceback.print_exc()
+            return False, str(e)
+
+
+    def _fetch_all_profiles_paginated(self):
+        """
+        Internal method: Fetch ALL profiles with pagination (old behavior)
+        Used when count=None
+        """
+        try:
+            all_profiles = []
+            seen_profile_ids = set()
+            page = 1
+            limit = 30
+            max_pages = 100
+        
+            print(f"[GOLOGIN] Fetching ALL profiles with pagination...")
+        
+            while page <= max_pages:
+                url = f"{self.base_url}/browser/v2"
+                params = {
+                    "limit": limit,
+                    "page": page
+                }
+            
+                print(f"[GOLOGIN] Fetching page {page} (limit={limit})...")
+                response = requests.get(url, headers=self.headers, params=params, timeout=30)
+            
+                if response.status_code != 200:
+                    error_msg = f"HTTP {response.status_code}"
+                    try:
+                        error_data = response.json()
+                        error_msg = error_data.get("message", error_msg)
+                    except:
+                        error_msg = f"{error_msg}: {response.text[:200]}"
+                
+                    print(f"[GOLOGIN] ✗ Get profiles failed: {error_msg}")
+                    return False, error_msg
+            
+                # Parse response
+                data = response.json()
+                profiles_page = []
+                if isinstance(data, list):
+                    profiles_page = data
+                elif isinstance(data, dict):
+                    profiles_page = data.get("profiles", data.get("data", []))
+            
+                # Empty page = end
+                if len(profiles_page) == 0:
+                    print(f"[GOLOGIN] Empty page, stopping pagination")
+                    break
+            
+                # Deduplicate
+                new_profiles_count = 0
+                duplicates_in_this_page = 0
+            
+                for profile in profiles_page:
+                    profile_id = profile.get("id")
+                    if not profile_id:
+                        continue
+                
+                    if profile_id in seen_profile_ids:
+                        duplicates_in_this_page += 1
+                        continue
+                
+                    all_profiles.append(profile)
+                    seen_profile_ids.add(profile_id)
+                    new_profiles_count += 1
+            
+                # Log
+                if duplicates_in_this_page > 0:
+                    print(f"[GOLOGIN] Page {page}: Added {new_profiles_count} new profile(s), skipped {duplicates_in_this_page} duplicate(s)")
+                else:
+                    print(f"[GOLOGIN] Page {page}: Added {new_profiles_count} new profile(s)")
+            
+                # Stop if only duplicates
+                if new_profiles_count == 0 and duplicates_in_this_page > 0:
+                    print(f"[GOLOGIN] ⚠ Page {page} contains only duplicates, stopping pagination")
+                    break
+            
+                page += 1
         
             print(f"[GOLOGIN] ✓ SUCCESS: Retrieved {len(all_profiles)} unique profile(s)")
             return True, all_profiles
@@ -906,6 +986,7 @@ class GoLoginAPI:
             import traceback
             traceback.print_exc()
             return False, str(e)
+
 
 
 
