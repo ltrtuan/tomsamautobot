@@ -18,6 +18,143 @@ from controllers.actions.mouse_move_action import MouseMoveAction
 from controllers.actions.keyboard_action import KeyboardAction
 from helpers.gologin_profile_helper import GoLoginProfileHelper
 
+
+class YouTubeFlowIterator:
+    """
+    YouTube Flow với chain iterator pattern - Hỗ trợ round-robin execution
+    
+    Thay vì execute toàn bộ flow, class này cho phép execute từng chain một
+    và chờ coordinator gọi lại để execute chain tiếp theo.
+    
+    Workflow:
+    1. __init__: Tạo danh sách chains cần execute
+    2. has_next_chain(): Kiểm tra còn chain nào chưa execute
+    3. execute_next_chain(): Execute 1 chain, tăng index, return result
+    """
+    
+    def __init__(self, driver, keyword, profile_id, debugger_address, log_prefix="[YOUTUBE]"):
+        """
+        Khởi tạo flow iterator
+        
+        Args:
+            driver: Selenium WebDriver instance
+            keyword: Keyword để search YouTube
+            profile_id: Profile ID
+            debugger_address: Chrome debugger address
+            log_prefix: Prefix cho log messages
+        """
+        self.driver = driver
+        self.keyword = keyword
+        self.profile_id = profile_id
+        self.debugger_address = debugger_address
+        self.log_prefix = log_prefix
+        
+        # Build danh sách chains
+        self.chains = self._build_chain_queue()
+        self.current_chain_index = 0
+        
+        print(f"{log_prefix} [{profile_id}] ✓ Flow iterator initialized with {len(self.chains)} chains")
+    
+    def _build_chain_queue(self):
+        """
+        Tạo danh sách chains cần execute
+        
+        Returns:
+            list: Danh sách tuples (chain_function, chain_args)
+        """
+        chains = []
+        
+        # Chain 1: Search and start video (LOCKED - khoảng 30s)
+        chains.append({
+            'name': 'search_and_start_video',
+            'function': YouTubeFlow._search_and_start_video_chain,
+            'args': (self.driver, self.keyword, self.profile_id, self.debugger_address, self.log_prefix)
+        })
+        
+        # Chains 2-N: Random interaction cycles (mỗi cycle là 1 chain)
+        # Random 3-6 interaction cycles
+        num_interaction_cycles = random.randint(3, 6)
+        print(f"{self.log_prefix} [{self.profile_id}] Planning {num_interaction_cycles} interaction cycles")
+        
+        for cycle_num in range(1, num_interaction_cycles + 1):
+            chains.append({
+                'name': f'interaction_cycle_{cycle_num}',
+                'function': YouTubeFlow._video_interaction_chain,
+                'args': (self.driver, self.profile_id, self.debugger_address, self.log_prefix, cycle_num)
+            })
+        
+        return chains
+    
+    def has_next_chain(self):
+        """
+        Kiểm tra còn chain nào chưa execute
+        
+        Returns:
+            bool: True nếu còn chain, False nếu đã hết
+        """
+        return self.current_chain_index < len(self.chains)
+    
+    def execute_next_chain(self):
+        """
+        Execute chain tiếp theo trong queue
+        
+        Process:
+        1. Lấy chain hiện tại
+        2. Execute chain thông qua ActionChainManager (LOCKED)
+        3. Tăng index
+        4. Return result
+        
+        Returns:
+            bool: True nếu chain thành công, False nếu failed
+        """
+        if not self.has_next_chain():
+            print(f"{self.log_prefix} [{self.profile_id}] ⚠ No more chains to execute")
+            return False
+        
+        # Lấy chain hiện tại
+        chain_info = self.chains[self.current_chain_index]
+        chain_name = chain_info['name']
+        chain_function = chain_info['function']
+        chain_args = chain_info['args']
+        
+        print(f"{self.log_prefix} [{self.profile_id}] ========================================")
+        print(f"{self.log_prefix} [{self.profile_id}] Executing chain {self.current_chain_index + 1}/{len(self.chains)}: {chain_name}")
+        print(f"{self.log_prefix} [{self.profile_id}] ========================================")
+        
+        # Execute chain thông qua ActionChainManager (tự động acquire/release lock)
+        from helpers.action_chain_manager import ActionChainManager
+        
+        result = ActionChainManager.execute_chain(
+            self.profile_id,
+            chain_function,
+            *chain_args
+        )
+        
+        # Tăng index cho lần execute tiếp theo
+        self.current_chain_index += 1
+        
+        if result:
+            print(f"{self.log_prefix} [{self.profile_id}] ✓ Chain '{chain_name}' completed successfully")
+        else:
+            print(f"{self.log_prefix} [{self.profile_id}] ✗ Chain '{chain_name}' failed")
+        
+        return result
+    
+    def get_progress(self):
+        """
+        Lấy thông tin tiến độ
+        
+        Returns:
+            dict: {'current': int, 'total': int, 'percentage': float}
+        """
+        return {
+            'current': self.current_chain_index,
+            'total': len(self.chains),
+            'percentage': (self.current_chain_index / len(self.chains) * 100) if len(self.chains) > 0 else 0
+        }
+
+
+
 class YouTubeFlow:
     """
     YouTube Flow Orchestrator - Natural interaction mode
@@ -75,6 +212,24 @@ class YouTubeFlow:
         return True
     
     @staticmethod
+    def create_flow_iterator(driver, keyword, profile_id, debugger_address, log_prefix="[YOUTUBE]"):
+        """
+        Factory method để tạo flow iterator cho round-robin execution
+    
+        Args:
+            driver: Selenium WebDriver instance
+            keyword: Keyword để search
+            profile_id: Profile ID
+            debugger_address: Chrome debugger address
+            log_prefix: Prefix cho log
+    
+        Returns:
+            YouTubeFlowIterator: Flow iterator instance
+        """
+        return YouTubeFlowIterator(driver, keyword, profile_id, debugger_address, log_prefix)
+
+    
+    @staticmethod
     def _search_and_start_video_chain(driver, keyword, profile_id, debugger_address, log_prefix):
         """
         LOCKED CHAIN: Navigate → Search → Click video → Wait for playing
@@ -85,10 +240,22 @@ class YouTubeFlow:
         try:
             # THÊM ĐOẠN NÀY VÀO ĐẦU (TRONG LOCK)
             # Fix crashed tabs INSIDE lock to prevent window focus conflicts
+            # PAUSE health monitoring during crashed tab fix
+            from helpers.profile_health_monitor import get_health_monitor
+
+            monitor = get_health_monitor()
+            monitor.pause_monitoring(profile_id)
+
             print(f"{log_prefix} [{profile_id}] Checking for crashed tabs...")
-            if not GoLoginProfileHelper.check_and_fix_crashed_tabs(driver, debugger_address, log_prefix):
-                print(f"{log_prefix} [{profile_id}] ⚠ Could not fix crashed tab, continuing anyway...")
+            crashed_fix_success = GoLoginProfileHelper.check_and_fix_crashed_tabs(driver, debugger_address, log_prefix)
+
+            # RESUME health monitoring after fix
+            monitor.resume_monitoring(profile_id)
+
+            if not crashed_fix_success:
+                print(f"{log_prefix} [{profile_id}] ✗ Failed to fix crashed tab - closing profile")
                 return False
+
         
             # Bring window to front AFTER fixing crashed tabs
             GoLoginProfileHelper.bring_profile_to_front(profile_id, driver=driver, log_prefix=log_prefix)
@@ -102,6 +269,10 @@ class YouTubeFlow:
             
             
             # Step 3: Search keyword
+            # RE-BRING TO FRONT before critical action (in case other profile closed during setup)
+            print(f"{log_prefix} [{profile_id}] Re-activating window before search...")
+            GoLoginProfileHelper.bring_profile_to_front(profile_id, driver=driver, log_prefix=log_prefix)
+            time.sleep(0.5)
             YouTubeSearchAction(driver, profile_id, keyword, log_prefix, debugger_address).execute()
             time.sleep(random.uniform(2, 4))
             

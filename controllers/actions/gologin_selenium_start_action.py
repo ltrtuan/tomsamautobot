@@ -138,50 +138,322 @@ class GoLoginSeleniumStartAction(BaseAction):
             print(f"[GOLOGIN START] ⚠ Proxy update error: {e}")
     
     def _start_parallel(self, profile_list):
-        """Start multiple profiles in parallel - NO TIMEOUT"""
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        
-        max_workers = min(int(self.params.get("max_workers", "3")), len(profile_list))
-        print(f"[GOLOGIN START] Starting {len(profile_list)} profiles with {max_workers} threads")
-        
-        results = []
-        success_count = [0]  # Use list for mutable counter
-        
-        executor = ThreadPoolExecutor(max_workers=max_workers)
-        try:
-            # Submit all threads
-            future_to_profile = {}
-            for i, profile_id in enumerate(profile_list):
-                if i > 0:
-                    time.sleep(3)  # Stagger 3s
-                
-                future = executor.submit(self._start_single_profile, profile_id)
-                future_to_profile[future] = profile_id
-                print(f"[GOLOGIN START] Submitted {i+1}/{len(profile_list)}: {profile_id}")
-            
-            # Wait for all threads WITHOUT TIMEOUT
-            for future in as_completed(future_to_profile):
-                profile_id = future_to_profile[future]
-                try:
-                    success = future.result()  # No timeout - wait indefinitely
-                    results.append(success)
-                    if success:
-                        success_count[0] += 1
-                    print(f"[GOLOGIN START] {'✓' if success else '✗'} Profile {profile_id} completed")
-                except Exception as e:
-                    print(f"[GOLOGIN START] ✗ Profile {profile_id} exception: {e}")
-                    results.append(False)
-        
-        finally:
-            executor.shutdown(wait=True)
-        
-        # Summary
-        print(f"\n[GOLOGIN START] ========== SUMMARY ==========")
-        print(f"[GOLOGIN START] Success: {success_count[0]}/{len(profile_list)}")
-        print(f"[GOLOGIN START] ============================\n")
-        
-        self.set_variable(success_count[0] > 0)
+        """
+        Execute parallel mode với ROUND-ROBIN ARCHITECTURE
     
+        NEW WORKFLOW:
+        Phase 1: Open tất cả profiles song song (parallel opening)
+        Phase 2: Tạo flow iterator cho mỗi profile
+        Phase 3: Round-robin execution:
+            - Profile A → Execute chain 1 (LOCKED) → Release
+            - Profile B → Execute chain 1 (LOCKED) → Release
+            - Profile A → Execute chain 2 (LOCKED) → Release
+            - Profile B → Execute chain 2 (LOCKED) → Release
+            - ... (repeat cho đến khi tất cả profiles hết chains)
+        Phase 4: Close tất cả profiles
+    
+        Args:
+            profile_list: List of profile IDs to execute
+        """
+        import threading
+        from helpers.flow_youtube import YouTubeFlow
+        from helpers.flow_google import GoogleFlow
+    
+        print("\n" + "="*80)
+        print("[PARALLEL MODE] 🚀 STARTING ROUND-ROBIN EXECUTION")
+        print("="*80)
+    
+        # ========== PHASE 1: OPEN ALL PROFILES (PARALLEL OPENING) ==========
+        print("\n[PHASE 1] Opening all profiles in parallel...")
+    
+        profile_data = {}  # {profile_id: {'driver': ..., 'debugger': ..., 'status': ...}}
+        open_threads = []
+        open_lock = threading.Lock()
+    
+        def open_profile_thread(profile_id):
+            """Thread function để open 1 profile"""
+            try:
+                print(f"[PARALLEL][{profile_id}] Opening profile...")
+            
+                # Start profile qua GoLogin API
+                success, result = self.gologin_api.start_profile(profile_id)
+                if not success:
+                    print(f"[PARALLEL][{profile_id}] ✗ Failed to start: {result}")
+                    with open_lock:
+                        profile_data[profile_id] = {'status': 'failed', 'error': result}
+                    return
+            
+                debugger_address = result
+                print(f"[PARALLEL][{profile_id}] ✓ Got debugger: {debugger_address}")
+            
+                # Connect Selenium
+                driver = GoLoginProfileHelper.connect_selenium(
+                    debugger_address, 
+                    f"[PARALLEL][{profile_id}]"
+                )
+            
+                if not driver:
+                    print(f"[PARALLEL][{profile_id}] ✗ Failed to connect Selenium")
+                    self.gologin_api.stop_profile(profile_id)
+                    with open_lock:
+                        profile_data[profile_id] = {'status': 'failed', 'error': 'Selenium connection failed'}
+                    return
+            
+                # Register driver
+                register_selenium_driver(driver, profile_id)
+            
+                # Cleanup tabs
+                print(f"[PARALLEL][{profile_id}] Cleaning up browser tabs...")
+                GoLoginProfileHelper.cleanup_browser_tabs(driver, f"[PARALLEL][{profile_id}]")
+                time.sleep(1)
+            
+                # Store profile data
+                with open_lock:
+                    profile_data[profile_id] = {
+                        'driver': driver,
+                        'debugger_address': debugger_address,
+                        'status': 'opened'
+                    }
+            
+                print(f"[PARALLEL][{profile_id}] ✓ Profile opened successfully")
+            
+            except Exception as e:
+                print(f"[PARALLEL][{profile_id}] ✗ Exception while opening: {e}")
+                import traceback
+                traceback.print_exc()
+                with open_lock:
+                    profile_data[profile_id] = {'status': 'error', 'error': str(e)}
+    
+        # Start opening all profiles in parallel threads
+        for i, profile_id in enumerate(profile_list):
+            if i > 0:
+                time.sleep(2)  # Stagger profile opening để tránh overwhelm
+        
+            thread = threading.Thread(target=open_profile_thread, args=(profile_id,))
+            thread.start()
+            open_threads.append(thread)
+            print(f"[PHASE 1] Submitted opening thread {i+1}/{len(profile_list)}: {profile_id}")
+    
+        # Wait for tất cả profiles open xong
+        print(f"[PHASE 1] Waiting for all profiles to open...")
+        for thread in open_threads:
+            thread.join()
+    
+        # Check kết quả opening
+        opened_profiles = [pid for pid, data in profile_data.items() if data.get('status') == 'opened']
+        failed_profiles = [pid for pid, data in profile_data.items() if data.get('status') != 'opened']
+    
+        print(f"\n[PHASE 1] Opening results:")
+        print(f"  ✓ Successfully opened: {len(opened_profiles)}/{len(profile_list)}")
+        if failed_profiles:
+            print(f"  ✗ Failed to open: {failed_profiles}")
+    
+        if not opened_profiles:
+            print("[PARALLEL MODE] ✗ No profiles opened successfully, aborting")
+            self.set_variable(False)
+            return
+    
+        # ========== PHASE 2: CREATE FLOW ITERATORS ==========
+        print("\n[PHASE 2] Creating flow iterators for opened profiles...")
+    
+        flow_iterators = {}  # {profile_id: FlowIterator}
+        action_type = self.params.get("action_type", "None")
+    
+        if action_type == "None":
+            print("[PHASE 2] Action type is 'None', skipping flow creation")
+            print("[PARALLEL MODE] ✓ All profiles opened, no actions to execute")
+            self.set_variable(True)
+            return
+    
+        # Load keywords
+        keywords = GoLoginProfileHelper.load_keywords(self.params, "[PARALLEL]")
+        if not keywords:
+            print("[PHASE 2] ✗ Failed to load keywords")
+            self._cleanup_profiles(profile_data)
+            self.set_variable(False)
+            return
+    
+        # Create flow iterator cho mỗi opened profile
+        for profile_id in opened_profiles:
+            driver = profile_data[profile_id]['driver']
+            debugger_address = profile_data[profile_id]['debugger_address']
+            keyword = random.choice(keywords)
+        
+            try:
+                # Tạo flow iterator dựa trên action type
+                if action_type == "Youtube":
+                    flow_iterator = YouTubeFlow.create_flow_iterator(
+                        driver=driver,
+                        keyword=keyword,
+                        profile_id=profile_id,
+                        debugger_address=debugger_address,
+                        log_prefix=f"[PARALLEL][{profile_id}]"
+                    )
+                elif action_type == "Google":
+                    flow_iterator = GoogleFlow.create_flow_iterator(
+                        driver=driver,
+                        keyword=keyword,
+                        profile_id=profile_id,
+                        debugger_address=debugger_address,
+                        log_prefix=f"[PARALLEL][{profile_id}]"
+                    )
+                else:
+                    print(f"[PHASE 2][{profile_id}] ✗ Unknown action type: {action_type}")
+                    continue
+            
+                flow_iterators[profile_id] = flow_iterator
+                print(f"[PHASE 2][{profile_id}] ✓ Flow iterator created (keyword: '{keyword}')")
+            
+            except Exception as e:
+                print(f"[PHASE 2][{profile_id}] ✗ Failed to create flow iterator: {e}")
+                import traceback
+                traceback.print_exc()
+    
+        if not flow_iterators:
+            print("[PHASE 2] ✗ No flow iterators created")
+            self._cleanup_profiles(profile_data)
+            self.set_variable(False)
+            return
+    
+        print(f"[PHASE 2] ✓ Created {len(flow_iterators)} flow iterators")
+    
+        # ========== PHASE 3: ROUND-ROBIN CHAIN EXECUTION ==========
+        print("\n[PHASE 3] Starting round-robin chain execution...")
+        print("="*80)
+    
+        round_num = 1
+        active_profiles = list(flow_iterators.keys())
+    
+        # Loop cho đến khi tất cả profiles hết chains
+        while active_profiles:
+            print(f"\n{'='*80}")
+            print(f"[ROUND {round_num}] Active profiles: {len(active_profiles)}/{len(flow_iterators)}")
+            print(f"{'='*80}\n")
+        
+            profiles_to_remove = []
+        
+            # Execute 1 chain cho mỗi active profile
+            for profile_id in active_profiles:
+                flow_iterator = flow_iterators[profile_id]
+            
+                # Check xem profile còn chain nào chưa
+                if not flow_iterator.has_next_chain():
+                    print(f"[ROUND {round_num}][{profile_id}] ✓ All chains completed")
+                    profiles_to_remove.append(profile_id)
+                    continue
+            
+                # Show progress
+                progress = flow_iterator.get_progress()
+                print(f"[ROUND {round_num}][{profile_id}] Progress: {progress['current']}/{progress['total']} chains ({progress['percentage']:.1f}%)")
+            
+                # Bring profile window to front trước khi execute
+                driver = profile_data[profile_id]['driver']
+                try:
+                    driver.switch_to.window(driver.current_window_handle)
+                    # Maximize window để đảm bảo visible
+                    driver.maximize_window()
+                    print(f"[ROUND {round_num}][{profile_id}] ✓ Window brought to front")
+                except Exception as e:
+                    print(f"[ROUND {round_num}][{profile_id}] ⚠ Could not bring window to front: {e}")
+            
+                # Execute next chain (ActionChainManager tự động acquire/release lock)
+                print(f"\n[ROUND {round_num}][{profile_id}] >>> ACQUIRING LOCK & EXECUTING CHAIN <<<")
+            
+                try:
+                    result = flow_iterator.execute_next_chain()
+                
+                    if result:
+                        print(f"[ROUND {round_num}][{profile_id}] ✓ Chain executed successfully")
+                    else:
+                        print(f"[ROUND {round_num}][{profile_id}] ⚠ Chain failed, but continuing...")
+                    
+                except Exception as e:
+                    print(f"[ROUND {round_num}][{profile_id}] ✗ Exception during chain execution: {e}")
+                    import traceback
+                    traceback.print_exc()
+            
+                print(f"[ROUND {round_num}][{profile_id}] >>> LOCK RELEASED <<<\n")
+            
+                # Small delay giữa các profiles trong cùng round
+                time.sleep(2)
+        
+            # Remove profiles đã hoàn thành tất cả chains
+            for profile_id in profiles_to_remove:
+                active_profiles.remove(profile_id)
+        
+            round_num += 1
+        
+            # Safety check để tránh infinite loop
+            if round_num > 100:
+                print("[PHASE 3] ⚠ Safety limit reached (100 rounds), breaking loop")
+                break
+    
+        print("\n" + "="*80)
+        print("[PHASE 3] ✓ All profiles completed all chains")
+        print("="*80)
+    
+        # ========== PHASE 4: CLEANUP PROFILES ==========
+        print("\n[PHASE 4] Cleaning up and closing profiles...")
+        self._cleanup_profiles(profile_data)
+    
+        print("\n[PARALLEL MODE] ✅ ROUND-ROBIN EXECUTION COMPLETED")
+        self.set_variable(len(opened_profiles) > 0)
+
+    def _cleanup_profiles(self, profile_data):
+        """
+        Helper method để cleanup và close tất cả profiles
+    
+        Process:
+        1. Unregister Selenium driver
+        2. Quit driver (close browser connection)
+        3. Stop profile qua GoLogin API
+    
+        Args:
+            profile_data: Dict chứa profile data với format:
+                         {profile_id: {'driver': ..., 'debugger_address': ..., 'status': ...}}
+        """
+        print("\n[CLEANUP] Starting profile cleanup...")
+    
+        for profile_id, data in profile_data.items():
+            # Chỉ cleanup profiles đã mở thành công
+            if data.get('status') != 'opened':
+                continue
+        
+            try:
+                print(f"[CLEANUP][{profile_id}] Closing profile...")
+            
+                # Step 1: Unregister driver
+                try:
+                    unregister_selenium_driver(profile_id)
+                    print(f"[CLEANUP][{profile_id}]   ✓ Driver unregistered")
+                except Exception as e:
+                    print(f"[CLEANUP][{profile_id}]   ⚠ Failed to unregister driver: {e}")
+            
+                # Step 2: Quit driver (close browser connection)
+                if 'driver' in data:
+                    try:
+                        data['driver'].quit()
+                        print(f"[CLEANUP][{profile_id}]   ✓ Driver quit")
+                    except Exception as e:
+                        print(f"[CLEANUP][{profile_id}]   ⚠ Failed to quit driver: {e}")
+            
+                # Step 3: Stop profile qua API
+                try:
+                    self.gologin_api.stop_profile(profile_id)
+                    print(f"[CLEANUP][{profile_id}]   ✓ Profile stopped via API")
+                except Exception as e:
+                    print(f"[CLEANUP][{profile_id}]   ⚠ Failed to stop profile: {e}")
+            
+                print(f"[CLEANUP][{profile_id}] ✓ Cleanup completed")
+            
+            except Exception as e:
+                print(f"[CLEANUP][{profile_id}] ✗ Error during cleanup: {e}")
+                import traceback
+                traceback.print_exc()
+    
+        print("[CLEANUP] ✓ All profiles cleanup completed")
+
+
     def _start_single_profile(self, profile_id):
         """Start profile and execute action - Profile stays alive"""
         driver = None
