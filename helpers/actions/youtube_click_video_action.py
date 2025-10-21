@@ -1,4 +1,4 @@
-# helpers/actions/youtube_click_video_action.py
+﻿# helpers/actions/youtube_click_video_action.py
 
 from helpers.actions.base_youtube_action import BaseYouTubeAction
 from selenium.webdriver.common.by import By
@@ -9,21 +9,35 @@ import time
 class YouTubeClickVideoAction(BaseYouTubeAction):
     """Click random video and wait for it to start playing"""
     
-    def __init__(self, driver, profile_id, log_prefix="[YOUTUBE]", debugger_address=None, video_index_range=(1, 10)):
+    def __init__(self, driver, profile_id, log_prefix="[YOUTUBE]", debugger_address=None, video_index_range=(1, 10), location="main"):
         super().__init__(driver, profile_id, log_prefix, debugger_address)
         self.video_index_range = video_index_range
+        self.location = location  # 'main' hoặc 'side'
+
     
     def execute(self):
         """Execute video click and wait for video to start playing"""
         try:
             self.log("Looking for videos to click...", "INFO")
             
-            # Find video thumbnails/titles
-            selectors = [
-                'a#video-title',
-                'ytd-thumbnail a',
-                'a.ytd-video-renderer'
-            ]
+             # Select selectors based on location
+            if self.location == 'side':
+                self.log("Looking for sidebar videos to click...", "INFO")
+                # Sidebar video selectors (when watching a video)
+                selectors = [
+                    '#related ytd-compact-video-renderer a',
+                    '#secondary ytd-compact-video-renderer a',
+                    'ytd-compact-video-renderer a#thumbnail',
+                    '#related a.ytd-compact-video-renderer'
+                ]
+            else:
+                self.log("Looking for main videos to click...", "INFO")
+                # Main page video selectors
+                selectors = [
+                    'a#video-title',
+                    'ytd-thumbnail a',
+                    'a.ytd-video-renderer'
+                ]
             
             for selector in selectors:
                 try:

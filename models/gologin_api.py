@@ -241,7 +241,7 @@ class GoLoginAPI:
                 # gl.stop() completed successfully
                 print(f"[GOLOGIN] ✓ gl.stop() completed successfully")
                 print(f"[GOLOGIN] Waiting 10s for cloud sync to complete...")
-                time.sleep(5)  # Increased from 5s to 10s           
+                time.sleep(15)
            
             
                 # Check if browser processes still exist (shouldn't happen)

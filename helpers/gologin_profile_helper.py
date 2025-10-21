@@ -308,34 +308,29 @@ class GoLoginProfileHelper:
             # Detect Chrome version
             chrome_version = GoLoginProfileHelper.get_chrome_version_from_debugger(
                 debugger_address, log_prefix
-            )
-        
-            # ========== ACQUIRE LOCK FOR CHROMEDRIVER OPERATIONS ==========
-            # This prevents multiple threads from downloading/accessing ChromeDriver simultaneously
-            print(f"{log_prefix} Acquiring ChromeDriver lock...")
-            with _chromedriver_lock:
-                print(f"{log_prefix} ✓ Lock acquired")
+            )        
             
-                try:
-                    if chrome_version:
-                        print(f"{log_prefix} Installing ChromeDriver for Chrome {chrome_version}...")
-                        chromedriver_path = ChromeDriverManager(driver_version=chrome_version).install()
-                    else:
-                        print(f"{log_prefix} Installing ChromeDriver with auto-detection...")
-                        chromedriver_path = ChromeDriverManager().install()
+            
+            try:
+                if chrome_version:
+                    print(f"{log_prefix} Installing ChromeDriver for Chrome {chrome_version}...")
+                    chromedriver_path = ChromeDriverManager(driver_version=chrome_version).install()
+                else:
+                    print(f"{log_prefix} Installing ChromeDriver with auto-detection...")
+                    chromedriver_path = ChromeDriverManager().install()
                 
-                    print(f"{log_prefix} ChromeDriver path: {chromedriver_path}")
+                print(f"{log_prefix} ChromeDriver path: {chromedriver_path}")
                 
-                    # Small delay to ensure file is fully written
-                    time.sleep(0.5)
+                # Small delay to ensure file is fully written
+                time.sleep(0.5)
                 
-                    # Create service
-                    service = Service(chromedriver_path)
-                    service.log_output = None
+                # Create service
+                service = Service(chromedriver_path)
+                service.log_output = None
                 
-                except Exception as install_err:
-                    print(f"{log_prefix} ✗ ChromeDriver install error: {install_err}")
-                    raise
+            except Exception as install_err:
+                print(f"{log_prefix} ✗ ChromeDriver install error: {install_err}")
+                raise
         
             # ========== LOCK RELEASED - NOW CREATE WEBDRIVER ==========
             print(f"{log_prefix} Creating WebDriver instance...")
