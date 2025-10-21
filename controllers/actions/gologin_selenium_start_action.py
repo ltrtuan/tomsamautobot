@@ -277,14 +277,13 @@ class GoLoginSeleniumStartAction(BaseAction):
         for profile_id in opened_profiles:
             driver = profile_data[profile_id]['driver']
             debugger_address = profile_data[profile_id]['debugger_address']
-            keyword = random.choice(keywords)
         
             try:
                 # Tạo flow iterator dựa trên action type
                 if action_type == "Youtube":
                     flow_iterator = YouTubeFlow.create_flow_iterator(
                         driver=driver,
-                        keyword=keyword,
+                        keywords=keywords,
                         profile_id=profile_id,
                         debugger_address=debugger_address,
                         log_prefix=f"[PARALLEL][{profile_id}]"
@@ -292,7 +291,7 @@ class GoLoginSeleniumStartAction(BaseAction):
                 elif action_type == "Google":
                     flow_iterator = GoogleFlow.create_flow_iterator(
                         driver=driver,
-                        keyword=keyword,
+                        keywords=keywords,
                         profile_id=profile_id,
                         debugger_address=debugger_address,
                         log_prefix=f"[PARALLEL][{profile_id}]"
@@ -302,7 +301,7 @@ class GoLoginSeleniumStartAction(BaseAction):
                     continue
             
                 flow_iterators[profile_id] = flow_iterator
-                print(f"[PHASE 2][{profile_id}] ✓ Flow iterator created (keyword: '{keyword}')")
+               
             
             except Exception as e:
                 print(f"[PHASE 2][{profile_id}] ✗ Failed to create flow iterator: {e}")
@@ -351,7 +350,7 @@ class GoLoginSeleniumStartAction(BaseAction):
                 try:
                     driver.switch_to.window(driver.current_window_handle)
                     # Maximize window để đảm bảo visible
-                    driver.maximize_window()
+                    # driver.maximize_window()
                     print(f"[ROUND {round_num}][{profile_id}] ✓ Window brought to front")
                 except Exception as e:
                     print(f"[ROUND {round_num}][{profile_id}] ⚠ Could not bring window to front: {e}")
@@ -402,60 +401,98 @@ class GoLoginSeleniumStartAction(BaseAction):
     def _cleanup_profiles(self, profile_data):
         """
         Helper method để cleanup và close tất cả profiles
-    
-        Process:
-        1. Unregister Selenium driver
-        2. Quit driver (close browser connection)
-        3. Stop profile qua GoLogin API
-    
+        
+        NEW PROCESS (FIX "folder locked" issue):
+        1. Close browser physically (click X button) - Ensures browser process closes
+        2. Unregister Selenium driver
+        3. Quit driver (Selenium cleanup)
+        4. Wait 5 seconds for full cleanup
+        5. Stop profile via GoLogin SDK
+        6. Kill remaining zombie processes
+        
         Args:
             profile_data: Dict chứa profile data với format:
-                         {profile_id: {'driver': ..., 'debugger_address': ..., 'status': ...}}
+                {profile_id: {'driver': ..., 'debugger_address': ..., 'status': ...}}
         """
         print("\n[CLEANUP] Starting profile cleanup...")
-    
+        
         for profile_id, data in profile_data.items():
             # Chỉ cleanup profiles đã mở thành công
             if data.get('status') != 'opened':
                 continue
-        
-            try:
-                print(f"[CLEANUP][{profile_id}] Closing profile...")
             
-                # Step 1: Unregister driver
+            try:
+                log_prefix = f"[CLEANUP][{profile_id}]"
+                print(f"{log_prefix} Closing profile...")
+                
+                # ========== STEP 1: CLOSE BROWSER PHYSICALLY ==========
+                # This ensures browser window closes properly before SDK cleanup
+                # print(f"{log_prefix} Step 1: Closing browser physically (click X button)...")
+                # try:
+                #     close_success = GoLoginProfileHelper.close_browser_physically(
+                #         profile_id=profile_id,
+                #         driver=data.get('driver'),
+                #         log_prefix=log_prefix
+                #     )
+                    
+                #     if close_success:
+                #         print(f"{log_prefix} ✓ Browser closed physically")
+                #     else:
+                #         print(f"{log_prefix} ⚠ Physical close failed, continuing with SDK cleanup")
+                        
+                # except Exception as e:
+                #     print(f"{log_prefix} ⚠ Physical close error: {e}, continuing...")
+                
+                # ========== STEP 2: UNREGISTER DRIVER ==========
+                print(f"{log_prefix} Step 2: Unregistering Selenium driver...")
                 try:
                     unregister_selenium_driver(profile_id)
-                    print(f"[CLEANUP][{profile_id}]   ✓ Driver unregistered")
+                    print(f"{log_prefix} ✓ Driver unregistered")
                 except Exception as e:
-                    print(f"[CLEANUP][{profile_id}]   ⚠ Failed to unregister driver: {e}")
-            
-                # Step 2: Quit driver (close browser connection)
+                    print(f"{log_prefix} ⚠ Failed to unregister driver: {e}")
+                
+                # ========== STEP 3: QUIT DRIVER ==========
+                print(f"{log_prefix} Step 3: Quitting Selenium driver...")
                 if 'driver' in data:
                     try:
                         data['driver'].quit()
-                        print(f"[CLEANUP][{profile_id}]   ✓ Driver quit")
+                        print(f"{log_prefix} ✓ Driver quit")
                     except Exception as e:
-                        print(f"[CLEANUP][{profile_id}]   ⚠ Failed to quit driver: {e}")
-            
-                # Wait for driver cleanup to complete (critical for parallel execution)
-                print(f"[CLEANUP][{profile_id}] Waiting 5s for driver cleanup...")
-                time.sleep(5)  # Give browser time to close gracefully
+                        print(f"{log_prefix} ⚠ Failed to quit driver: {e}")
                 
-                # Step 3: Stop profile qua API
+                # ========== STEP 4: WAIT FOR CLEANUP ==========
+                # Critical: Wait for all processes to finish cleanup
+                print(f"{log_prefix} Step 4: Waiting 5s for full cleanup...")
+                
+                
+                # ========== STEP 5: STOP PROFILE VIA SDK ==========
+                print(f"{log_prefix} Step 5: Stopping profile via GoLogin SDK...")
                 try:
                     self.gologin_api.stop_profile(profile_id)
-                    print(f"[CLEANUP][{profile_id}]   ✓ Profile stopped via API")
+                    print(f"{log_prefix} ✓ Profile stopped via SDK")
                 except Exception as e:
-                    print(f"[CLEANUP][{profile_id}]   ⚠ Failed to stop profile: {e}")
-            
-                print(f"[CLEANUP][{profile_id}] ✓ Cleanup completed")
-            
+                    print(f"{log_prefix} ⚠ Failed to stop profile via SDK: {e}")
+                time.sleep(5)
+                # ========== STEP 6: KILL ZOMBIE PROCESSES ==========
+                print(f"{log_prefix} Step 6: Killing remaining zombie processes...")
+                try:
+                    GoLoginProfileHelper.kill_zombie_chrome_processes(
+                        profile_id=profile_id,
+                        log_prefix=log_prefix
+                    )
+                    print(f"{log_prefix} ✓ Zombie processes killed")
+                except Exception as e:
+                    print(f"{log_prefix} ⚠ Failed to kill zombie processes: {e}")
+                
+                print(f"{log_prefix} ✓ Cleanup completed")
+                
             except Exception as e:
                 print(f"[CLEANUP][{profile_id}] ✗ Error during cleanup: {e}")
                 import traceback
                 traceback.print_exc()
-    
+        
         print("[CLEANUP] ✓ All profiles cleanup completed")
+
 
 
     def _start_single_profile(self, profile_id):
@@ -525,12 +562,42 @@ class GoLoginSeleniumStartAction(BaseAction):
             return False
     
         finally:
-            # Unregister driver but DON'T close it (profile stays alive)
+            # ========== CLEANUP: STOP PROFILE (GIỐNG PARALLEL MODE) ==========
+            # Skip cleanup if action_type is None (keep profiles running)
+            action_type = self.params.get("action_type", "None")
+    
+            if action_type == "None":
+                print(f"[GOLOGIN START] [{profile_id}] ⚠ Action type is 'None', profile will remain open (no cleanup)")
+                return action_success if 'action_success' in locals() else False
+    
             if driver:
                 try:
+                    # Step 1: Unregister driver
                     unregister_selenium_driver(profile_id)
-                except:
-                    pass
+                    print(f"[SELENIUM REGISTRY] ✓ Driver unregistered: profile_{profile_id}")
+                except Exception as unreg_err:
+                    print(f"[SELENIUM REGISTRY] ⚠ Failed to unregister driver: {unreg_err}")
+        
+                try:
+                    # Step 2: Quit driver
+                    print(f"[CLEANUP][{profile_id}] Quitting driver...")
+                    driver.quit()
+                    print(f"[CLEANUP][{profile_id}] ✓ Driver quit")
+                except Exception as quit_err:
+                    print(f"[CLEANUP][{profile_id}] ⚠ Failed to quit driver: {quit_err}")
+        
+                # Step 3: Wait for driver cleanup
+                print(f"[CLEANUP][{profile_id}] Waiting 5s for driver cleanup...")
+                time.sleep(5)
+        
+                # Step 4: Stop profile via API
+                try:
+                    print(f"[CLEANUP][{profile_id}] Stopping profile via API...")
+                    self.gologin_api.stop_profile(profile_id)
+                    print(f"[CLEANUP][{profile_id}] ✓ Profile stopped via API")
+                except Exception as stop_err:
+                    print(f"[CLEANUP][{profile_id}] ⚠ Failed to stop profile: {stop_err}")
+
 
     
     def _execute_action(self, driver, profile_id, action_type, debugger_address):
@@ -544,15 +611,13 @@ class GoLoginSeleniumStartAction(BaseAction):
                 keywords = GoLoginProfileHelper.load_keywords(self.params, "[GOLOGIN START]")
                 if not keywords:
                     return False
-                keyword = random.choice(keywords)
-                return YouTubeFlow.execute_main_flow(driver, keyword, profile_id, debugger_address, "[GOLOGIN START]")
+                return YouTubeFlow.execute_main_flow(driver, keywords, profile_id, debugger_address, "[GOLOGIN START]")
             
             elif action_type == "Google":
                 keywords = GoLoginProfileHelper.load_keywords(self.params, "[GOLOGIN START]")
                 if not keywords:
                     return False
-                keyword = random.choice(keywords)
-                return GoogleFlow.execute_main_flow(driver, keyword, profile_id, debugger_address, "[GOLOGIN START]")
+                return GoogleFlow.execute_main_flow(driver, keywords, profile_id, debugger_address, "[GOLOGIN START]")
             
             else:
                 print(f"[GOLOGIN START] [{profile_id}] ✗ Unknown action type")

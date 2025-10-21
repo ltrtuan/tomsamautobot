@@ -21,6 +21,74 @@ class BaseYouTubeAction(BaseFlowAction, ABC):  # ← THÊM BaseFlowAction
         self.profile_id = profile_id
         self.log_prefix = log_prefix
         self.debugger_address = debugger_address
+        
+
+    def _exit_fullscreen_if_needed(self):
+        """
+        Exit fullscreen mode if currently in fullscreen
+        Returns: True if exited fullscreen or not in fullscreen, False if error
+        """
+        try:
+            # Check if in fullscreen using same logic as YouTubeFullscreenAction
+            is_fullscreen = self.driver.execute_script("""
+                // Check if document is in fullscreen
+                if (document.fullscreenElement || 
+                    document.webkitFullscreenElement || 
+                    document.mozFullScreenElement || 
+                    document.msFullscreenElement) {
+                    return true;
+                }
+                
+                // Check YouTube player fullscreen state
+                var player = document.querySelector('.html5-video-player');
+                if (player && player.classList.contains('ytp-fullscreen')) {
+                    return true;
+                }
+                
+                return false;
+            """)
+            
+            if is_fullscreen:
+                self.log("Currently in fullscreen, exiting...", "INFO")
+                # Import here to avoid circular import
+                from controllers.actions.keyboard_action import KeyboardAction
+                KeyboardAction.press_key_static("Escape")  # Use ESC instead of F11 for safer exit
+                import time
+                time.sleep(1)  # Wait for fullscreen exit animation
+                self.log("Exited fullscreen mode", "SUCCESS")
+                return True
+            else:
+                # Not in fullscreen, no action needed
+                return True
+                
+        except Exception as e:
+            self.log(f"Exit fullscreen error: {e}", "ERROR")
+            return False
+
+    def _find_video_element(self):
+        """
+        Find YouTube video player element
+        Returns: Video element if found, None otherwise
+        """
+        selectors = [
+            'video.html5-main-video',
+            'video.video-stream',
+            '#movie_player video',
+            '.html5-video-player video'
+        ]
+    
+        for selector in selectors:
+            try:
+                from selenium.webdriver.common.by import By
+                element = self.driver.find_element(By.CSS_SELECTOR, selector)
+                if element.is_displayed():
+                    return element
+            except:
+                continue
+    
+        return None
+
+
 
     @abstractmethod
     def execute(self):
@@ -43,34 +111,4 @@ class BaseYouTubeAction(BaseFlowAction, ABC):  # ← THÊM BaseFlowAction
         duration = random.uniform(min_sec, max_sec)
         time.sleep(duration)
         return duration
-
-    # ========== DEPRECATED: get_random_click_position (use get_element_viewport_coordinates) ==========
-    def get_random_click_position(self, element):
-        """
-        [DEPRECATED] Use get_element_viewport_coordinates() instead
-        This method uses element.location which is inaccurate after scroll
-        """
-        try:
-            location = element.location
-            size = element.size
-
-            # Get window position on screen
-            viewport_offset_x = self.driver.execute_script(
-                "return window.screenX + (window.outerWidth - window.innerWidth);"
-            )
-            viewport_offset_y = self.driver.execute_script(
-                "return window.screenY + (window.outerHeight - window.innerHeight);"
-            )
-
-            # Random position within element (30-70% range for natural click)
-            random_x = location['x'] + size['width'] * random.uniform(0.3, 0.7)
-            random_y = location['y'] + size['height'] * random.uniform(0.3, 0.7)
-
-            # Convert to screen coordinates
-            screen_x = int(viewport_offset_x + random_x)
-            screen_y = int(viewport_offset_y + random_y)
-            return screen_x, screen_y
-
-        except Exception as e:
-            self.log(f"Position calculation error: {e}", "WARNING")
-            return 500, 300
+    

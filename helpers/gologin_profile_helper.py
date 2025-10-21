@@ -366,7 +366,144 @@ class GoLoginProfileHelper:
             traceback.print_exc()
             return None
 
-    
+    @staticmethod
+    def close_browser_physically(profile_id, driver=None, log_prefix="[GOLOGIN]"):
+        """
+        Close browser by physically clicking X button - THREAD SAFE
+        This ensures browser closes properly before SDK cleanup
+        
+        Process:
+        1. Get browser window position and size
+        2. Calculate X button position (top-right corner)
+        3. Move mouse to X button
+        4. Click X button
+        5. Wait for browser to close
+        
+        Args:
+            profile_id: Profile ID
+            driver: Optional Selenium WebDriver (to get window position)
+            log_prefix: Prefix for log messages
+            
+        Returns:
+            bool: True if successful
+        """
+        # ========== ACQUIRE WINDOW FOCUS LOCK ==========
+        with _window_focus_lock:
+            print(f"{log_prefix} [{profile_id}] Closing browser physically...")
+            
+            try:
+                import platform
+                if platform.system() != "Windows":
+                    print(f"{log_prefix} [{profile_id}] ℹ Physical close not implemented for this OS")
+                    return False
+                
+                import psutil
+                import win32gui
+                import win32process
+                import win32con
+                from controllers.actions.mouse_move_action import MouseMoveAction
+                import time
+                
+                # Find browser window for this profile
+                hwnd = None
+                for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                    try:
+                        cmdline = proc.info.get('cmdline', [])
+                        if not cmdline:
+                            continue
+                        
+                        cmdline_str = ' '.join(cmdline).lower()
+                        
+                        # Check if this is the main browser process for this profile
+                        if profile_id.lower() in cmdline_str and '--type=renderer' not in cmdline_str:
+                            pid = proc.info['pid']
+                            
+                            # Find window handle for this process
+                            def enum_callback(window_hwnd, pid_list):
+                                if win32gui.IsWindowVisible(window_hwnd):
+                                    _, found_pid = win32process.GetWindowThreadProcessId(window_hwnd)
+                                    if found_pid == pid:
+                                        pid_list.append(window_hwnd)
+                                return True
+                            
+                            windows = []
+                            win32gui.EnumWindows(enum_callback, windows)
+                            
+                            if windows:
+                                hwnd = windows[0]
+                                break
+                                
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        continue
+                
+                if not hwnd:
+                    print(f"{log_prefix} [{profile_id}] ⚠ Could not find browser window")
+                    return False
+                
+                # Get window position and size
+                try:
+                    rect = win32gui.GetWindowRect(hwnd)
+                    x, y, right, bottom = rect
+                    width = right - x
+                    height = bottom - y
+                    
+                    print(f"{log_prefix} [{profile_id}] Window: ({x}, {y}), Size: {width}x{height}")
+                    
+                    # Calculate X button position (top-right corner)
+                    # Windows 11: X button is ~15px from right, ~15px from top
+                    # Size: ~47x32 pixels
+                    close_button_x = right - 15 - 23  # 23px = half of button width
+                    close_button_y = y + 15 + 16      # 16px = half of button height
+                    
+                    print(f"{log_prefix} [{profile_id}] Calculated X button position: ({close_button_x}, {close_button_y})")
+                    
+                    # Ensure window is maximized and in front
+                    win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+                    win32gui.SetForegroundWindow(hwnd)
+                    time.sleep(0.5)
+                    
+                    # Move mouse to X button and click
+                    print(f"{log_prefix} [{profile_id}] Moving mouse to X button...")
+                    MouseMoveAction.move_and_click_static(
+                        close_button_x,
+                        close_button_y,
+                        click_type="single_click",
+                        fast=True  # Fast move for cleanup
+                    )
+                    
+                    print(f"{log_prefix} [{profile_id}] ✓ Clicked X button")
+                    
+                    # Wait for browser to close
+                    print(f"{log_prefix} [{profile_id}] Waiting 5s for browser to close...")
+                    time.sleep(5)
+                    
+                    # Verify browser is closed
+                    try:
+                        if win32gui.IsWindow(hwnd):
+                            print(f"{log_prefix} [{profile_id}] ⚠ Window still exists, forcing close...")
+                            win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+                            time.sleep(2)
+                    except:
+                        pass  # Window already closed
+                    
+                    print(f"{log_prefix} [{profile_id}] ✓ Browser closed physically")
+                    return True
+                    
+                except Exception as e:
+                    print(f"{log_prefix} [{profile_id}] ⚠ Click X button error: {e}")
+                    return False
+                
+            except ImportError as ie:
+                print(f"{log_prefix} [{profile_id}] ⚠ Missing dependencies: {ie}")
+                return False
+            except Exception as e:
+                print(f"{log_prefix} [{profile_id}] ⚠ Physical close error: {e}")
+                import traceback
+                traceback.print_exc()
+                return False
+        # ========== LOCK RELEASED ==========
+
+
     @staticmethod
     def bring_profile_to_front(profile_id, driver=None, log_prefix="[GOLOGIN]"):
         """
@@ -670,40 +807,46 @@ class GoLoginProfileHelper:
         """
         Kill ONLY GoLogin Orbita browser processes for this specific profile
         Does NOT kill GoLogin.exe main application
-    
+        
+        NEW: Also force cleanup chrome_debug.log and profile folder if needed
+        
         Args:
             profile_id: Profile ID to clean up
             log_prefix: Prefix for log messages
-        
+            
         Returns:
             bool: True if successful, False otherwise
         """
         try:
             import psutil
             import os
+            import tempfile
+            import shutil
+            import time
+            
             print(f"{log_prefix} [{profile_id}] Checking for zombie Orbita processes...")
-        
             killed_count = 0
+            
+            # ========== STEP 1: KILL ZOMBIE PROCESSES ==========
             for proc in psutil.process_iter(['pid', 'name', 'exe', 'cmdline']):
                 try:
                     proc_name = proc.info['name'].lower()
                     proc_exe = proc.info.get('exe', '')
                     cmdline = proc.info.get('cmdline', [])
-                
+                    
                     # ========== CRITICAL: ONLY MATCH CHROME.EXE, NOT GOLOGIN.EXE ==========
                     # Skip if this is GoLogin main app
                     if proc_name in ['gologin.exe', 'gologin']:
                         continue
-                
+                    
                     # Only target chrome.exe processes
                     if proc_name not in ['chrome.exe', 'chrome']:
                         continue
-                
+                    
                     # Check if this chrome.exe is from GoLogin/Orbita directory
                     is_gologin_orbita = False
                     if proc_exe:
                         proc_exe_lower = proc_exe.lower()
-                    
                         # Check for GoLogin Orbita browser paths
                         if '.gologin' in proc_exe_lower and 'orbita' in proc_exe_lower:
                             is_gologin_orbita = True
@@ -715,21 +858,20 @@ class GoLoginProfileHelper:
                             is_gologin_orbita = True
                         elif '/gologin/browser/orbita' in proc_exe_lower:
                             is_gologin_orbita = True
-                
+                    
                     if not is_gologin_orbita:
                         continue
-                
+                    
                     # Check if this browser belongs to the specific profile
                     belongs_to_profile = False
                     if cmdline:
                         cmdline_str = ' '.join(cmdline).lower()
-                    
                         # Profile ID must be in user-data-dir or profile-directory
                         if profile_id.lower() in cmdline_str:
                             # Must have user-data-dir or profile-directory to confirm it's a profile browser
                             if '--user-data-dir' in cmdline_str or '--profile-directory' in cmdline_str:
                                 belongs_to_profile = True
-                
+                    
                     # Kill ONLY if:
                     # 1. It's chrome.exe (not GoLogin.exe)
                     # 2. It's from GoLogin Orbita directory
@@ -738,19 +880,49 @@ class GoLoginProfileHelper:
                         print(f"{log_prefix} [{profile_id}] Killing zombie Orbita PID {proc.info['pid']} ({proc_name})")
                         proc.kill()
                         killed_count += 1
-            
+                        
                 except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                     pass
-        
+            
             if killed_count > 0:
                 print(f"{log_prefix} [{profile_id}] ✓ Killed {killed_count} zombie Orbita process(es)")
-                import time
-                time.sleep(2)
+                time.sleep(2)  # Wait for processes to finish cleanup
             else:
                 print(f"{log_prefix} [{profile_id}] ✓ No zombie Orbita processes found")
-        
+            
+            # ========== STEP 2: FORCE CLEANUP chrome_debug.log AND PROFILE FOLDER ==========
+            print(f"{log_prefix} [{profile_id}] Force cleaning up profile folder...")
+            
+            temp_dir = tempfile.gettempdir()
+            profile_folder = f"gologin_{profile_id}"
+            profile_path = os.path.join(temp_dir, profile_folder)
+            
+            if os.path.exists(profile_path):
+                # Try to delete chrome_debug.log first
+                log_file = os.path.join(profile_path, "chrome_debug.log")
+                if os.path.exists(log_file):
+                    try:
+                        os.remove(log_file)
+                        print(f"{log_prefix} [{profile_id}] ✓ Deleted chrome_debug.log")
+                    except Exception as log_err:
+                        print(f"{log_prefix} [{profile_id}] ⚠ Cannot delete log file: {log_err}")
+                
+                # Try to delete entire profile folder (best effort)
+                try:
+                    shutil.rmtree(profile_path, ignore_errors=True)
+                    print(f"{log_prefix} [{profile_id}] ✓ Force deleted profile folder")
+                except Exception as folder_err:
+                    print(f"{log_prefix} [{profile_id}] ⚠ Cannot delete folder: {folder_err}")
+                    # Not critical - folder may still be in use
+            else:
+                print(f"{log_prefix} [{profile_id}] ℹ Profile folder not found (already cleaned)")
+            
             return True
+            
         except Exception as e:
-            print(f"{log_prefix} [{profile_id}] ⚠ Zombie check error: {e}")
+            print(f"{log_prefix} [{profile_id}] ⚠ Zombie cleanup error: {e}")
+            import traceback
+            traceback.print_exc()
             return False
+
 

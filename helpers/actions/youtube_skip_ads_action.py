@@ -22,7 +22,9 @@ class YouTubeSkipAdsAction(BaseYouTubeAction):
 
             # Wait for ad to potentially show
             time.sleep(self.wait_time)
-
+            if not self._exit_fullscreen_if_needed():
+                self.log("Failed to exit fullscreen", "ERROR")
+                return False
             # Look for skip button
             skip_selectors = [
                 '.ytp-ad-skip-button',

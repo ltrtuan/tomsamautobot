@@ -6,8 +6,7 @@ from models.gologin_api import get_gologin_api
 import random
 import os
 import time
-import threading
-gologin_focus_lock = threading.Lock()
+
 # Import helpers
 from helpers.gologin_profile_helper import GoLoginProfileHelper
 from helpers.selenium_registry import register_selenium_driver, unregister_selenium_driver
@@ -291,9 +290,10 @@ class GoLoginSeleniumCollectAction(BaseAction):
             return False
     
         finally:
-            # Cleanup block (giữ nguyên)
+            # ========== CRITICAL: PROPER CLEANUP SEQUENCE ==========
             print(f"[GOLOGIN WARMUP] [{profile_id}] Running cleanup...")
-        
+            
+            # Step 1: Close extra tabs
             if driver:
                 try:
                     print(f"[GOLOGIN WARMUP] [{profile_id}] Closing extra tabs before shutdown...")
@@ -301,10 +301,12 @@ class GoLoginSeleniumCollectAction(BaseAction):
                     print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Tabs cleaned up")
                 except Exception as tab_err:
                     print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Tab cleanup warning: {tab_err}")
-        
+            
+            # Step 2: Wait for browser to flush cookies/history
             print(f"[GOLOGIN WARMUP] [{profile_id}] Waiting for browser to flush cookies/history...")
-            time.sleep(3)
-        
+            time.sleep(5)
+            
+            # Step 3: Unregister and quit driver
             if driver:
                 try:
                     unregister_selenium_driver(profile_id)
@@ -314,31 +316,79 @@ class GoLoginSeleniumCollectAction(BaseAction):
                     print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Selenium disconnect warning: {cleanup_err}")
                 finally:
                     driver = None
-        
+            
+            # Step 4: Wait for Chrome process cleanup
             print(f"[GOLOGIN WARMUP] [{profile_id}] Waiting for Chrome process cleanup...")
-            time.sleep(15)
-        
+            time.sleep(10)  # Increased from 15s → 10s (still enough)
+            
+            # Step 5: TRY SDK stop FIRST (for data sync to cloud)
+            stop_success = False
             if gologin:
                 try:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] Requesting profile stop (async)...")
-                    def async_stop():
-                        with gologin_focus_lock:
+                    print(f"[GOLOGIN WARMUP] [{profile_id}] Stopping profile via SDK (syncing data to cloud)...")
+                  
+                    success, msg = gologin.stop_profile(profile_id)
+                    if success:
+                        print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Profile stopped and data synced")
+                        stop_success = True
+                    else:
+                        print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ SDK stop returned error: {msg}")
+                        stop_success = False
+                            
+                except Exception as stop_err:
+                    error_msg = str(stop_err)
+                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ SDK stop exception: {error_msg}")
+                    stop_success = False
+                    
+                    # Check if error is "file locked" (chrome_debug.log)
+                    is_file_locked = ('winerror 32' in error_msg.lower() or 
+                                     'being used by another process' in error_msg.lower() or
+                                     'chrome_debug.log' in error_msg.lower())
+                    
+                    if is_file_locked:
+                        print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ File locked error (chrome_debug.log) detected!")
+                        print(f"[GOLOGIN WARMUP] [{profile_id}] → Forcing process kill and retry...")
+                        
+                        # ONLY NOW kill processes (after SDK stop failed)
+                        try:
+                            GoLoginProfileHelper.kill_zombie_chrome_processes(
+                                profile_id=profile_id,
+                                log_prefix="[GOLOGIN WARMUP]"
+                            )
+                            print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Zombie processes killed")
+                            
+                            # Wait for file handles to release
+                            time.sleep(3)
+                            
+                            # RETRY SDK stop
                             try:
-                                # Gọi stop_profile trong thread riêng, tránh block main thread
+                                print(f"[GOLOGIN WARMUP] [{profile_id}] Retrying SDK stop...")
+                           
                                 success, msg = gologin.stop_profile(profile_id)
                                 if success:
-                                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Profile stopped and data synced")
+                                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Profile stopped (retry successful)")
+                                    stop_success = True
                                 else:
-                                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✗ Stop failed: {msg}")
-                            except Exception as stop_ex:
-                                print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Stop error: {stop_ex}")
-
-                    threading.Thread(target=async_stop, daemon=True).start()
-                    time.sleep(2)  # chờ sync nhẹ để thread stop bắt đầu
-                except Exception as stop_err:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Stop profile error: {stop_err}")
-        
+                                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Retry failed: {msg}")
+                            except Exception as retry_err:
+                                print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Retry exception: {retry_err}")
+                                
+                        except Exception as kill_err:
+                            print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Kill zombie error: {kill_err}")
+            
+            # Step 6: Final force cleanup (only if SDK stop completely failed)
+            if not stop_success:
+                print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ SDK stop failed, forcing final cleanup...")
+                try:
+                    GoLoginProfileHelper.kill_zombie_chrome_processes(
+                        profile_id=profile_id,
+                        log_prefix="[GOLOGIN WARMUP]"
+                    )
+                except Exception as final_kill_err:
+                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Final kill error: {final_kill_err}")
+            
             print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Cleanup completed")
+
     
     def _warmup_parallel(self, profile_list, api_token):
         """Warm up multiple profiles in parallel using threading"""

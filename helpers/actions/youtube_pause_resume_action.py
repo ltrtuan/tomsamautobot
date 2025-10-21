@@ -15,6 +15,11 @@ class YouTubePauseResumeAction(BaseYouTubeAction):
         try:
             self.log("Pausing video...", "INFO")
             
+            # Exit fullscreen if needed
+            if not self._exit_fullscreen_if_needed():
+                self.log("Failed to exit fullscreen", "ERROR")
+                return False
+            
             # Find video player element
             video_element = self._find_video_element()
             if not video_element:
@@ -45,18 +50,16 @@ class YouTubePauseResumeAction(BaseYouTubeAction):
                 "return window.screenY + (window.outerHeight - window.innerHeight);"
             )
             
-            # Tính tọa độ click = random trong vùng video (tránh viền 10px mỗi bên)
-            # Random offset từ left edge của video (không phải từ center)
-            safe_margin = 10  # Tránh viền 10px
-
-            # Random X: từ left + 10px đến right - 10px
-            random_offset_x = random.uniform(safe_margin, viewport_coords['width'] - safe_margin)
-            # Random Y: từ top + 10px đến bottom - 10px
-            random_offset_y = random.uniform(safe_margin, viewport_coords['height'] - safe_margin)
-
-            click_x = viewport_offset_x + viewport_coords['x'] + random_offset_x
-            click_y = viewport_offset_y + viewport_coords['y'] + random_offset_y
-
+            # Calculate smart click position (method from BaseFlowAction)
+            click_x, click_y = self.calculate_smart_click_position(
+                viewport_coords,
+                viewport_offset_x,
+                viewport_offset_y
+            )
+            
+            if click_x is None or click_y is None:
+                self.log("Failed to calculate click position", "ERROR")
+                return False
             
             # Validate coords
             screen_width, screen_height = pyautogui.size()
@@ -75,7 +78,7 @@ class YouTubePauseResumeAction(BaseYouTubeAction):
             
             self.log("Video paused", "SUCCESS")
             
-            # Wait 2-5 seconds
+            # Wait 1-3 seconds
             pause_duration = random.uniform(1, 3)
             self.log(f"Waiting {pause_duration:.1f}s...", "INFO")
             time.sleep(pause_duration)
@@ -95,22 +98,3 @@ class YouTubePauseResumeAction(BaseYouTubeAction):
             import traceback
             traceback.print_exc()
             return False
-    
-    def _find_video_element(self):
-        """Find YouTube video player element"""
-        selectors = [
-            'video.html5-main-video',
-            'video.video-stream',
-            '#movie_player video',
-            '.html5-video-player video'
-        ]
-        
-        for selector in selectors:
-            try:
-                element = self.driver.find_element(By.CSS_SELECTOR, selector)
-                if element.is_displayed():
-                    return element
-            except:
-                continue
-        
-        return None
