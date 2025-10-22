@@ -350,7 +350,7 @@ class GoLoginSeleniumStartAction(BaseAction):
                 try:
                     driver.switch_to.window(driver.current_window_handle)
                     # Maximize window để đảm bảo visible
-                    # driver.maximize_window()
+                    driver.maximize_window()
                     print(f"[ROUND {round_num}][{profile_id}] ✓ Window brought to front")
                 except Exception as e:
                     print(f"[ROUND {round_num}][{profile_id}] ⚠ Could not bring window to front: {e}")
@@ -463,7 +463,7 @@ class GoLoginSeleniumStartAction(BaseAction):
                 # ========== STEP 4: WAIT FOR CLEANUP ==========
                 # Critical: Wait for all processes to finish cleanup
                 print(f"{log_prefix} Step 4: Waiting 5s for full cleanup...")
-                
+                time.sleep(5)
                 
                 # ========== STEP 5: STOP PROFILE VIA SDK ==========
                 print(f"{log_prefix} Step 5: Stopping profile via GoLogin SDK...")

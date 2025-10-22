@@ -168,9 +168,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
                     "--mute-audio",
                     "--disable-background-networking",
                     "--disable-extensions",
-                    "--enable-features=NetworkService",
-                    "--enable-logging",
-                    "--v=1",
+                    "--enable-features=NetworkService",                 
                     "--disk-cache-size=0",
                     "--media-cache-size=0",
                     "--disable-features=CookiesWithoutSameSiteMustBeSecure",
@@ -198,9 +196,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
             else:
                 extra_params = [
                     "--enable-features=NetworkService",
-                    "--disable-features=CookiesWithoutSameSiteMustBeSecure",
-                    "--enable-logging",
-                    "--v=1",
+                    "--disable-features=CookiesWithoutSameSiteMustBeSecure",                   
                     "--disk-cache-size=0",
                     "--media-cache-size=0",
                     "--disable-sync",
@@ -413,10 +409,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
             duration_minutes = 5
         
         timeout_per_profile = int((duration_minutes + 5) * 60)
-        batches = math.ceil(len(profile_list) / max_workers)
-        total_timeout = timeout_per_profile * batches
-        
-        print(f"[GOLOGIN WARMUP] Timeout per profile: {timeout_per_profile}s ({timeout_per_profile/60:.1f} min)")
+        batches = math.ceil(len(profile_list) / max_workers)        
         
         # Store results
         results = []
@@ -447,47 +440,36 @@ class GoLoginSeleniumCollectAction(BaseAction):
                     print("[GOLOGIN WARMUP] ⏸ Cooling down for 30 seconds...")
                     time.sleep(30)
             
-            # Wait for all threads to complete
-            print(f"[GOLOGIN WARMUP] Waiting for threads (timeout: {total_timeout}s)...")
+          
             
-            try:
-                for future in as_completed(future_to_profile, timeout=total_timeout):
-                    profile_id = future_to_profile[future]
-                    try:
-                        success = future.result(timeout=30)
-                        results.append(success)
-                        completed_profiles.append(profile_id)
+            
+            for future in as_completed(future_to_profile):
+                profile_id = future_to_profile[future]
+                try:
+                    success = future.result(timeout=30)
+                    results.append(success)
+                    completed_profiles.append(profile_id)
                         
-                        if success:
-                            print(f"[GOLOGIN WARMUP] ✓ Profile {profile_id} completed successfully")
-                        else:
-                            print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} failed")
+                    if success:
+                        print(f"[GOLOGIN WARMUP] ✓ Profile {profile_id} completed successfully")
+                    else:
+                        print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} failed")
                     
-                    except TimeoutError:
-                        print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} TIMEOUT")
-                        results.append(False)
-                        timeout_profiles.append(profile_id)
+                except TimeoutError:
+                    print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} TIMEOUT")
+                    results.append(False)
+                    timeout_profiles.append(profile_id)
                     
-                    except Exception as e:
-                        error_msg = str(e)
-                        if any(err in error_msg for err in ["Max retries", "Connection refused", "ConnectionResetError"]):
-                            print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} lost connection (browser crashed)")
-                            connection_error_profiles.append(profile_id)
-                        else:
-                            print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} exception: {e}")
-                        results.append(False)
-                        completed_profiles.append(profile_id)
-            
-            except TimeoutError:
-                print(f"[GOLOGIN WARMUP] ⚠ GLOBAL TIMEOUT reached after {total_timeout}s")
-                print(f"[GOLOGIN WARMUP] Completed: {len(completed_profiles)}/{len(profile_list)}")
-                
-                # Mark remaining profiles as timeout
-                for profile_id in profile_list:
-                    if profile_id not in completed_profiles and profile_id not in timeout_profiles:
-                        print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} TIMEOUT (global)")
-                        results.append(False)
-                        timeout_profiles.append(profile_id)
+                except Exception as e:
+                    error_msg = str(e)
+                    if any(err in error_msg for err in ["Max retries", "Connection refused", "ConnectionResetError"]):
+                        print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} lost connection (browser crashed)")
+                        connection_error_profiles.append(profile_id)
+                    else:
+                        print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} exception: {e}")
+                    results.append(False)
+                    completed_profiles.append(profile_id)
+        
         
         except Exception as e:
             print(f"[GOLOGIN WARMUP] ⚠ Parallel execution error: {e}")
