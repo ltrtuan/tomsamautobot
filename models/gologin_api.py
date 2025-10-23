@@ -203,6 +203,20 @@ class GoLoginAPI:
         def _stop_internal():
             """Internal stop logic with timeout protection"""
             try:
+                # ========== NEW: WAIT FOR CHROME CLEANUP FIRST ==========
+                # Wait for Chrome to naturally cleanup BEFORE gl.stop()
+                # This prevents WinError 32 when gl.stop() tries to delete chrome_debug.log
+                print(f"[GOLOGIN] Waiting for Chrome process to cleanup before gl.stop()...")
+                chrome_cleaned = self._wait_for_chrome_cleanup(profile_id, max_wait=20)
+        
+                if not chrome_cleaned:
+                    print(f"[GOLOGIN] ⚠ Chrome still running after 20s wait")
+                    print(f"[GOLOGIN] → Proceeding with gl.stop() anyway (may get warnings)")
+                    # DO NOT force kill here - let gl.stop() try to sync first
+                else:
+                    print(f"[GOLOGIN] ✓ Chrome cleaned up, proceeding with gl.stop()...")
+                # =====================================================
+        
                 print(f"[GOLOGIN] Closing browser and syncing data to cloud...")
                 gl.stop()
                 stop_result["success"] = True
@@ -214,6 +228,7 @@ class GoLoginAPI:
                 stop_result["message"] = str(stop_err)
             finally:
                 stop_result["completed"] = True
+
     
         # Run gl.stop() in separate thread with 60s timeout
         stop_thread = threading.Thread(target=_stop_internal, daemon=True)
@@ -241,7 +256,7 @@ class GoLoginAPI:
                 # gl.stop() completed successfully
                 print(f"[GOLOGIN] ✓ gl.stop() completed successfully")
                 print(f"[GOLOGIN] Waiting 10s for cloud sync to complete...")
-                time.sleep(15)
+                time.sleep(10)
            
             
                 # Check if browser processes still exist (shouldn't happen)
@@ -297,86 +312,161 @@ class GoLoginAPI:
             return True, f"Stopped with warnings: {stop_result['message']}"
 
 
-    
-        
-    def _force_kill_browser_processes(self, profile_id):
+    def _wait_for_chrome_cleanup(self, profile_id, max_wait=20):
         """
-        Force kill Orbita/Chrome processes ONLY related to THIS SPECIFIC GoLogin profile
-        SAFE: Will NOT kill user's personal Chrome browser or OTHER profiles' browsers
+        Wait for Chrome processes to cleanup BEFORE calling gl.stop()
+        This prevents WinError 32 (file locked by process)
+    
+        Args:
+            profile_id: Profile ID to check
+            max_wait: Max seconds to wait (default 20s)
+    
+        Returns:
+            bool: True if Chrome cleaned up, False if still running after timeout
         """
         try:
             import psutil
+            import time
+        
+            profile_folder = f"gologin_{profile_id}".lower()
+            print(f"[GOLOGIN] [{profile_id}] Verifying Chrome process cleanup...")
+        
+            cleanup_start = time.time()
+            chrome_terminated = False
+        
+            while time.time() - cleanup_start < max_wait:
+                # Check if any Chrome process for this profile is still running
+                chrome_running = False
+            
+                for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                    try:
+                        proc_name = proc.info['name'].lower() if proc.info['name'] else ''
+                        if proc_name in ['chrome.exe', 'chrome']:
+                            cmdline = proc.info.get('cmdline', [])
+                            if cmdline:
+                                cmdline_str = ' '.join(cmdline).lower()
+                                if profile_folder in cmdline_str:
+                                    chrome_running = True
+                                    break
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        continue
+            
+                if not chrome_running:
+                    elapsed = time.time() - cleanup_start
+                    print(f"[GOLOGIN] [{profile_id}] ✓ Chrome process cleaned up after {elapsed:.1f}s")
+                    chrome_terminated = True
+                    break
+            
+                # Still running, wait a bit
+                time.sleep(1)
+        
+            if not chrome_terminated:
+                print(f"[GOLOGIN] [{profile_id}] ⚠ Chrome process still running after {max_wait}s")
+                return False
+        
+            # Extra safety wait for file handles to release
+            time.sleep(2)
+            return True
+        
+        except Exception as e:
+            print(f"[GOLOGIN] [{profile_id}] ⚠ Chrome cleanup check error: {e}")
+            return True  # Continue anyway
+
+        
+    def _force_kill_browser_processes(self, profile_id):
+        """
+        Force kill Chrome processes ONLY for THIS SPECIFIC profile
+        Uses SAME LOGIC as helper's kill_zombie_chrome_processes()
+        """
+        try:
+            import psutil
+            import shutil
             killed_count = 0
         
-            # Get tmpdir path to identify GoLogin processes
-            tmpdir_lower = self.tmpdir.lower()
-        
-            # ← FIX: Build profile-specific identifier
             profile_folder = f"gologin_{profile_id}".lower()
-            print(f"[GOLOGIN] [{profile_id}] Looking for processes with folder: {profile_folder}")
+            print(f"[GOLOGIN] [{profile_id}] Force killing Chrome processes...")
         
+            # Kill Chrome processes for this profile
             for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'exe']):
                 try:
                     proc_name = proc.info['name'].lower() if proc.info['name'] else ''
                 
-                    # Check if it's a browser process
-                    is_browser = any(name in proc_name for name in ['orbita', 'chrome', 'chromium'])
+                    # ONLY kill chrome.exe (NOT gologin.exe)
+                    if proc_name != 'chrome.exe':
+                        continue
                 
-                    if is_browser and proc.info['cmdline']:
-                        cmdline = ' '.join(proc.info['cmdline']).lower()
-                    
-                        # ← FIX: Check if this process belongs to THIS profile
-                        belongs_to_this_profile = profile_folder in cmdline
-                    
-                        if not belongs_to_this_profile:
-                            # This process belongs to different profile or user's Chrome
-                            continue
-                    
-                        # Additional safety checks (must have at least 2 of these)
-                        match_count = 0
-                    
-                        # Check 1: Profile folder in command line (already checked above)
-                        if profile_folder in cmdline:
-                            match_count += 1
-                    
-                        # Check 2: "gologin" keyword in command line or exe path
-                        if 'gologin' in cmdline:
-                            match_count += 1
-                        elif proc.info['exe']:
-                            exe_path = proc.info['exe'].lower()
-                            if 'gologin' in exe_path:
-                                match_count += 1
-                    
-                        # Check 3: Temp directory in command line
-                        if tmpdir_lower in cmdline or 'appdata\\local\\temp\\gologin' in cmdline:
-                            match_count += 1
-                    
-                        # Check 4: "orbita" in process name or path (GoLogin's browser)
-                        if 'orbita' in proc_name:
-                            match_count += 1
-                        elif proc.info['exe'] and 'orbita' in proc.info['exe'].lower():
-                            match_count += 1
-                    
-                        # Only kill if at least 2 conditions match AND belongs to this profile
-                        if match_count >= 2:
-                            print(f"[GOLOGIN] [{profile_id}] Force killing browser process: {proc.info['pid']} (matches: {match_count})")
-                            proc.kill()
-                            killed_count += 1
-                        else:
-                            # Safety check failed - don't kill
-                            pass
-                        
+                    cmdline = proc.info.get('cmdline', [])
+                    if not cmdline:
+                        continue
+                
+                    cmdline_str = ' '.join(cmdline).lower()
+                    exe_path = proc.info.get('exe', '').lower() if proc.info.get('exe') else ''
+                
+                    # Check if belongs to this profile
+                    belongs_to_profile = profile_folder in cmdline_str
+                    if not belongs_to_profile:
+                        continue
+                
+                    # Additional safety: Must be GoLogin Orbita
+                    is_gologin_orbita = (
+                        ('.gologin' in exe_path and 'orbita' in exe_path) or
+                        ('appdata\\local\\gologin\\browser' in exe_path) or
+                        ('.gologin' in cmdline_str and 'orbita' in cmdline_str)
+                    )
+                
+                    if not is_gologin_orbita:
+                        continue
+                
+                    # Verify user-data-dir or profile-directory flag
+                    has_profile_flag = (
+                        '--user-data-dir' in cmdline_str or
+                        '--profile-directory' in cmdline_str
+                    )
+                
+                    if not has_profile_flag:
+                        continue
+                
+                    # ALL checks passed - safe to kill
+                    print(f"[GOLOGIN] [{profile_id}] Killing PID {proc.info['pid']} (chrome.exe)")
+                    proc.kill()
+                    killed_count += 1
+                
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     pass
         
             if killed_count > 0:
-                print(f"[GOLOGIN] [{profile_id}] ✓ Killed {killed_count} browser process(es) for THIS profile")
+                print(f"[GOLOGIN] [{profile_id}] ✓ Killed {killed_count} Chrome process(es)")
                 time.sleep(2)  # Wait for processes to die
             else:
-                print(f"[GOLOGIN] [{profile_id}] No browser processes found for this profile")
-            
+                print(f"[GOLOGIN] [{profile_id}] No Chrome processes found")
+        
+            # ========== CLEANUP FILES (LIKE HELPER) ==========
+            print(f"[GOLOGIN] [{profile_id}] Cleaning up profile files...")
+        
+            # Cleanup chrome_debug.log
+            profile_temp_path = os.path.join(self.tmpdir, f"gologin_{profile_id}")
+            debug_log = os.path.join(profile_temp_path, "chrome_debug.log")
+        
+            if os.path.exists(debug_log):
+                try:
+                    os.remove(debug_log)
+                    print(f"[GOLOGIN] [{profile_id}] ✓ Deleted chrome_debug.log")
+                except Exception as log_err:
+                    print(f"[GOLOGIN] [{profile_id}] ⚠ Could not delete chrome_debug.log: {log_err}")
+        
+            # Cleanup profile folder
+            if os.path.exists(profile_temp_path):
+                try:
+                    shutil.rmtree(profile_temp_path)
+                    print(f"[GOLOGIN] [{profile_id}] ✓ Deleted profile folder: {profile_temp_path}")
+                except Exception as folder_err:
+                    print(f"[GOLOGIN] [{profile_id}] ⚠ Could not delete profile folder: {folder_err}")
+        
         except Exception as e:
-            print(f"[GOLOGIN] [{profile_id}] ⚠ Process kill warning: {e}")
+            print(f"[GOLOGIN] [{profile_id}] ⚠ Force kill error: {e}")
+            import traceback
+            traceback.print_exc()
+
 
 
 

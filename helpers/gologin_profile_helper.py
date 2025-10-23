@@ -504,23 +504,135 @@ class GoLoginProfileHelper:
         # ========== LOCK RELEASED ==========
 
 
+    # @staticmethod
+    # def bring_profile_to_front(profile_id, driver=None, log_prefix="[GOLOGIN]"):
+    #     """
+    #     Bring GoLogin profile window to front AND maximize it - THREAD SAFE
+    #     Support 2 modes:
+    #     - With driver: Use Selenium to maximize (faster, more reliable)
+    #     - Without driver: Use win32gui to bring to front + maximize (for multi-threading)
+    
+    #     Args:
+    #         profile_id: Profile ID
+    #         driver: Optional Selenium WebDriver instance (for maximize)
+    #         log_prefix: Prefix for log messages
+    
+    #     Returns:
+    #         bool: True if successful
+    #     """
+    
+    #     # ========== ACQUIRE WINDOW FOCUS LOCK TO PREVENT CONFLICTS ==========
+    #     with _window_focus_lock:
+    #         print(f"{log_prefix} [{profile_id}] Acquiring window focus lock...")
+        
+    #         try:
+    #             # MODE 1: If driver provided, use Selenium maximize (RECOMMENDED)
+    #             if driver:
+    #                 try:
+    #                     driver.maximize_window()
+    #                     print(f"{log_prefix} [{profile_id}] ✓ Browser maximized via Selenium")
+                    
+    #                     # Optional: Verify window size
+    #                     import time
+    #                     time.sleep(0.5)
+                    
+    #                     window_size = driver.get_window_size()
+    #                     print(f"{log_prefix} [{profile_id}] Window size: {window_size['width']}x{window_size['height']}")
+                    
+    #                     # Delay before releasing lock (let window settle)
+    #                     time.sleep(1)
+    #                     return True
+                    
+    #                 except Exception as e:
+    #                     print(f"{log_prefix} [{profile_id}] ⚠ Selenium maximize failed: {e}")
+    #                     # Continue to MODE 2 as fallback
+            
+    #             # MODE 2: Use win32gui to bring to front + maximize (for multi-threading or fallback)
+    #             import psutil
+    #             import platform
+            
+    #             if platform.system() != "Windows":
+    #                 print(f"{log_prefix} [{profile_id}] ℹ Window control not implemented for this OS")
+    #                 return False
+            
+    #             # Find GoLogin Chrome process for this profile
+    #             for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+    #                 try:
+    #                     cmdline = proc.info.get('cmdline', [])
+    #                     if not cmdline:
+    #                         continue
+                    
+    #                     cmdline_str = ' '.join(cmdline).lower()
+                    
+    #                     # Check if this is the main browser process for this profile
+    #                     if profile_id.lower() in cmdline_str and '--type=renderer' not in cmdline_str:
+    #                         pid = proc.info['pid']
+                        
+    #                         try:
+    #                             import win32gui
+    #                             import win32con
+    #                             import win32process
+                            
+    #                             def enum_windows_callback(hwnd, pid_list):
+    #                                 if win32gui.IsWindowVisible(hwnd):
+    #                                     _, found_pid = win32process.GetWindowThreadProcessId(hwnd)
+    #                                     if found_pid == pid:
+    #                                         pid_list.append(hwnd)
+    #                                 return True
+                            
+    #                             windows = []
+    #                             win32gui.EnumWindows(enum_windows_callback, windows)
+                            
+    #                             if windows:
+    #                                 hwnd = windows[0]
+                                
+    #                                 # Step 1: Restore window (in case minimized)
+    #                                 win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                                
+    #                                 # Step 2: Maximize window
+    #                                 win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+                                
+    #                                 # Step 3: Bring to foreground
+    #                                 win32gui.SetForegroundWindow(hwnd)
+                                
+    #                                 print(f"{log_prefix} [{profile_id}] ✓ Brought to front and maximized via win32gui")
+                                
+    #                                 # Delay before releasing lock
+    #                                 time.sleep(1)
+    #                                 return True
+                        
+    #                         except ImportError:
+    #                             print(f"{log_prefix} [{profile_id}] ⚠ win32gui not available")
+    #                             return False
+                
+    #                 except (psutil.NoSuchProcess, psutil.AccessDenied):
+    #                     continue
+            
+    #             print(f"{log_prefix} [{profile_id}] ⚠ Could not find browser window")
+    #             return False
+            
+    #         except Exception as e:
+    #             print(f"{log_prefix} [{profile_id}] ⚠ Error: {e}")
+    #             return False
+    #     # ===================================================================
+
     @staticmethod
     def bring_profile_to_front(profile_id, driver=None, log_prefix="[GOLOGIN]"):
         """
         Bring GoLogin profile window to front AND maximize it - THREAD SAFE
+    
         Support 2 modes:
         - With driver: Use Selenium to maximize (faster, more reliable)
-        - Without driver: Use win32gui to bring to front + maximize (for multi-threading)
+        - Without driver: Use win32gui to FORCE bring to front + maximize (for multi-threading)
     
         Args:
             profile_id: Profile ID
             driver: Optional Selenium WebDriver instance (for maximize)
             log_prefix: Prefix for log messages
-    
+        
         Returns:
             bool: True if successful
         """
-    
         # ========== ACQUIRE WINDOW FOCUS LOCK TO PREVENT CONFLICTS ==========
         with _window_focus_lock:
             print(f"{log_prefix} [{profile_id}] Acquiring window focus lock...")
@@ -535,9 +647,89 @@ class GoLoginProfileHelper:
                         # Optional: Verify window size
                         import time
                         time.sleep(0.5)
-                    
                         window_size = driver.get_window_size()
                         print(f"{log_prefix} [{profile_id}] Window size: {window_size['width']}x{window_size['height']}")
+                    
+                        # Try to FORCE bring to front using win32gui (fallback to ensure focus)
+                        # This is needed when multiple Chrome windows are open
+                        try:
+                            import psutil
+                            import platform
+                        
+                            if platform.system() == "Windows":
+                                # Find the Chrome window for this profile
+                                for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                                    try:
+                                        cmdline = proc.info.get('cmdline', [])
+                                        if not cmdline:
+                                            continue
+                                    
+                                        cmdline_str = ' '.join(cmdline).lower()
+                                    
+                                        # Check if this is the main browser process for this profile
+                                        if profile_id.lower() in cmdline_str and '--type=renderer' not in cmdline_str:
+                                            pid = proc.info['pid']
+                                        
+                                            import win32gui
+                                            import win32con
+                                            import win32process
+                                        
+                                            def enum_windows_callback(hwnd, pid_list):
+                                                if win32gui.IsWindowVisible(hwnd):
+                                                    _, found_pid = win32process.GetWindowThreadProcessId(hwnd)
+                                                    if found_pid == pid:
+                                                        pid_list.append(hwnd)
+                                                return True
+                                        
+                                            windows = []
+                                            win32gui.EnumWindows(enum_windows_callback, windows)
+                                        
+                                            if windows:
+                                                hwnd = windows[0]
+                                            
+                                                # ===== CHECK IF ALREADY IN FOREGROUND FIRST =====
+                                                foreground_hwnd = win32gui.GetForegroundWindow()
+                                            
+                                                if foreground_hwnd == hwnd:
+                                                    print(f"{log_prefix} [{profile_id}] ✓ Window already in foreground, skip bring to front")
+                                                    time.sleep(0.5)
+                                                    return True
+                                                # =================================================
+                                            
+                                                # FORCE bring to front with AttachThreadInput trick
+                                                try:
+                                                    # Get thread IDs
+                                                    foreground_thread = win32process.GetWindowThreadProcessId(foreground_hwnd)[0]
+                                                    target_thread = win32process.GetWindowThreadProcessId(hwnd)[0]
+                                                
+                                                    # Attach threads to allow SetForegroundWindow
+                                                    if foreground_thread != target_thread:
+                                                        win32process.AttachThreadInput(foreground_thread, target_thread, True)
+                                                
+                                                    # Restore if minimized
+                                                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                                                
+                                                    # Maximize
+                                                    win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+                                                
+                                                    # Set foreground (now it works because threads are attached)
+                                                    win32gui.SetForegroundWindow(hwnd)
+                                                
+                                                    # Detach threads
+                                                    if foreground_thread != target_thread:
+                                                        win32process.AttachThreadInput(foreground_thread, target_thread, False)
+                                                
+                                                    print(f"{log_prefix} [{profile_id}] ✓ FORCED window to foreground")
+                                                
+                                                except Exception as force_err:
+                                                    print(f"{log_prefix} [{profile_id}] ⚠ Force foreground error: {force_err}")
+                                            
+                                                break
+                                            
+                                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                        continue
+                        except Exception as force_err:
+                            print(f"{log_prefix} [{profile_id}] ℹ Could not force foreground (fallback OK): {force_err}")
                     
                         # Delay before releasing lock (let window settle)
                         time.sleep(1)
@@ -547,7 +739,7 @@ class GoLoginProfileHelper:
                         print(f"{log_prefix} [{profile_id}] ⚠ Selenium maximize failed: {e}")
                         # Continue to MODE 2 as fallback
             
-                # MODE 2: Use win32gui to bring to front + maximize (for multi-threading or fallback)
+                # MODE 2: Use win32gui to FORCE bring to front + maximize (for multi-threading or fallback)
                 import psutil
                 import platform
             
@@ -586,25 +778,60 @@ class GoLoginProfileHelper:
                                 if windows:
                                     hwnd = windows[0]
                                 
-                                    # Step 1: Restore window (in case minimized)
-                                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                                    # ===== CHECK IF ALREADY IN FOREGROUND FIRST =====
+                                    foreground_hwnd = win32gui.GetForegroundWindow()
                                 
-                                    # Step 2: Maximize window
-                                    win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+                                    if foreground_hwnd == hwnd:
+                                        # Already in foreground, just make sure it's maximized
+                                        win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+                                        print(f"{log_prefix} [{profile_id}] ✓ Already in foreground, ensured maximized")
+                                        import time
+                                        time.sleep(0.5)
+                                        return True
+                                    # =================================================
                                 
-                                    # Step 3: Bring to foreground
-                                    win32gui.SetForegroundWindow(hwnd)
-                                
-                                    print(f"{log_prefix} [{profile_id}] ✓ Brought to front and maximized via win32gui")
+                                    # FORCE bring to front with AttachThreadInput trick
+                                    try:
+                                        # Get thread IDs
+                                        foreground_thread = win32process.GetWindowThreadProcessId(foreground_hwnd)[0]
+                                        target_thread = win32process.GetWindowThreadProcessId(hwnd)[0]
+                                    
+                                        # Attach threads to allow SetForegroundWindow
+                                        if foreground_thread != target_thread:
+                                            win32process.AttachThreadInput(foreground_thread, target_thread, True)
+                                    
+                                        # Restore if minimized
+                                        win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                                    
+                                        # Maximize
+                                        win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+                                    
+                                        # Set foreground (now it works because threads are attached)
+                                        win32gui.SetForegroundWindow(hwnd)
+                                    
+                                        # Detach threads
+                                        if foreground_thread != target_thread:
+                                            win32process.AttachThreadInput(foreground_thread, target_thread, False)
+                                    
+                                        print(f"{log_prefix} [{profile_id}] ✓ FORCED to front and maximized via win32gui")
+                                    
+                                    except Exception as force_err:
+                                        print(f"{log_prefix} [{profile_id}] ⚠ Force foreground error: {force_err}")
+                                        # Fallback to old method
+                                        win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                                        win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+                                        win32gui.SetForegroundWindow(hwnd)
+                                        print(f"{log_prefix} [{profile_id}] ✓ Used fallback method")
                                 
                                     # Delay before releasing lock
+                                    import time
                                     time.sleep(1)
                                     return True
-                        
+                                
                             except ImportError:
                                 print(f"{log_prefix} [{profile_id}] ⚠ win32gui not available")
                                 return False
-                
+                            
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
                         continue
             
@@ -614,13 +841,12 @@ class GoLoginProfileHelper:
             except Exception as e:
                 print(f"{log_prefix} [{profile_id}] ⚠ Error: {e}")
                 return False
-        # ===================================================================
 
 
 
    
     @staticmethod
-    def check_and_fix_crashed_tabs(driver, debugger_address, log_prefix="[GOLOGIN]"):
+    def check_and_fix_crashed_tabs(driver, debugger_address, log_prefix="[GOLOGIN]", use_window_lock=True):
         """
         Check for crashed tabs and fix using raw HTTP to Chrome DevTools
         Strategy: Always create new tab first, then close crashed ones
@@ -629,7 +855,9 @@ class GoLoginProfileHelper:
             driver: Selenium WebDriver instance
             debugger_address: Chrome debugger address (e.g., "127.0.0.1:9222")
             log_prefix: Prefix for log messages
-        
+            use_window_lock: If True, use _window_focus_lock when activating (for Start action with physical interaction)
+                            If False, no lock (for Collect action with 100% Selenium)
+    
         Returns:
             bool: True if successful (no crash or fixed), False if cannot fix
         """
@@ -712,19 +940,34 @@ class GoLoginProfileHelper:
                 except Exception as e:
                     print(f"{log_prefix} ⚠ Could not verify new tab: {e}")
             
-                # Step 4: Activate the new page - PROTECTED BY LOCK
-                with _window_focus_lock:  # ← THÊM LOCK Ở ĐÂY
+                # Step 4: Activate the new page - CONDITIONAL LOCK based on use_window_lock parameter
+                if use_window_lock:
+                    # Start action: Use lock to prevent window focus conflicts with physical mouse
+                    with _window_focus_lock:
+                        try:
+                            activate_url = f"{base_url}/json/activate/{new_page_id}"
+                            activate_response = requests.get(activate_url, timeout=3)
+                            if activate_response.status_code == 200:
+                                print(f"{log_prefix} ✓ Activated new page (with lock)")
+                            else:
+                                print(f"{log_prefix} ⚠ Activate returned: {activate_response.status_code}")
+                        except Exception as activate_err:
+                            print(f"{log_prefix} ⚠ Could not activate: {activate_err}")
+        
+                        time.sleep(0.5)  # Let window settle inside lock
+                else:
+                    # Collect action: No lock needed (100% Selenium, no physical interaction)
                     try:
                         activate_url = f"{base_url}/json/activate/{new_page_id}"
                         activate_response = requests.get(activate_url, timeout=3)
                         if activate_response.status_code == 200:
-                            print(f"{log_prefix} ✓ Activated new page")
+                            print(f"{log_prefix} ✓ Activated new page (no lock)")
                         else:
                             print(f"{log_prefix} ⚠ Activate returned: {activate_response.status_code}")
                     except Exception as activate_err:
                         print(f"{log_prefix} ⚠ Could not activate: {activate_err}")
-                
-                    time.sleep(0.5)  # Let window settle inside lock
+    
+                    time.sleep(0.5)  # Let window settle
                 # ← KẾT THÚC LOCK
             
                 # Step 5: Get fresh window handles
@@ -797,132 +1040,3 @@ class GoLoginProfileHelper:
             import traceback
             traceback.print_exc()
             return True  # Continue anyway
-
-
-
-
-
-    @staticmethod
-    def kill_zombie_chrome_processes(profile_id, log_prefix="[GOLOGIN]"):
-        """
-        Kill ONLY GoLogin Orbita browser processes for this specific profile
-        Does NOT kill GoLogin.exe main application
-        
-        NEW: Also force cleanup chrome_debug.log and profile folder if needed
-        
-        Args:
-            profile_id: Profile ID to clean up
-            log_prefix: Prefix for log messages
-            
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        try:
-            import psutil
-            import os
-            import tempfile
-            import shutil
-            import time
-            
-            print(f"{log_prefix} [{profile_id}] Checking for zombie Orbita processes...")
-            killed_count = 0
-            
-            # ========== STEP 1: KILL ZOMBIE PROCESSES ==========
-            for proc in psutil.process_iter(['pid', 'name', 'exe', 'cmdline']):
-                try:
-                    proc_name = proc.info['name'].lower()
-                    proc_exe = proc.info.get('exe', '')
-                    cmdline = proc.info.get('cmdline', [])
-                    
-                    # ========== CRITICAL: ONLY MATCH CHROME.EXE, NOT GOLOGIN.EXE ==========
-                    # Skip if this is GoLogin main app
-                    if proc_name in ['gologin.exe', 'gologin']:
-                        continue
-                    
-                    # Only target chrome.exe processes
-                    if proc_name not in ['chrome.exe', 'chrome']:
-                        continue
-                    
-                    # Check if this chrome.exe is from GoLogin/Orbita directory
-                    is_gologin_orbita = False
-                    if proc_exe:
-                        proc_exe_lower = proc_exe.lower()
-                        # Check for GoLogin Orbita browser paths
-                        if '.gologin' in proc_exe_lower and 'orbita' in proc_exe_lower:
-                            is_gologin_orbita = True
-                        elif 'appdata\\local\\gologin\\browser' in proc_exe_lower:
-                            is_gologin_orbita = True
-                        elif 'appdata/local/gologin/browser' in proc_exe_lower:
-                            is_gologin_orbita = True
-                        elif '\\gologin\\browser\\orbita' in proc_exe_lower:
-                            is_gologin_orbita = True
-                        elif '/gologin/browser/orbita' in proc_exe_lower:
-                            is_gologin_orbita = True
-                    
-                    if not is_gologin_orbita:
-                        continue
-                    
-                    # Check if this browser belongs to the specific profile
-                    belongs_to_profile = False
-                    if cmdline:
-                        cmdline_str = ' '.join(cmdline).lower()
-                        # Profile ID must be in user-data-dir or profile-directory
-                        if profile_id.lower() in cmdline_str:
-                            # Must have user-data-dir or profile-directory to confirm it's a profile browser
-                            if '--user-data-dir' in cmdline_str or '--profile-directory' in cmdline_str:
-                                belongs_to_profile = True
-                    
-                    # Kill ONLY if:
-                    # 1. It's chrome.exe (not GoLogin.exe)
-                    # 2. It's from GoLogin Orbita directory
-                    # 3. It belongs to this specific profile
-                    if is_gologin_orbita and belongs_to_profile:
-                        print(f"{log_prefix} [{profile_id}] Killing zombie Orbita PID {proc.info['pid']} ({proc_name})")
-                        proc.kill()
-                        killed_count += 1
-                        
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                    pass
-            
-            if killed_count > 0:
-                print(f"{log_prefix} [{profile_id}] ✓ Killed {killed_count} zombie Orbita process(es)")
-                time.sleep(2)  # Wait for processes to finish cleanup
-            else:
-                print(f"{log_prefix} [{profile_id}] ✓ No zombie Orbita processes found")
-            
-            # ========== STEP 2: FORCE CLEANUP chrome_debug.log AND PROFILE FOLDER ==========
-            print(f"{log_prefix} [{profile_id}] Force cleaning up profile folder...")
-            
-            temp_dir = tempfile.gettempdir()
-            profile_folder = f"gologin_{profile_id}"
-            profile_path = os.path.join(temp_dir, profile_folder)
-            
-            if os.path.exists(profile_path):
-                # Try to delete chrome_debug.log first
-                log_file = os.path.join(profile_path, "chrome_debug.log")
-                if os.path.exists(log_file):
-                    try:
-                        os.remove(log_file)
-                        print(f"{log_prefix} [{profile_id}] ✓ Deleted chrome_debug.log")
-                    except Exception as log_err:
-                        print(f"{log_prefix} [{profile_id}] ⚠ Cannot delete log file: {log_err}")
-                
-                # Try to delete entire profile folder (best effort)
-                try:
-                    shutil.rmtree(profile_path, ignore_errors=True)
-                    print(f"{log_prefix} [{profile_id}] ✓ Force deleted profile folder")
-                except Exception as folder_err:
-                    print(f"{log_prefix} [{profile_id}] ⚠ Cannot delete folder: {folder_err}")
-                    # Not critical - folder may still be in use
-            else:
-                print(f"{log_prefix} [{profile_id}] ℹ Profile folder not found (already cleaned)")
-            
-            return True
-            
-        except Exception as e:
-            print(f"{log_prefix} [{profile_id}] ⚠ Zombie cleanup error: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
-
-

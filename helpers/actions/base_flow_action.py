@@ -49,102 +49,154 @@
 
 
 
-    def calculate_smart_click_position(self, viewport_coords, viewport_offset_x, viewport_offset_y):
+    def calculate_smart_click_position(self, viewport_coords, viewport_offset_x, viewport_offset_y, avoid_zone=None):
         """
         Calculate smart click position for any element:
         - Avoid edges (10px margin)
-        - Avoid center (30% center zone)
-        - Random in remaining areas (left/right/top/bottom zones)
-        
+        - Avoid center (30% center zone) - for default behavior
+        - Avoid specific zones (e.g., 'top-right' for YouTube Watch Later/Playlist icons)
+        - Random in remaining safe areas
+    
         Args:
             viewport_coords: Dict with {x, y, width, height} from get_element_viewport_coordinates()
             viewport_offset_x: Browser window X offset
             viewport_offset_y: Browser window Y offset
-            
+            avoid_zone: Optional string to specify zone to avoid:
+                - None (default): Avoid center + edges (general use)
+                - 'top-right': Avoid top-right corner (YouTube Watch Later/Playlist icons)
+                - 'top-left': Avoid top-left corner
+                - 'bottom-right': Avoid bottom-right corner
+                - 'bottom-left': Avoid bottom-left corner
+    
         Returns:
             (click_x, click_y): Screen coordinates to click, or (None, None) if error
         """
         try:
             import random
-            
+        
             width = viewport_coords['width']
             height = viewport_coords['height']
-            
+        
             # Edge margin (avoid clicking too close to edges)
             edge_margin = 10
+        
+            # ========== SPECIAL ZONE AVOIDANCE ==========
+            if avoid_zone == 'top-right':
+                # For YouTube sidebar thumbnails: Avoid top-right 30% where Watch Later/Playlist icons are
+                # Safe zone: Left 70% and Center-Bottom 55% of thumbnail
+                safe_x_min = width * 0.15   # Start from 15% from left (avoid left edge)
+                safe_x_max = width * 0.70   # End at 70% from left (avoid right 30% with icons)
+                safe_y_min = height * 0.35  # Start from 35% from top (avoid top area with icons)
+                safe_y_max = height * 0.85  # End at 85% from top (avoid bottom edge)
             
-            # Center zone to avoid (30% of width/height around center)
-            center_zone_width = width * 0.3
-            center_zone_height = height * 0.3
+                # Generate random position in safe zone
+                random_offset_x = random.uniform(safe_x_min, safe_x_max)
+                random_offset_y = random.uniform(safe_y_min, safe_y_max)
             
-            # Calculate center zone boundaries
-            center_left = (width / 2) - (center_zone_width / 2)
-            center_right = (width / 2) + (center_zone_width / 2)
-            center_top = (height / 2) - (center_zone_height / 2)
-            center_bottom = (height / 2) + (center_zone_height / 2)
+            elif avoid_zone == 'top-left':
+                # Avoid top-left corner (30% width, 40% height)
+                safe_x_min = width * 0.30
+                safe_x_max = width * 0.85
+                safe_y_min = height * 0.40
+                safe_y_max = height * 0.85
             
-            # Define clickable zones (avoid edges and center)
-            zones = []
+                random_offset_x = random.uniform(safe_x_min, safe_x_max)
+                random_offset_y = random.uniform(safe_y_min, safe_y_max)
             
-            # Left zone (avoid center)
-            if center_left > edge_margin:
-                zones.append({
-                    'name': 'left',
-                    'x_min': edge_margin,
-                    'x_max': center_left,
-                    'y_min': edge_margin,
-                    'y_max': height - edge_margin
-                })
+            elif avoid_zone == 'bottom-right':
+                # Avoid bottom-right corner (30% width, 40% height)
+                safe_x_min = width * 0.15
+                safe_x_max = width * 0.70
+                safe_y_min = height * 0.15
+                safe_y_max = height * 0.60
             
-            # Right zone (avoid center)
-            if width - center_right > edge_margin:
-                zones.append({
-                    'name': 'right',
-                    'x_min': center_right,
-                    'x_max': width - edge_margin,
-                    'y_min': edge_margin,
-                    'y_max': height - edge_margin
-                })
+                random_offset_x = random.uniform(safe_x_min, safe_x_max)
+                random_offset_y = random.uniform(safe_y_min, safe_y_max)
             
-            # Top zone (avoid center, between left and right zones)
-            if center_top > edge_margin:
-                zones.append({
-                    'name': 'top',
-                    'x_min': center_left,
-                    'x_max': center_right,
-                    'y_min': edge_margin,
-                    'y_max': center_top
-                })
+            elif avoid_zone == 'bottom-left':
+                # Avoid bottom-left corner (30% width, 40% height)
+                safe_x_min = width * 0.30
+                safe_x_max = width * 0.85
+                safe_y_min = height * 0.15
+                safe_y_max = height * 0.60
             
-            # Bottom zone (avoid center, between left and right zones)
-            if height - center_bottom > edge_margin:
-                zones.append({
-                    'name': 'bottom',
-                    'x_min': center_left,
-                    'x_max': center_right,
-                    'y_min': center_bottom,
-                    'y_max': height - edge_margin
-                })
-            
-            # If no zones available, fallback to simple random (avoid edges only)
-            if not zones:
-                print("[BaseFlowAction] No zones available, using fallback")
-                random_offset_x = random.uniform(edge_margin, width - edge_margin)
-                random_offset_y = random.uniform(edge_margin, height - edge_margin)
+                random_offset_x = random.uniform(safe_x_min, safe_x_max)
+                random_offset_y = random.uniform(safe_y_min, safe_y_max)
+        
+            # ========== DEFAULT BEHAVIOR: AVOID CENTER + EDGES ==========
             else:
-                # Random choose a zone
-                chosen_zone = random.choice(zones)
-                
-                # Random position in chosen zone
-                random_offset_x = random.uniform(chosen_zone['x_min'], chosen_zone['x_max'])
-                random_offset_y = random.uniform(chosen_zone['y_min'], chosen_zone['y_max'])
+                # Center zone to avoid (30% of width/height around center)
+                center_zone_width = width * 0.3
+                center_zone_height = height * 0.3
             
+                # Calculate center zone boundaries
+                center_left = (width / 2) - (center_zone_width / 2)
+                center_right = (width / 2) + (center_zone_width / 2)
+                center_top = (height / 2) - (center_zone_height / 2)
+                center_bottom = (height / 2) + (center_zone_height / 2)
+            
+                # Define clickable zones (avoid edges and center)
+                zones = []
+            
+                # Left zone (avoid center)
+                if center_left > edge_margin:
+                    zones.append({
+                        'name': 'left',
+                        'x_min': edge_margin,
+                        'x_max': center_left,
+                        'y_min': edge_margin,
+                        'y_max': height - edge_margin
+                    })
+            
+                # Right zone (avoid center)
+                if width - center_right > edge_margin:
+                    zones.append({
+                        'name': 'right',
+                        'x_min': center_right,
+                        'x_max': width - edge_margin,
+                        'y_min': edge_margin,
+                        'y_max': height - edge_margin
+                    })
+            
+                # Top zone (avoid center, between left and right zones)
+                if center_top > edge_margin:
+                    zones.append({
+                        'name': 'top',
+                        'x_min': center_left,
+                        'x_max': center_right,
+                        'y_min': edge_margin,
+                        'y_max': center_top
+                    })
+            
+                # Bottom zone (avoid center, between left and right zones)
+                if height - center_bottom > edge_margin:
+                    zones.append({
+                        'name': 'bottom',
+                        'x_min': center_left,
+                        'x_max': center_right,
+                        'y_min': center_bottom,
+                        'y_max': height - edge_margin
+                    })
+            
+                # If no zones available, fallback to simple random (avoid edges only)
+                if not zones:
+                    print("[BaseFlowAction] No zones available, using fallback")
+                    random_offset_x = random.uniform(edge_margin, width - edge_margin)
+                    random_offset_y = random.uniform(edge_margin, height - edge_margin)
+                else:
+                    # Random choose a zone
+                    chosen_zone = random.choice(zones)
+                    # Random position in chosen zone
+                    random_offset_x = random.uniform(chosen_zone['x_min'], chosen_zone['x_max'])
+                    random_offset_y = random.uniform(chosen_zone['y_min'], chosen_zone['y_max'])
+        
             # Calculate final screen coordinates
             click_x = viewport_offset_x + viewport_coords['x'] + random_offset_x
             click_y = viewport_offset_y + viewport_coords['y'] + random_offset_y
-            
+        
             return click_x, click_y
-            
+        
         except Exception as e:
             print(f"[BaseFlowAction] Calculate position error: {e}")
             return None, None
+

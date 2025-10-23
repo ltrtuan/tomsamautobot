@@ -16,7 +16,7 @@ from helpers.actions.youtube_seek_video_action import YouTubeSeekVideoAction
 from helpers.actions.youtube_pause_resume_action import YouTubePauseResumeAction
 from helpers.actions.youtube_click_ad_action import YouTubeClickAdAction
 from helpers.actions.youtube_fullscreen_action import YouTubeFullscreenAction
-
+from helpers.actions.google_navigate_action import GoogleNavigateAction
 
 from helpers.gologin_profile_helper import GoLoginProfileHelper
 
@@ -272,11 +272,13 @@ class YouTubeFlow:
         
             # Bring window to front AFTER fixing crashed tabs
             GoLoginProfileHelper.bring_profile_to_front(profile_id, driver=driver, log_prefix=log_prefix)
-            time.sleep(2)
+            
             
             # Step 1: Navigate to YouTube            
             YouTubeNavigateAction(driver, profile_id, log_prefix, debugger_address).execute()
             time.sleep(random.uniform(2, 4))
+            
+            time.sleep(2)
             
             # Step 2: Pre-search random actions
             YouTubeFlow._random_actions(driver, profile_id, debugger_address, log_prefix, num_actions=2)
@@ -286,7 +288,7 @@ class YouTubeFlow:
             # RE-BRING TO FRONT before critical action (in case other profile closed during setup)
             print(f"{log_prefix} [{profile_id}] Re-activating window before search...")
             GoLoginProfileHelper.bring_profile_to_front(profile_id, driver=driver, log_prefix=log_prefix)
-            time.sleep(0.5)
+            time.sleep(2)
             
             YouTubeSearchAction(driver, profile_id, keywords, log_prefix, debugger_address).execute()
             time.sleep(random.uniform(2, 4))
@@ -384,25 +386,26 @@ class YouTubeFlow:
             except:
                 pass
             print(f"{log_prefix} [{profile_id}] Will perform YouTubeSeekVideoAction")
-            YouTubeSeekVideoAction(driver, profile_id, log_prefix, debugger_address).execute()
+            GoogleNavigateAction(driver, profile_id, keywords, log_prefix, debugger_address).execute()
+            # YouTubeSeekVideoAction(driver, profile_id, log_prefix, debugger_address).execute()
+            # time.sleep(2)
+            # print(f"{log_prefix} [{profile_id}] Will perform YouTubePauseResumeAction")
+            # YouTubePauseResumeAction(driver, profile_id, log_prefix, debugger_address).execute()
+            # time.sleep(2)
+            # print(f"{log_prefix} [{profile_id}] Will perform YouTubeClickAdAction")
+            # YouTubeClickAdAction(driver, profile_id, log_prefix, debugger_address).execute()
+            # time.sleep(2)
+            # print(f"{log_prefix} [{profile_id}] Will perform YouTubeFullscreenAction")
+            # YouTubeFullscreenAction(driver, profile_id, log_prefix, debugger_address).execute()
             time.sleep(2)
-            print(f"{log_prefix} [{profile_id}] Will perform YouTubePauseResumeAction")
-            YouTubePauseResumeAction(driver, profile_id, log_prefix, debugger_address).execute()
-            time.sleep(2)
-            print(f"{log_prefix} [{profile_id}] Will perform YouTubeClickAdAction")
-            YouTubeClickAdAction(driver, profile_id, log_prefix, debugger_address).execute()
-            time.sleep(2)
-            print(f"{log_prefix} [{profile_id}] Will perform YouTubeFullscreenAction")
-            YouTubeFullscreenAction(driver, profile_id, log_prefix, debugger_address).execute()
-            time.sleep(2)
-            print(f"{log_prefix} [{profile_id}] Will perform YouTubeClickVideoAction sideeeeeee")
-            YouTubeClickVideoAction(driver, profile_id, log_prefix, debugger_address, (1,5), 'side').execute()
-            time.sleep(2)
-            print(f"{log_prefix} [{profile_id}] Will perform YouTubeSkipAdsAction")
-            YouTubeSkipAdsAction(driver, profile_id, log_prefix, debugger_address).execute()
-            time.sleep(2)
-            print(f"{log_prefix} [{profile_id}] Will perform YouTubeSearchAction")
-            YouTubeSearchAction(driver, profile_id, keywords, log_prefix, debugger_address).execute()
+            # print(f"{log_prefix} [{profile_id}] Will perform YouTubeClickVideoAction sideeeeeee")
+            # YouTubeClickVideoAction(driver, profile_id, log_prefix, debugger_address, (1,5), 'side').execute()
+            # time.sleep(2)
+            # print(f"{log_prefix} [{profile_id}] Will perform YouTubeSkipAdsAction")
+            # YouTubeSkipAdsAction(driver, profile_id, log_prefix, debugger_address).execute()
+            # time.sleep(2)
+            # print(f"{log_prefix} [{profile_id}] Will perform YouTubeSearchAction")
+            # YouTubeSearchAction(driver, profile_id, keywords, log_prefix, debugger_address).execute()
             
             # # Random number of interactions in this cycle (1-4)
             # num_interactions_this_cycle = random.randint(1, 4)

@@ -142,14 +142,21 @@ class GoLoginSeleniumCollectAction(BaseAction):
     
         try:
             print(f"\n[GOLOGIN WARMUP] [{profile_id}] Starting warm up...")
-            GoLoginProfileHelper.kill_zombie_chrome_processes(profile_id, "[GOLOGIN WARMUP]")
+            # Kill zombie processes via API (includes force kill + cleanup)
+            print(f"[GOLOGIN WARMUP] [{profile_id}] Cleaning up zombie processes...")
+            # Get GoLogin API instance
+            gologin = get_gologin_api(api_token)
+            
+            try:
+                gologin.stop_profile(profile_id)  # This will force kill + cleanup
+                print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Zombie cleanup completed")
+            except Exception as zombie_err:
+                print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Zombie cleanup warning: {zombie_err}")
         
             # Get options
             refresh_fingerprint = self.params.get("refresh_fingerprint", False)
-            headless = self.params.get("headless", False)
-        
-            # Get GoLogin API instance
-            gologin = get_gologin_api(api_token)
+            headless = self.params.get("headless", False)        
+          
         
             # Refresh fingerprint if requested
             if refresh_fingerprint:
@@ -222,7 +229,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
             
            
             # Check and fix crashed tabs FIRST
-            if not GoLoginProfileHelper.check_and_fix_crashed_tabs(driver, debugger_address, "[GOLOGIN WARMUP]"):
+            if not GoLoginProfileHelper.check_and_fix_crashed_tabs(driver, debugger_address, "[GOLOGIN WARMUP]", use_window_lock=False):
                 print(f"[GOLOGIN WARMUP] [{profile_id}] ✗ Could not fix crashed tabs")
                 driver.quit()
                 gologin.stop_profile(profile_id)
@@ -237,6 +244,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
             if not websites:
                 print(f"[GOLOGIN WARMUP] [{profile_id}] ✗ No websites to browse")
                 driver.quit()
+                time.sleep(5)
                 gologin.stop_profile(profile_id)
                 return False
         
@@ -346,15 +354,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
                         print(f"[GOLOGIN WARMUP] [{profile_id}] → Forcing process kill and retry...")
                         
                         # ONLY NOW kill processes (after SDK stop failed)
-                        try:
-                            GoLoginProfileHelper.kill_zombie_chrome_processes(
-                                profile_id=profile_id,
-                                log_prefix="[GOLOGIN WARMUP]"
-                            )
-                            print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Zombie processes killed")
-                            
-                            # Wait for file handles to release
-                            time.sleep(3)
+                        try:                           
                             
                             # RETRY SDK stop
                             try:
@@ -372,16 +372,20 @@ class GoLoginSeleniumCollectAction(BaseAction):
                         except Exception as kill_err:
                             print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Kill zombie error: {kill_err}")
             
+            
             # Step 6: Final force cleanup (only if SDK stop completely failed)
             if not stop_success:
-                print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ SDK stop failed, forcing final cleanup...")
+                print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ SDK stop failed, retry one more time...")
                 try:
-                    GoLoginProfileHelper.kill_zombie_chrome_processes(
-                        profile_id=profile_id,
-                        log_prefix="[GOLOGIN WARMUP]"
-                    )
-                except Exception as final_kill_err:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Final kill error: {final_kill_err}")
+                    time.sleep(3)  # Extra wait
+                    success, msg = gologin.stop_profile(profile_id)  # API will handle force kill + cleanup
+                    if success:
+                        print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Final retry successful")
+                    else:
+                        print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Final retry failed: {msg}")
+                except Exception as final_err:
+                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Final retry error: {final_err}")
+
             
             print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Cleanup completed")
 
@@ -436,9 +440,9 @@ class GoLoginSeleniumCollectAction(BaseAction):
                 print(f"[GOLOGIN WARMUP] Submitted thread {i+1}/{len(profile_list)}: {profile_id}")
                 
                 # Cooling period every max_workers profiles
-                if (i + 1) % max_workers == 0:
-                    print("[GOLOGIN WARMUP] ⏸ Cooling down for 30 seconds...")
-                    time.sleep(30)
+                # if (i + 1) % max_workers == 0:
+                #     print("[GOLOGIN WARMUP] ⏸ Cooling down for 30 seconds...")
+                #     time.sleep(30)
             
           
             
@@ -521,11 +525,8 @@ class GoLoginSeleniumCollectAction(BaseAction):
             success = self._warmup_single_profile(profile_id, api_token)
             
             if not success:
-                return False
-            
-            # Bring window to front for better interaction
-            time.sleep(1)
-            GoLoginProfileHelper.bring_profile_to_front(profile_id, driver=None, log_prefix="[GOLOGIN WARMUP]")
+                return False            
+           
             time.sleep(1)
             
             return True

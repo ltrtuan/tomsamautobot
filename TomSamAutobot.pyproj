@@ -66,6 +66,7 @@
     <Compile Include="exceptions\__init__.py" />
     <Compile Include="helpers\actions\base_flow_action.py" />
     <Compile Include="helpers\actions\base_youtube_action.py" />
+    <Compile Include="helpers\actions\google_navigate_action.py" />
     <Compile Include="helpers\actions\youtube_click_ad_action.py" />
     <Compile Include="helpers\actions\youtube_click_video_action.py" />
     <Compile Include="helpers\actions\youtube_fullscreen_action.py" />
