@@ -202,36 +202,41 @@ class GoLoginAPI:
     
         def _stop_internal():
             """Internal stop logic with timeout protection"""
-            try:
-                # ========== NEW: WAIT FOR CHROME CLEANUP FIRST ==========
-                # Wait for Chrome to naturally cleanup BEFORE gl.stop()
-                # This prevents WinError 32 when gl.stop() tries to delete chrome_debug.log
-                print(f"[GOLOGIN] Waiting for Chrome process to cleanup before gl.stop()...")
-                chrome_cleaned = self._wait_for_chrome_cleanup(profile_id, max_wait=20)
-        
-                if not chrome_cleaned:
-                    print(f"[GOLOGIN] ⚠ Chrome still running after 20s wait")
-                    print(f"[GOLOGIN] → Proceeding with gl.stop() anyway (may get warnings)")
-                    # DO NOT force kill here - let gl.stop() try to sync first
-                else:
-                    print(f"[GOLOGIN] ✓ Chrome cleaned up, proceeding with gl.stop()...")
-                # =====================================================
-        
-                print(f"[GOLOGIN] Closing browser and syncing data to cloud...")
-                gl.stop()
-                stop_result["success"] = True
-                stop_result["message"] = "Profile stopped successfully"
-                print(f"[GOLOGIN] ✓ gl.stop() completed")
-            except Exception as stop_err:
-                print(f"[GOLOGIN] ⚠ Stop error: {stop_err}")
-                stop_result["success"] = False
-                stop_result["message"] = str(stop_err)
-            finally:
-                stop_result["completed"] = True
+            max_retries = 3
+            retry_delay = 5  # seconds between retries
+            for attempt in range(1, max_retries + 1):
+                try:                                 
+                    print(f"[GOLOGIN] Attempt {attempt}/{max_retries}: Closing browser and syncing data to cloud...")
+                    gl.stop()
+                    stop_result["success"] = True
+                    stop_result["message"] = "Profile stopped successfully"
+                    print(f"[GOLOGIN] ✓ gl.stop() {profile_id} completed successfully on attempt {attempt}")
+                    
+                    # ========== NEW: FORCE KILL CHROME IMMEDIATELY ==========
+                    # CRITICAL: gl.stop() may not kill Chrome subprocesses!
+                    # Kill immediately to release DB locks for other profiles
+                    # print(f"[GOLOGIN] Force killing Chrome to release file locks...")
+                    # time.sleep(2)  # Let SDK finish file operations
+                    # self._force_kill_browser_processes(profile_id)
+                    # print(f"[GOLOGIN] ✓ Chrome killed, DB locks released")
+                    
+                    break  # Success - exit retry loop
+                except Exception as stop_err:
+                    # ========== LAST ATTEMPT FAILED ==========
+                    if attempt >= max_retries:
+                        # All retries exhausted
+                        stop_result["success"] = False
+                        stop_result["message"] = f"Failed after {max_retries} attempts: {stop_err}"
+                        print(f"[GOLOGIN] ✗ All {max_retries} attempts failed")
+                        break  # ← Exit loop after last attempt
+                    time.sleep(retry_delay)
+                finally:
+                    # ========== ALWAYS SET COMPLETED (CRITICAL!) ==========
+                    stop_result["completed"] = True  # ← MOVED TO FINALLY!
 
     
         # Run gl.stop() in separate thread with 60s timeout
-        stop_thread = threading.Thread(target=_stop_internal, daemon=True)
+        stop_thread = threading.Thread(target=_stop_internal, daemon=False)
         stop_thread.start()
         print(f"[GOLOGIN] Waiting for gl.stop() to complete (max 60s)...")
         stop_thread.join(timeout=60)
@@ -255,21 +260,19 @@ class GoLoginAPI:
             if stop_result["success"]:
                 # gl.stop() completed successfully
                 print(f"[GOLOGIN] ✓ gl.stop() completed successfully")
-                print(f"[GOLOGIN] Waiting 10s for cloud sync to complete...")
-                time.sleep(10)
-           
-            
-                # Check if browser processes still exist (shouldn't happen)
+                print(f"[GOLOGIN] Waiting 5s for cloud sync to complete...")
+                time.sleep(5)
+        
+                # Check if browser processes still exist
                 try:
                     import psutil
                     profile_folder = f"gologin_{profile_id}".lower()
                     browser_still_running = False
-                
+            
                     for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
                         try:
                             proc_name = proc.info['name'].lower() if proc.info['name'] else ''
                             is_browser = any(name in proc_name for name in ['orbita', 'chrome', 'chromium'])
-                        
                             if is_browser and proc.info['cmdline']:
                                 cmdline = ' '.join(proc.info['cmdline']).lower()
                                 if profile_folder in cmdline:
@@ -278,24 +281,68 @@ class GoLoginAPI:
                                     break
                         except:
                             pass
-                
+            
                     if browser_still_running:
-                        print(f"[GOLOGIN] ⚠ Browser didn't close naturally, force killing...")
+                        print(f"[GOLOGIN] Force killing remaining browser processes...")
                         self._force_kill_browser_processes(profile_id)
                     else:
-                        print(f"[GOLOGIN] ✓ Browser closed naturally, no need to force kill")
-                    
+                        print(f"[GOLOGIN] ✓ Browser closed naturally")
+                        # Cleanup leftover files manually (no force kill needed)
+                        self._cleanup_temp_files(profile_id)
                 except Exception as verify_err:
                     print(f"[GOLOGIN] ⚠ Verification warning: {verify_err}")
-        
+    
             else:
                 # gl.stop() completed but with error
-                print(f"[GOLOGIN] ⚠ gl.stop() completed with error: {stop_result['message']}")
-                print(f"[GOLOGIN] Force killing browser processes...")
-                try:
-                    self._force_kill_browser_processes(profile_id)
-                except Exception as kill_err:
-                    print(f"[GOLOGIN] ⚠ Force kill error: {kill_err}")
+                error_msg = stop_result['message']
+        
+                # Check if error is ONLY WinError 32 on *_upload.zip (NON-CRITICAL)
+                is_upload_zip_lock = ("WinError 32" in error_msg or "being used by another process" in error_msg) and "_upload.zip" in error_msg
+        
+                if is_upload_zip_lock:
+                    # This is acceptable - cookies already synced, just file cleanup issue
+                    print(f"[GOLOGIN] ℹ gl.stop() completed with file lock warning (non-critical)")
+                    print(f"[GOLOGIN] → Cookies synced successfully, only temp file cleanup pending")
+            
+                    # Still check if browser closed
+                    print(f"[GOLOGIN] Checking if browser closed...")
+                    time.sleep(3)
+            
+                    try:
+                        import psutil
+                        profile_folder = f"gologin_{profile_id}".lower()
+                        browser_running = False
+                
+                        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                            try:
+                                proc_name = proc.info['name'].lower() if proc.info['name'] else ''
+                                if 'chrome' in proc_name and proc.info['cmdline']:
+                                    cmdline = ' '.join(proc.info['cmdline']).lower()
+                                    if profile_folder in cmdline:
+                                        browser_running = True
+                                        break
+                            except:
+                                pass
+                
+                        if browser_running:
+                            print(f"[GOLOGIN] Browser still running, force killing...")
+                            self._force_kill_browser_processes(profile_id)
+                        else:
+                            print(f"[GOLOGIN] ✓ Browser already closed")
+                            # Cleanup files with retry (after Chrome closed)
+                            self._cleanup_temp_files(profile_id)
+                    
+                    except Exception as e:
+                        print(f"[GOLOGIN] ⚠ Cleanup error: {e}")
+                else:
+                    # Other errors - force kill needed
+                    print(f"[GOLOGIN] ⚠ gl.stop() error: {error_msg}")
+                    print(f"[GOLOGIN] Force killing browser processes...")
+                    try:
+                        self._force_kill_browser_processes(profile_id)
+                    except Exception as kill_err:
+                        print(f"[GOLOGIN] ⚠ Force kill error: {kill_err}")
+
     
         # Remove from active profiles
         try:
@@ -312,65 +359,71 @@ class GoLoginAPI:
             return True, f"Stopped with warnings: {stop_result['message']}"
 
 
-    def _wait_for_chrome_cleanup(self, profile_id, max_wait=20):
+    def _cleanup_temp_files(self, profile_id, max_retries=5):
         """
-        Wait for Chrome processes to cleanup BEFORE calling gl.stop()
-        This prevents WinError 32 (file locked by process)
+        Cleanup temp files WITHOUT force killing browser
+        Used when browser already closed naturally
     
         Args:
-            profile_id: Profile ID to check
-            max_wait: Max seconds to wait (default 20s)
-    
-        Returns:
-            bool: True if Chrome cleaned up, False if still running after timeout
+            profile_id: Profile ID
+            max_retries: Max retry attempts for locked files
         """
         try:
-            import psutil
-            import time
+            import shutil
+            print(f"[GOLOGIN] [{profile_id}] Cleaning up temp files...")
         
-            profile_folder = f"gologin_{profile_id}".lower()
-            print(f"[GOLOGIN] [{profile_id}] Verifying Chrome process cleanup...")
+            profile_temp_path = os.path.join(self.tmpdir, f"gologin_{profile_id}")
+            upload_zip_path = os.path.join(self.tmpdir, f"gologin_{profile_id}_upload.zip")
+            debug_log = os.path.join(profile_temp_path, "chrome_debug.log")
         
-            cleanup_start = time.time()
-            chrome_terminated = False
-        
-            while time.time() - cleanup_start < max_wait:
-                # Check if any Chrome process for this profile is still running
-                chrome_running = False
-            
-                for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-                    try:
-                        proc_name = proc.info['name'].lower() if proc.info['name'] else ''
-                        if proc_name in ['chrome.exe', 'chrome']:
-                            cmdline = proc.info.get('cmdline', [])
-                            if cmdline:
-                                cmdline_str = ' '.join(cmdline).lower()
-                                if profile_folder in cmdline_str:
-                                    chrome_running = True
-                                    break
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        continue
-            
-                if not chrome_running:
-                    elapsed = time.time() - cleanup_start
-                    print(f"[GOLOGIN] [{profile_id}] ✓ Chrome process cleaned up after {elapsed:.1f}s")
-                    chrome_terminated = True
-                    break
-            
-                # Still running, wait a bit
-                time.sleep(1)
-        
-            if not chrome_terminated:
-                print(f"[GOLOGIN] [{profile_id}] ⚠ Chrome process still running after {max_wait}s")
-                return False
-        
-            # Extra safety wait for file handles to release
+            # Wait for file handles to release
             time.sleep(2)
-            return True
+        
+            # 1. Cleanup chrome_debug.log
+            if os.path.exists(debug_log):
+                for attempt in range(3):
+                    try:
+                        os.remove(debug_log)
+                        print(f"[GOLOGIN] [{profile_id}] ✓ Deleted chrome_debug.log")
+                        break
+                    except PermissionError:
+                        if attempt < 2:
+                            time.sleep(2)
+                        else:
+                            print(f"[GOLOGIN] [{profile_id}] ⚠ Could not delete chrome_debug.log (non-critical)")
+        
+            # 2. Cleanup *_upload.zip with retry
+            if os.path.exists(upload_zip_path):
+                for attempt in range(max_retries):
+                    try:
+                        os.remove(upload_zip_path)
+                        print(f"[GOLOGIN] [{profile_id}] ✓ Deleted upload.zip")
+                        break
+                    except PermissionError:
+                        if attempt < max_retries - 1:
+                            wait_time = 2 + attempt  # 2s, 3s, 4s, 5s, 6s
+                            print(f"[GOLOGIN] [{profile_id}] ⚠ upload.zip locked (attempt {attempt + 1}/{max_retries}), waiting {wait_time}s...")
+                            time.sleep(wait_time)
+                        else:
+                            print(f"[GOLOGIN] [{profile_id}] ⚠ Could not delete upload.zip (non-critical)")
+        
+            # 3. Cleanup profile folder
+            if os.path.exists(profile_temp_path):
+                for attempt in range(3):
+                    try:
+                        shutil.rmtree(profile_temp_path)
+                        print(f"[GOLOGIN] [{profile_id}] ✓ Deleted profile folder")
+                        break
+                    except PermissionError:
+                        if attempt < 2:
+                            time.sleep(2)
+                        else:
+                            print(f"[GOLOGIN] [{profile_id}] ⚠ Could not delete profile folder (non-critical)")
+        
+            print(f"[GOLOGIN] [{profile_id}] ✓ Temp file cleanup completed")
         
         except Exception as e:
-            print(f"[GOLOGIN] [{profile_id}] ⚠ Chrome cleanup check error: {e}")
-            return True  # Continue anyway
+            print(f"[GOLOGIN] [{profile_id}] Cleanup temp files error: {e}")
 
         
     def _force_kill_browser_processes(self, profile_id):
@@ -390,7 +443,7 @@ class GoLoginAPI:
             for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'exe']):
                 try:
                     proc_name = proc.info['name'].lower() if proc.info['name'] else ''
-                
+                    pid = proc.info['pid']
                     # ONLY kill chrome.exe (NOT gologin.exe)
                     if proc_name != 'chrome.exe':
                         continue
@@ -404,7 +457,9 @@ class GoLoginAPI:
                 
                     # Check if belongs to this profile
                     belongs_to_profile = profile_folder in cmdline_str
+                    
                     if not belongs_to_profile:
+                      
                         continue
                 
                     # Additional safety: Must be GoLogin Orbita
@@ -414,14 +469,17 @@ class GoLoginAPI:
                         ('.gologin' in cmdline_str and 'orbita' in cmdline_str)
                     )
                 
+                  
+                
                     if not is_gologin_orbita:
+                     
                         continue
                 
                     # Verify user-data-dir or profile-directory flag
                     has_profile_flag = (
                         '--user-data-dir' in cmdline_str or
                         '--profile-directory' in cmdline_str
-                    )
+                    )                 
                 
                     if not has_profile_flag:
                         continue
@@ -431,7 +489,7 @@ class GoLoginAPI:
                     proc.kill()
                     killed_count += 1
                 
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                except (psutil.NoSuchProcess, psutil.AccessDenied):                   
                     pass
         
             if killed_count > 0:

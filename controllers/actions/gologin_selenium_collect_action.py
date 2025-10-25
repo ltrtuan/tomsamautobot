@@ -294,100 +294,20 @@ class GoLoginSeleniumCollectAction(BaseAction):
             return False
     
         finally:
-            # ========== CRITICAL: PROPER CLEANUP SEQUENCE ==========
+            # ========== USE CENTRALIZED CLEANUP ==========
             print(f"[GOLOGIN WARMUP] [{profile_id}] Running cleanup...")
-            
-            # Step 1: Close extra tabs
-            if driver:
+    
+            if driver and gologin:
                 try:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] Closing extra tabs before shutdown...")
-                    GoLoginProfileHelper.cleanup_browser_tabs(driver, "[GOLOGIN WARMUP]")
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Tabs cleaned up")
-                except Exception as tab_err:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Tab cleanup warning: {tab_err}")
-            
-            # Step 2: Wait for browser to flush cookies/history
-            print(f"[GOLOGIN WARMUP] [{profile_id}] Waiting for browser to flush cookies/history...")
-            time.sleep(5)
-            
-            # Step 3: Unregister and quit driver
-            if driver:
-                try:
-                    unregister_selenium_driver(profile_id)
-                    driver.quit()
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Selenium disconnected")
+                    GoLoginProfileHelper.cleanup_profiles(
+                        profile_data={"profile_id": profile_id, "driver": driver},
+                        gologin_api=gologin,
+                        log_prefix="[GOLOGIN WARMUP]"
+                    )
                 except Exception as cleanup_err:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Selenium disconnect warning: {cleanup_err}")
-                finally:
-                    driver = None
-            
-            # Step 4: Wait for Chrome process cleanup
-            print(f"[GOLOGIN WARMUP] [{profile_id}] Waiting for Chrome process cleanup...")
-            time.sleep(10)  # Increased from 15s → 10s (still enough)
-            
-            # Step 5: TRY SDK stop FIRST (for data sync to cloud)
-            stop_success = False
-            if gologin:
-                try:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] Stopping profile via SDK (syncing data to cloud)...")
-                  
-                    success, msg = gologin.stop_profile(profile_id)
-                    if success:
-                        print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Profile stopped and data synced")
-                        stop_success = True
-                    else:
-                        print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ SDK stop returned error: {msg}")
-                        stop_success = False
-                            
-                except Exception as stop_err:
-                    error_msg = str(stop_err)
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ SDK stop exception: {error_msg}")
-                    stop_success = False
-                    
-                    # Check if error is "file locked" (chrome_debug.log)
-                    is_file_locked = ('winerror 32' in error_msg.lower() or 
-                                     'being used by another process' in error_msg.lower() or
-                                     'chrome_debug.log' in error_msg.lower())
-                    
-                    if is_file_locked:
-                        print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ File locked error (chrome_debug.log) detected!")
-                        print(f"[GOLOGIN WARMUP] [{profile_id}] → Forcing process kill and retry...")
-                        
-                        # ONLY NOW kill processes (after SDK stop failed)
-                        try:                           
-                            
-                            # RETRY SDK stop
-                            try:
-                                print(f"[GOLOGIN WARMUP] [{profile_id}] Retrying SDK stop...")
-                           
-                                success, msg = gologin.stop_profile(profile_id)
-                                if success:
-                                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Profile stopped (retry successful)")
-                                    stop_success = True
-                                else:
-                                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Retry failed: {msg}")
-                            except Exception as retry_err:
-                                print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Retry exception: {retry_err}")
-                                
-                        except Exception as kill_err:
-                            print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Kill zombie error: {kill_err}")
-            
-            
-            # Step 6: Final force cleanup (only if SDK stop completely failed)
-            if not stop_success:
-                print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ SDK stop failed, retry one more time...")
-                try:
-                    time.sleep(3)  # Extra wait
-                    success, msg = gologin.stop_profile(profile_id)  # API will handle force kill + cleanup
-                    if success:
-                        print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Final retry successful")
-                    else:
-                        print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Final retry failed: {msg}")
-                except Exception as final_err:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Final retry error: {final_err}")
-
-            
-            print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Cleanup completed")
+                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✗ Cleanup error: {cleanup_err}")
+                    import traceback
+                    traceback.print_exc()
 
     
     def _warmup_parallel(self, profile_list, api_token):
@@ -432,7 +352,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
                     time.sleep(2)  # Stagger submissions
                 
                 future = executor.submit(
-                    self._warmup_single_profile_with_focus, 
+                    self._warmup_single_profile, 
                     profile_id, 
                     api_token
                 )
@@ -509,31 +429,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
         
         self.set_variable(success_count > 0)
     
-    def _warmup_single_profile_with_focus(self, profile_id, api_token):
-        """
-        Warm up single profile and bring to front (for parallel mode)
-        
-        Args:
-            profile_id: Profile ID to warm up
-            api_token: GoLogin API token
-            
-        Returns:
-            bool: True if successful
-        """
-        try:
-            # Warm up profile normally
-            success = self._warmup_single_profile(profile_id, api_token)
-            
-            if not success:
-                return False            
-           
-            time.sleep(1)
-            
-            return True
-        
-        except Exception as e:
-            print(f"[GOLOGIN WARMUP] [{profile_id}] Error in parallel warmup: {e}")
-            return False  
+    
     
     def _search_on_site(self, driver, url, keywords):
         """Perform search if on Google or YouTube"""

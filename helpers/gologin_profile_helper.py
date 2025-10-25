@@ -7,6 +7,7 @@ import threading
 import time
 _chromedriver_lock = threading.Lock()
 _window_focus_lock = threading.Lock()
+_cleanup_lock = threading.Lock()
 class GoLoginProfileHelper:
     """Helper class for common GoLogin profile operations"""
      # ========== THÊM CLASS VARIABLES ĐỂ CACHE ==========
@@ -272,6 +273,205 @@ class GoLoginProfileHelper:
         except Exception as e:
             print(f"{log_prefix} ⚠ Tab cleanup error: {e}")
             return False
+        
+    @staticmethod
+    def cleanup_profiles(profile_data, gologin_api, log_prefix="[CLEANUP]"):
+        """
+        Cleanup profiles: tabs → flush → unregister → quit → wait → stop SDK
+    
+        Unified method for both single profile and batch profiles cleanup.
+        Can be called from Start action, Collect action, or any other action.
+    
+        Args:
+            profile_data: Can be either:
+                          1. Single dict: {"profile_id": "xxx", "driver": driver_instance}
+                          2. Batch dict: {
+                               "profile_id_1": {"status": "opened", "driver": driver1, ...},
+                               "profile_id_2": {"status": "opened", "driver": driver2, ...}
+                             }
+            gologin_api: GoLoginAPI instance for stop_profile()
+            log_prefix: Prefix for log messages (default: "[CLEANUP]")
+    
+        Returns:
+            dict: {profile_id: cleanup_success_bool, ...}
+        """
+        from helpers.selenium_registry import unregister_selenium_driver
+        import time
+    
+        cleanup_results = {}
+    
+        # ========== NORMALIZE INPUT TO BATCH FORMAT ==========
+        # Convert single profile to batch format for unified processing
+        if "profile_id" in profile_data and "driver" in profile_data:
+            # Single profile format: {"profile_id": "xxx", "driver": driver}
+            profile_id = profile_data["profile_id"]
+            profiles_to_cleanup = {
+                profile_id: {
+                    "driver": profile_data["driver"],
+                    "status": "opened"
+                }
+            }
+            print(f"{log_prefix} Single profile cleanup: {profile_id}")
+        else:
+            # Batch format: {profile_id: {status, driver, ...}, ...}
+            profiles_to_cleanup = profile_data
+            print(f"{log_prefix} Batch cleanup: {len(profiles_to_cleanup)} profile(s)")
+    
+        # ========== CLEANUP EACH PROFILE ==========
+        for profile_id, data in profiles_to_cleanup.items():
+            # Skip profiles that didn't open successfully
+            if data.get('status') not in ['opened', None]:  # None for single profile
+                print(f"{log_prefix}[{profile_id}] Skipping (status: {data.get('status')})")
+                cleanup_results[profile_id] = False
+                continue
+        
+            driver_in_loop = data.get('driver')
+            if not driver_in_loop:
+                print(f"{log_prefix}[{profile_id}] ⚠ No driver found, skipping")
+                cleanup_results[profile_id] = False
+                continue
+        
+            try:
+                print(f"{log_prefix}[{profile_id}] Starting cleanup sequence...")
+            
+                # ========== STEP 1: CLEANUP EXTRA TABS ==========
+                print(f"{log_prefix}[{profile_id}] Step 1/6: Closing extra tabs...")
+                try:
+                    GoLoginProfileHelper.cleanup_browser_tabs(driver_in_loop, f"{log_prefix}[{profile_id}]")
+                    print(f"{log_prefix}[{profile_id}] ✓ Tabs cleaned up")
+                    time.sleep(2)  # Wait for tab cleanup
+                except Exception as tab_err:
+                    print(f"{log_prefix}[{profile_id}] ⚠ Tab cleanup warning: {tab_err}")
+            
+                # ========== STEP 2: WAIT FOR BROWSER FLUSH ==========
+                print(f"{log_prefix}[{profile_id}] Step 2/6: Waiting for browser to flush cookies/history...")
+                time.sleep(3)  # Allow browser to write to disk
+            
+                # ========== STEP 3: UNREGISTER SELENIUM DRIVER ==========
+                print(f"{log_prefix}[{profile_id}] Step 3/6: Unregistering Selenium driver...")
+                try:
+                    unregister_selenium_driver(profile_id)
+                    print(f"{log_prefix}[{profile_id}] ✓ Driver unregistered")
+                except Exception as unreg_err:
+                    print(f"{log_prefix}[{profile_id}] ⚠ Failed to unregister: {unreg_err}")
+            
+                # ========== STEP 4: QUIT SELENIUM DRIVER (ENHANCED FOR GRACEFUL SHUTDOWN) ==========
+                print(f"{log_prefix}[{profile_id}] Step 4/6: Quitting Selenium driver...")
+                try:
+                    # # ========== 4A: NAVIGATE TO BLANK PAGE ==========
+                    # # Unload all page resources to help Chrome cleanup faster
+                    # try:
+                    #     print(f"{log_prefix}[{profile_id}] Navigating to about:blank to unload resources...")
+                    #     driver.get("about:blank")
+                    #     time.sleep(1)  # Let page unload
+                    # except Exception as blank_err:
+                    #     print(f"{log_prefix}[{profile_id}] ℹ Navigate to blank warning: {blank_err}")
+    
+                    # # ========== 4B: WAIT FOR CHROME TO FLUSH COOKIES ==========
+                    # # Give Chrome time to write cookies/cache to disk BEFORE quit
+                    # print(f"{log_prefix}[{profile_id}] Waiting 5s for Chrome to flush cookies/cache...")
+                    # time.sleep(5)
+    
+                    # ========== 4C: QUIT DRIVER ==========
+                    driver_in_loop.quit()
+                    print(f"{log_prefix}[{profile_id}] ✓ Driver quit")
+    
+                except Exception as quit_err:
+                    print(f"{log_prefix}[{profile_id}] ⚠ Driver quit error: {quit_err}")
+
+                # ========== 4D: TERMINATE CHROMEDRIVER PROCESS ==========
+                # Ensure chromedriver process is killed
+                # try:
+                #     if hasattr(driver, 'service') and driver.service and hasattr(driver.service, 'process'):
+                #         if driver.service.process:
+                #             driver.service.process.terminate()
+                #             print(f"{log_prefix}[{profile_id}] ✓ Chromedriver process terminated")
+                # except Exception as terminate_err:
+                #     print(f"{log_prefix}[{profile_id}] ℹ Chromedriver terminate: {terminate_err}")
+
+            
+                # ========== STEP 5: WAIT FOR CHROME CLEANUP ==========
+                # CRITICAL: Wait 10 seconds for Chrome to release file handles
+                # This prevents WinError 32 when gl.stop() tries to cleanup files
+                print(f"{log_prefix}[{profile_id}] Step 5/6: Waiting 10s for Driver Quittttttttttttttttttttttttttttttttttttttttt...")
+                time.sleep(10)
+                
+                # # ========== STEP 6: STOP PROFILE VIA GOLOGIN SDK ==========
+                # print(f"{log_prefix}[{profile_id}] Step 6/6: Stopping profile via GoLogin SDK...")
+                # try:
+                #     success = gologin_api.stop_profile(profile_id)
+                #     if success:
+                #         print(f"{log_prefix}[{profile_id}] ✓ Profile stopped via SDK")
+                #         cleanup_results[profile_id] = True
+                #     else:
+                #         print(f"{log_prefix}[{profile_id}] ⚠ Profile stop returned False")
+                #         cleanup_results[profile_id] = True  # Still consider success if cookies synced
+                
+                # except Exception as stop_err:
+                #     error_msg = str(stop_err)
+                
+                #     # WinError 32 on *_upload.zip is non-critical (cookies synced)
+                #     if "WinError 32" in error_msg and "_upload.zip" in error_msg:
+                #         print(f"{log_prefix}[{profile_id}] ℹ Stop completed with file lock (non-critical)")
+                #         cleanup_results[profile_id] = True
+                #     else:
+                #         print(f"{log_prefix}[{profile_id}] ✗ Failed to stop: {stop_err}")
+                #         cleanup_results[profile_id] = False
+            
+                # print(f"{log_prefix}[{profile_id}] ✓ Cleanup completed")
+
+
+                # ========== STEP 6: STOP PROFILE VIA GOLOGIN SDK (WITH LOCK) ==========
+                print(f"{log_prefix}[{profile_id}] Step 6/6: Stopping profile via GoLogin SDK...")
+
+                # ========== CRITICAL: LOCK CLEANUP TO PREVENT DB CONFLICTS ==========
+                # When multiple profiles cleanup simultaneously, Chrome subprocesses
+                # may not release DB file handles fast enough, causing "unable to open
+                # database file" errors. Serialize gl.stop() calls to avoid this.            
+    
+                try:
+                    # Call GoLogin stop (now protected by lock)
+                    # Returns: (success: bool, message: str)
+                    result = gologin_api.stop_profile(profile_id)
+        
+                    # Handle tuple return
+                    if result:
+                        if isinstance(result, tuple):
+                            success, message = result
+                            if success:
+                                print(f"{log_prefix}[{profile_id}] ✓ Profile stopped via SDK")
+                            else:
+                                print(f"{log_prefix}[{profile_id}] ⚠ Stop warning: {message}")
+                        else:
+                            # Fallback for unexpected return type
+                            print(f"{log_prefix}[{profile_id}] ✓ Profile stopped (unexpected return type)")
+                    else:
+                        print(f"{log_prefix}[{profile_id}] ⚠ Stop warning: No response from SDK")
+            
+                except Exception as stop_err:
+                    print(f"{log_prefix}[{profile_id}] ⚠ Stop error: {stop_err}")
+    
+                finally:
+                    # ========== WAIT BEFORE RELEASING LOCK ==========
+                    # Give Chrome extra time to release file handles before
+                    # next profile tries to stop
+                    print(f"{log_prefix}[{profile_id}] Waiting 3s for file handles to release...")
+                    time.sleep(3)
+
+
+                print(f"{log_prefix}[{profile_id}] ✓ Cleanup completed")
+
+            
+            except Exception as e:
+                print(f"{log_prefix}[{profile_id}] ✗ Cleanup error: {e}")
+                import traceback
+                traceback.print_exc()
+                cleanup_results[profile_id] = False
+    
+        print(f"{log_prefix} ✓ All profiles cleanup completed")
+        return cleanup_results
+
+
     
     @staticmethod
     def get_chrome_version_from_debugger(debugger_address, log_prefix="[GOLOGIN]"):

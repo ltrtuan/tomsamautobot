@@ -578,7 +578,7 @@ class GoLoginSeleniumStartAction(BaseAction):
             keywords = GoLoginProfileHelper.load_keywords(self.params, "[PARALLEL]")
             if not keywords:
                 print("[PHASE 2] ✗ Failed to load keywords")
-                self._cleanup_profiles(profile_data)
+                GoLoginProfileHelper.cleanup_profiles(profile_data, self.gologin_api, "[CLEANUP]")
                 self.set_variable(False)
                 return
             
@@ -642,10 +642,12 @@ class GoLoginSeleniumStartAction(BaseAction):
                     flow = flow_iterators[profile_id]
                 
                     # Check if profile completed all chains
-                    if not flow.has_next_chain():  # ← ĐÚNG: dùng has_next_chain()
+                    if not flow.has_next_chain():
                         print(f"[BATCH {batch_num}][ROUND {round_num}][{profile_id}] ✓ All chains completed")
-                        profiles_to_remove.append(profile_id)
+                        profiles_to_remove.append(profile_id)                           
+    
                         continue
+
                 
                     # Show progress
                     progress = flow.get_progress()
@@ -684,8 +686,12 @@ class GoLoginSeleniumStartAction(BaseAction):
                     print(f"[BATCH {batch_num}][ROUND {round_num}][{profile_id}] >>> LOCK RELEASED <<<\n")
             
                 # Remove completed/failed profiles
-                for profile_id in profiles_to_remove:
-                    active_profiles.remove(profile_id)
+                # for profile_id in profiles_to_remove:
+                #     active_profiles.remove(profile_id)
+                # Convert to set for O(1) lookup
+                profiles_to_remove_set = set(profiles_to_remove)
+                active_profiles = [pid for pid in active_profiles if pid not in profiles_to_remove_set]
+
         
             print()
             print("=" * 80)
@@ -693,54 +699,24 @@ class GoLoginSeleniumStartAction(BaseAction):
             print("=" * 80)
             print()
         
-            # ========== PHASE 4: CLEANUP BATCH PROFILES ==========
-            print(f"[BATCH {batch_num}][PHASE 4] Cleaning up {len(opened_profiles)} profile(s) (max {max_parallel_profiles} concurrent)...")
-        
-            cleanup_results = {}
-            cleanup_lock = threading.Lock()
-        
-            def cleanup_profile_thread(profile_id):
-                """Thread function to cleanup 1 profile"""
-                try:
-                    # Call existing cleanup method
-                    single_profile_data = {profile_id: profile_data[profile_id]}
-                    self._cleanup_profiles(single_profile_data)
-                
-                    with cleanup_lock:
-                        cleanup_results[profile_id] = 'success'
-                
-                except Exception as e:
-                    print(f"[BATCH {batch_num}][CLEANUP][{profile_id}] ✗ Cleanup exception: {e}")
-                    with cleanup_lock:
-                        cleanup_results[profile_id] = 'error'
-        
-            # Use ThreadPoolExecutor to cleanup profiles
-            executor = ThreadPoolExecutor(max_workers=max_parallel_profiles)
-            try:
-                future_to_profile = {}
-                for profile_id in opened_profiles:
-                    future = executor.submit(cleanup_profile_thread, profile_id)
-                    future_to_profile[future] = profile_id
             
-                # Wait for all to complete
-                for future in as_completed(future_to_profile):
-                    profile_id = future_to_profile[future]
-                    try:
-                        future.result()
-                    except Exception as e:
-                        print(f"[BATCH {batch_num}][PHASE 4] ✗ Cleanup thread for {profile_id} raised exception: {e}")
-        
-            finally:
-                executor.shutdown(wait=True)
-                print(f"[BATCH {batch_num}][PHASE 4] ✓ Thread pool shut down")
-        
-            # Update totals
-            total_success += len([r for r in cleanup_results.values() if r == 'success'])
-            total_failed += len(failed_profiles) + len([r for r in cleanup_results.values() if r == 'error'])
-        
-            print(f"\n[BATCH {batch_num}] ✓ Batch completed")
-            print("=" * 80)
-            print()
+            # ========== PHASE 4: CLEANUP TẤT CẢ (KHÔNG KIỂM TRA 'cleaned_up'!) ==========
+            print(f"[BATCH {batch_num}][PHASE 4] Cleaning up {len(opened_profiles)} profile(s)...")
+
+            # Use centralized helper method (handles all profiles sequentially with proper wait times)
+            cleanup_results = GoLoginProfileHelper.cleanup_profiles(
+                profile_data={pid: profile_data[pid] for pid in opened_profiles},
+                gologin_api=self.gologin_api,
+                log_prefix=f"[BATCH {batch_num}][CLEANUP]"
+            )
+
+            # Count results
+            cleanup_success = sum(1 for r in cleanup_results.values() if r)
+            print(f"[BATCH {batch_num}][PHASE 4] ✓ Cleanup completed: {cleanup_success}/{len(cleanup_results)}")
+            # Update batch statistics
+            total_success += cleanup_success
+            total_failed += (len(batch_profiles) - cleanup_success)
+
     
         # ========== FINAL SUMMARY ==========
         print()
@@ -754,92 +730,6 @@ class GoLoginSeleniumStartAction(BaseAction):
     
         # Set result variable
         self.set_variable(True)
-
-
-    def _cleanup_profiles(self, profile_data):
-        """
-        Helper method để cleanup và close tất cả profiles
-        
-        NEW PROCESS (FIX "folder locked" issue):
-        1. Close browser physically (click X button) - Ensures browser process closes
-        2. Unregister Selenium driver
-        3. Quit driver (Selenium cleanup)
-        4. Wait 5 seconds for full cleanup
-        5. Stop profile via GoLogin SDK
-        6. Kill remaining zombie processes
-        
-        Args:
-            profile_data: Dict chứa profile data với format:
-                {profile_id: {'driver': ..., 'debugger_address': ..., 'status': ...}}
-        """
-        print("\n[CLEANUP] Starting profile cleanup...")
-        
-        for profile_id, data in profile_data.items():
-            # Chỉ cleanup profiles đã mở thành công
-            if data.get('status') != 'opened':
-                continue
-            
-            try:
-                log_prefix = f"[CLEANUP][{profile_id}]"
-                print(f"{log_prefix} Closing profile...")
-                
-                # ========== STEP 1: CLOSE BROWSER PHYSICALLY ==========
-                # This ensures browser window closes properly before SDK cleanup
-                # print(f"{log_prefix} Step 1: Closing browser physically (click X button)...")
-                # try:
-                #     close_success = GoLoginProfileHelper.close_browser_physically(
-                #         profile_id=profile_id,
-                #         driver=data.get('driver'),
-                #         log_prefix=log_prefix
-                #     )
-                    
-                #     if close_success:
-                #         print(f"{log_prefix} ✓ Browser closed physically")
-                #     else:
-                #         print(f"{log_prefix} ⚠ Physical close failed, continuing with SDK cleanup")
-                        
-                # except Exception as e:
-                #     print(f"{log_prefix} ⚠ Physical close error: {e}, continuing...")
-                
-                # ========== STEP 2: UNREGISTER DRIVER ==========
-                print(f"{log_prefix} Step 2: Unregistering Selenium driver...")
-                try:
-                    unregister_selenium_driver(profile_id)
-                    print(f"{log_prefix} ✓ Driver unregistered")
-                except Exception as e:
-                    print(f"{log_prefix} ⚠ Failed to unregister driver: {e}")
-                
-                # ========== STEP 3: QUIT DRIVER ==========
-                print(f"{log_prefix} Step 3: Quitting Selenium driver...")
-                if 'driver' in data:
-                    try:
-                        data['driver'].quit()
-                        print(f"{log_prefix} ✓ Driver quit")
-                    except Exception as e:
-                        print(f"{log_prefix} ⚠ Failed to quit driver: {e}")
-                
-                # ========== STEP 4: WAIT FOR CLEANUP ==========
-                # Critical: Wait for all processes to finish cleanup
-                print(f"{log_prefix} Step 4: Waiting 5s for full cleanup...")
-                time.sleep(5)
-                
-                # ========== STEP 5: STOP PROFILE VIA SDK ==========
-                print(f"{log_prefix} Step 5: Stopping profile via GoLogin SDK...")
-                try:
-                    self.gologin_api.stop_profile(profile_id)
-                    print(f"{log_prefix} ✓ Profile stopped via SDK")
-                except Exception as e:
-                    print(f"{log_prefix} ⚠ Failed to stop profile via SDK: {e}")
-                time.sleep(5)
-               
-                print(f"{log_prefix} ✓ Cleanup completed")
-                
-            except Exception as e:
-                print(f"[CLEANUP][{profile_id}] ✗ Error during cleanup: {e}")
-                import traceback
-                traceback.print_exc()
-        
-        print("[CLEANUP] ✓ All profiles cleanup completed")
 
 
 
@@ -910,41 +800,26 @@ class GoLoginSeleniumStartAction(BaseAction):
             return False
     
         finally:
-            # ========== CLEANUP: STOP PROFILE (GIỐNG PARALLEL MODE) ==========
+            # ========== CLEANUP: STOP PROFILE ==========
             # Skip cleanup if action_type is None (keep profiles running)
             action_type = self.params.get("action_type", "None")
-    
             if action_type == "None":
                 print(f"[GOLOGIN START] [{profile_id}] ⚠ Action type is 'None', profile will remain open (no cleanup)")
                 return action_success if 'action_success' in locals() else False
     
+            # Use centralized cleanup method from helper
             if driver:
                 try:
-                    # Step 1: Unregister driver
-                    unregister_selenium_driver(profile_id)
-                    print(f"[SELENIUM REGISTRY] ✓ Driver unregistered: profile_{profile_id}")
-                except Exception as unreg_err:
-                    print(f"[SELENIUM REGISTRY] ⚠ Failed to unregister driver: {unreg_err}")
-        
-                try:
-                    # Step 2: Quit driver
-                    print(f"[CLEANUP][{profile_id}] Quitting driver...")
-                    driver.quit()
-                    print(f"[CLEANUP][{profile_id}] ✓ Driver quit")
-                except Exception as quit_err:
-                    print(f"[CLEANUP][{profile_id}] ⚠ Failed to quit driver: {quit_err}")
-        
-                # Step 3: Wait for driver cleanup
-                print(f"[CLEANUP][{profile_id}] Waiting 5s for driver cleanup...")
-                time.sleep(5)
-        
-                # Step 4: Stop profile via API
-                try:
-                    print(f"[CLEANUP][{profile_id}] Stopping profile via API...")
-                    self.gologin_api.stop_profile(profile_id)
-                    print(f"[CLEANUP][{profile_id}] ✓ Profile stopped via API")
-                except Exception as stop_err:
-                    print(f"[CLEANUP][{profile_id}] ⚠ Failed to stop profile: {stop_err}")
+                    GoLoginProfileHelper.cleanup_profiles(
+                        profile_data={"profile_id": profile_id, "driver": driver},
+                        gologin_api=self.gologin_api,
+                        log_prefix="[CLEANUP]"
+                    )
+                except Exception as cleanup_err:
+                    print(f"[CLEANUP][{profile_id}] ✗ Cleanup error: {cleanup_err}")
+                    import traceback
+                    traceback.print_exc()
+
 
 
     
