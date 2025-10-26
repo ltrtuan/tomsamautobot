@@ -575,7 +575,11 @@ class GoLoginSeleniumStartAction(BaseAction):
             print(f"[BATCH {batch_num}][PHASE 2] Creating flow iterators for opened profiles...")
             
             # Load keywords
-            keywords = GoLoginProfileHelper.load_keywords(self.params, "[PARALLEL]")
+            keywords_suffix_prefix = self.params.get("keywords_suffix_prefix", "").strip()
+            keywords_youtube = GoLoginProfileHelper.load_keywords(self.params, "[Get Youtube Keywords]")
+            keywords_google = GoLoginProfileHelper.load_keywords(self.params, "[Get Google Keywords]", "Google")
+            keywords = {"keywords_youtube" : keywords_youtube, "keywords_google" : keywords_google, "suffix_prefix" : keywords_suffix_prefix}
+
             if not keywords:
                 print("[PHASE 2] ✗ Failed to load keywords")
                 GoLoginProfileHelper.cleanup_profiles(profile_data, self.gologin_api, "[CLEANUP]")
@@ -644,8 +648,7 @@ class GoLoginSeleniumStartAction(BaseAction):
                     # Check if profile completed all chains
                     if not flow.has_next_chain():
                         print(f"[BATCH {batch_num}][ROUND {round_num}][{profile_id}] ✓ All chains completed")
-                        profiles_to_remove.append(profile_id)                           
-    
+                        profiles_to_remove.append(profile_id)
                         continue
 
                 
@@ -826,18 +829,22 @@ class GoLoginSeleniumStartAction(BaseAction):
     def _execute_action(self, driver, profile_id, action_type, debugger_address):
         """Execute action based on type"""
         try:
+            keywords_suffix_prefix = self.params.get("keywords_suffix_prefix", "").strip()
+            keywords_youtube = GoLoginProfileHelper.load_keywords(self.params, "[Get Youtube Keywords]")
+            keywords_google = GoLoginProfileHelper.load_keywords(self.params, "[Get Google Keywords]", "Google")
+            keywords = {"keywords_youtube" : keywords_youtube, "keywords_google" : keywords_google, "suffix_prefix" : keywords_suffix_prefix}
+            
             if action_type == "None":
                 print(f"[GOLOGIN START] [{profile_id}] No action required")
                 return True
             
             elif action_type == "Youtube":
-                keywords = GoLoginProfileHelper.load_keywords(self.params, "[GOLOGIN START]")
+                
                 if not keywords:
                     return False
                 return YouTubeFlow.execute_main_flow(driver, keywords, profile_id, debugger_address, "[GOLOGIN START]")
             
-            elif action_type == "Google":
-                keywords = GoLoginProfileHelper.load_keywords(self.params, "[GOLOGIN START]")
+            elif action_type == "Google":                
                 if not keywords:
                     return False
                 return GoogleFlow.execute_main_flow(driver, keywords, profile_id, debugger_address, "[GOLOGIN START]")

@@ -81,6 +81,7 @@
     <Compile Include="helpers\flow_google.py" />
     <Compile Include="helpers\flow_youtube.py" />
     <Compile Include="helpers\gologin_profile_helper.py" />
+    <Compile Include="helpers\keyword_variation_helper.py" />
     <Compile Include="helpers\profile_health_monitor.py" />
     <Compile Include="helpers\selenium_actions.py" />
     <Compile Include="helpers\selenium_registry.py" />

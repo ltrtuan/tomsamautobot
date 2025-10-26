@@ -128,7 +128,7 @@ class GoLoginProfileHelper:
             return random.choice(profile_list)
     
     @staticmethod
-    def load_keywords(params, log_prefix="[GOLOGIN]"):
+    def load_keywords(params, log_prefix="[GOLOGIN]", type_kw = None):
         """
         Load keywords from file with caching
     
@@ -140,17 +140,29 @@ class GoLoginProfileHelper:
             list: List of keywords
         """
         try:
-            # Get keywords file - priority: variable > direct path
             keywords_file = None
-            keywords_var = params.get("keywords_variable", "").strip()
-            if keywords_var:
-                keywords_file = GlobalVariables().get(keywords_var, "")
+            # Get keywords file - priority: variable > direct path
+            if type_kw == "Google":
+                keywords_var = params.get("keywords_google_variable", "").strip()
+                if keywords_var:
+                    keywords_file = GlobalVariables().get(keywords_var, "")
         
-            if not keywords_file:
-                keywords_file = params.get("keywords_file", "").strip()
+                if not keywords_file:
+                    keywords_file = params.get("keywords_google_file", "").strip()
         
-            if not keywords_file:
-                return []
+                if not keywords_file:
+                    return []
+            
+            else:
+                keywords_var = params.get("keywords_variable", "").strip()
+                if keywords_var:
+                    keywords_file = GlobalVariables().get(keywords_var, "")
+        
+                if not keywords_file:
+                    keywords_file = params.get("keywords_file", "").strip()
+        
+                if not keywords_file:
+                    return []
         
             import os
             if not os.path.exists(keywords_file):
@@ -703,24 +715,180 @@ class GoLoginProfileHelper:
                 return False
         # ========== LOCK RELEASED ==========
 
+    @staticmethod
+    def bring_profile_to_front(profile_id, driver=None, log_prefix="[GOLOGIN]"):
+        """
+        Bring GoLogin profile window to front AND maximize it - THREAD SAFE
+        ENHANCED: Check BOTH foreground AND maximized state before calling SW_MAXIMIZE
+        """
+        with _window_focus_lock:
+            print(f"{log_prefix} [{profile_id}] Checking window state...")
+        
+            try:
+                import psutil
+                import platform
+            
+                if platform.system() != "Windows":
+                    print(f"{log_prefix} [{profile_id}] ℹ Window control not implemented for this OS")
+                    return False
+            
+                import win32gui
+                import win32con
+                import win32process
+                import time
+            
+                # ========== FIND CHROME WINDOW FOR THIS PROFILE ==========
+                hwnd = None
+                for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                    try:
+                        cmdline = proc.info.get('cmdline', [])
+                        if not cmdline:
+                            continue
+                    
+                        cmdline_str = ' '.join(cmdline).lower()
+                    
+                        # Check if this is the main browser process for this profile
+                        if profile_id.lower() in cmdline_str and '--type=renderer' not in cmdline_str:
+                            pid = proc.info['pid']
+                        
+                            def enum_windows_callback(window_hwnd, pid_list):
+                                if win32gui.IsWindowVisible(window_hwnd):
+                                    _, found_pid = win32process.GetWindowThreadProcessId(window_hwnd)
+                                    if found_pid == pid:
+                                        pid_list.append(window_hwnd)
+                                return True
+                        
+                            windows = []
+                            win32gui.EnumWindows(enum_windows_callback, windows)
+                        
+                            if windows:
+                                hwnd = windows[0]
+                                break
+                
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        continue
+            
+                if not hwnd:
+                    print(f"{log_prefix} [{profile_id}] ⚠ Could not find browser window")
+                    return False
+            
+                # ========== CHECK CURRENT STATE ==========
+                foreground_hwnd = win32gui.GetForegroundWindow()
+                is_foreground = (foreground_hwnd == hwnd)
+            
+                # Check if window is maximized
+                placement = win32gui.GetWindowPlacement(hwnd)
+                is_maximized = (placement[1] == win32con.SW_SHOWMAXIMIZED)
+            
+                print(f"{log_prefix} [{profile_id}] State: Foreground={is_foreground}, Maximized={is_maximized}")
+            
+                # ========== STRATEGY: ONLY USE SELENIUM, AVOID SW_MAXIMIZE ==========
+                if driver:
+                    # If already foreground and maximized, skip
+                    if is_foreground and is_maximized:
+                        print(f"{log_prefix} [{profile_id}] ✓ Already perfect state, skip")
+                        time.sleep(0.3)
+                        return True
+                
+                    # Use Selenium to maximize (SAFE - doesn't affect child windows)
+                    try:
+                        driver.maximize_window()
+                        print(f"{log_prefix} [{profile_id}] ✓ Maximized via Selenium (no child window side effects)")
+                        time.sleep(0.5)
+                    except Exception as e:
+                        print(f"{log_prefix} [{profile_id}] ⚠ Selenium maximize failed: {e}")
+                
+                    # ONLY force foreground if NOT foreground (NO SW_MAXIMIZE!)
+                    if not is_foreground:
+                        try:
+                            foreground_thread = win32process.GetWindowThreadProcessId(foreground_hwnd)[0]
+                            target_thread = win32process.GetWindowThreadProcessId(hwnd)[0]
+                        
+                            if foreground_thread != target_thread:
+                                win32process.AttachThreadInput(foreground_thread, target_thread, True)
+                        
+                            # ONLY call SetForegroundWindow, NO SW_MAXIMIZE!
+                            win32gui.SetForegroundWindow(hwnd)
+                        
+                            if foreground_thread != target_thread:
+                                win32process.AttachThreadInput(foreground_thread, target_thread, False)
+                        
+                            print(f"{log_prefix} [{profile_id}] ✓ Brought to foreground (no maximize)")
+                        except Exception as force_err:
+                            print(f"{log_prefix} [{profile_id}] ⚠ Force foreground error: {force_err}")
+                    
+                        time.sleep(0.5)
+                
+                    return True
+            
+                # ========== MODE 2: NO DRIVER - USE WIN32GUI (AVOID SW_MAXIMIZE IF POSSIBLE) ==========
+                # Skip if already perfect
+                if is_foreground and is_maximized:
+                    print(f"{log_prefix} [{profile_id}] ✓ Already perfect state, skip")
+                    time.sleep(0.5)
+                    return True
+            
+                # Restore if minimized (but don't maximize yet to avoid popup issue)
+                if placement[1] == win32con.SW_SHOWMINIMIZED:
+                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                    time.sleep(0.3)
+            
+                # Force foreground
+                if not is_foreground:
+                    try:
+                        foreground_thread = win32process.GetWindowThreadProcessId(foreground_hwnd)[0]
+                        target_thread = win32process.GetWindowThreadProcessId(hwnd)[0]
+                    
+                        if foreground_thread != target_thread:
+                            win32process.AttachThreadInput(foreground_thread, target_thread, True)
+                    
+                        win32gui.SetForegroundWindow(hwnd)
+                    
+                        if foreground_thread != target_thread:
+                            win32process.AttachThreadInput(foreground_thread, target_thread, False)
+                    
+                        print(f"{log_prefix} [{profile_id}] ✓ Brought to foreground")
+                    except Exception as force_err:
+                        print(f"{log_prefix} [{profile_id}] ⚠ Force foreground error: {force_err}")
+                
+                    time.sleep(0.5)
+            
+                # ONLY maximize if not already maximized
+                if not is_maximized:
+                    win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+                    print(f"{log_prefix} [{profile_id}] ✓ Maximized (was not maximized before)")
+                    time.sleep(0.5)
+            
+                return True
+        
+            except ImportError as ie:
+                print(f"{log_prefix} [{profile_id}] ⚠ Missing dependencies: {ie}")
+                return False
+        
+            except Exception as e:
+                print(f"{log_prefix} [{profile_id}] ⚠ Error: {e}")
+                import traceback
+                traceback.print_exc()
+                return False
+
 
     # @staticmethod
     # def bring_profile_to_front(profile_id, driver=None, log_prefix="[GOLOGIN]"):
     #     """
     #     Bring GoLogin profile window to front AND maximize it - THREAD SAFE
+    
     #     Support 2 modes:
     #     - With driver: Use Selenium to maximize (faster, more reliable)
-    #     - Without driver: Use win32gui to bring to front + maximize (for multi-threading)
+    #     - Without driver: Use win32gui to FORCE bring to front + maximize (for multi-threading)
     
     #     Args:
     #         profile_id: Profile ID
     #         driver: Optional Selenium WebDriver instance (for maximize)
     #         log_prefix: Prefix for log messages
-    
+        
     #     Returns:
     #         bool: True if successful
     #     """
-    
     #     # ========== ACQUIRE WINDOW FOCUS LOCK TO PREVENT CONFLICTS ==========
     #     with _window_focus_lock:
     #         print(f"{log_prefix} [{profile_id}] Acquiring window focus lock...")
@@ -735,9 +903,89 @@ class GoLoginProfileHelper:
     #                     # Optional: Verify window size
     #                     import time
     #                     time.sleep(0.5)
-                    
     #                     window_size = driver.get_window_size()
     #                     print(f"{log_prefix} [{profile_id}] Window size: {window_size['width']}x{window_size['height']}")
+                    
+    #                     # Try to FORCE bring to front using win32gui (fallback to ensure focus)
+    #                     # This is needed when multiple Chrome windows are open
+    #                     try:
+    #                         import psutil
+    #                         import platform
+                        
+    #                         if platform.system() == "Windows":
+    #                             # Find the Chrome window for this profile
+    #                             for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+    #                                 try:
+    #                                     cmdline = proc.info.get('cmdline', [])
+    #                                     if not cmdline:
+    #                                         continue
+                                    
+    #                                     cmdline_str = ' '.join(cmdline).lower()
+                                    
+    #                                     # Check if this is the main browser process for this profile
+    #                                     if profile_id.lower() in cmdline_str and '--type=renderer' not in cmdline_str:
+    #                                         pid = proc.info['pid']
+                                        
+    #                                         import win32gui
+    #                                         import win32con
+    #                                         import win32process
+                                        
+    #                                         def enum_windows_callback(hwnd, pid_list):
+    #                                             if win32gui.IsWindowVisible(hwnd):
+    #                                                 _, found_pid = win32process.GetWindowThreadProcessId(hwnd)
+    #                                                 if found_pid == pid:
+    #                                                     pid_list.append(hwnd)
+    #                                             return True
+                                        
+    #                                         windows = []
+    #                                         win32gui.EnumWindows(enum_windows_callback, windows)
+                                        
+    #                                         if windows:
+    #                                             hwnd = windows[0]
+                                            
+    #                                             # ===== CHECK IF ALREADY IN FOREGROUND FIRST =====
+    #                                             foreground_hwnd = win32gui.GetForegroundWindow()
+                                            
+    #                                             if foreground_hwnd == hwnd:
+    #                                                 print(f"{log_prefix} [{profile_id}] ✓ Window already in foreground, skip bring to front")
+    #                                                 time.sleep(0.5)
+    #                                                 return True
+    #                                             # =================================================
+                                            
+    #                                             # FORCE bring to front with AttachThreadInput trick
+    #                                             try:
+    #                                                 # Get thread IDs
+    #                                                 foreground_thread = win32process.GetWindowThreadProcessId(foreground_hwnd)[0]
+    #                                                 target_thread = win32process.GetWindowThreadProcessId(hwnd)[0]
+                                                
+    #                                                 # Attach threads to allow SetForegroundWindow
+    #                                                 if foreground_thread != target_thread:
+    #                                                     win32process.AttachThreadInput(foreground_thread, target_thread, True)
+                                                
+    #                                                 # Restore if minimized
+    #                                                 win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                                                
+    #                                                 # Maximize
+    #                                                 win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+                                                
+    #                                                 # Set foreground (now it works because threads are attached)
+    #                                                 win32gui.SetForegroundWindow(hwnd)
+                                                
+    #                                                 # Detach threads
+    #                                                 if foreground_thread != target_thread:
+    #                                                     win32process.AttachThreadInput(foreground_thread, target_thread, False)
+                                                
+    #                                                 print(f"{log_prefix} [{profile_id}] ✓ FORCED window to foreground")
+                                                
+    #                                             except Exception as force_err:
+    #                                                 print(f"{log_prefix} [{profile_id}] ⚠ Force foreground error: {force_err}")
+                                            
+    #                                             break
+                                            
+    #                                 except (psutil.NoSuchProcess, psutil.AccessDenied):
+    #                                     continue
+    #                     except Exception as force_err:
+    #                         print(f"{log_prefix} [{profile_id}] ℹ Could not force foreground (fallback OK): {force_err}")
                     
     #                     # Delay before releasing lock (let window settle)
     #                     time.sleep(1)
@@ -747,7 +995,7 @@ class GoLoginProfileHelper:
     #                     print(f"{log_prefix} [{profile_id}] ⚠ Selenium maximize failed: {e}")
     #                     # Continue to MODE 2 as fallback
             
-    #             # MODE 2: Use win32gui to bring to front + maximize (for multi-threading or fallback)
+    #             # MODE 2: Use win32gui to FORCE bring to front + maximize (for multi-threading or fallback)
     #             import psutil
     #             import platform
             
@@ -786,25 +1034,60 @@ class GoLoginProfileHelper:
     #                             if windows:
     #                                 hwnd = windows[0]
                                 
-    #                                 # Step 1: Restore window (in case minimized)
-    #                                 win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+    #                                 # ===== CHECK IF ALREADY IN FOREGROUND FIRST =====
+    #                                 foreground_hwnd = win32gui.GetForegroundWindow()
                                 
-    #                                 # Step 2: Maximize window
-    #                                 win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+    #                                 if foreground_hwnd == hwnd:
+    #                                     # Already in foreground, just make sure it's maximized
+    #                                     win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+    #                                     print(f"{log_prefix} [{profile_id}] ✓ Already in foreground, ensured maximized")
+    #                                     import time
+    #                                     time.sleep(0.5)
+    #                                     return True
+    #                                 # =================================================
                                 
-    #                                 # Step 3: Bring to foreground
-    #                                 win32gui.SetForegroundWindow(hwnd)
-                                
-    #                                 print(f"{log_prefix} [{profile_id}] ✓ Brought to front and maximized via win32gui")
+    #                                 # FORCE bring to front with AttachThreadInput trick
+    #                                 try:
+    #                                     # Get thread IDs
+    #                                     foreground_thread = win32process.GetWindowThreadProcessId(foreground_hwnd)[0]
+    #                                     target_thread = win32process.GetWindowThreadProcessId(hwnd)[0]
+                                    
+    #                                     # Attach threads to allow SetForegroundWindow
+    #                                     if foreground_thread != target_thread:
+    #                                         win32process.AttachThreadInput(foreground_thread, target_thread, True)
+                                    
+    #                                     # Restore if minimized
+    #                                     win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                                    
+    #                                     # Maximize
+    #                                     win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+                                    
+    #                                     # Set foreground (now it works because threads are attached)
+    #                                     win32gui.SetForegroundWindow(hwnd)
+                                    
+    #                                     # Detach threads
+    #                                     if foreground_thread != target_thread:
+    #                                         win32process.AttachThreadInput(foreground_thread, target_thread, False)
+                                    
+    #                                     print(f"{log_prefix} [{profile_id}] ✓ FORCED to front and maximized via win32gui")
+                                    
+    #                                 except Exception as force_err:
+    #                                     print(f"{log_prefix} [{profile_id}] ⚠ Force foreground error: {force_err}")
+    #                                     # Fallback to old method
+    #                                     win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+    #                                     win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+    #                                     win32gui.SetForegroundWindow(hwnd)
+    #                                     print(f"{log_prefix} [{profile_id}] ✓ Used fallback method")
                                 
     #                                 # Delay before releasing lock
+    #                                 import time
     #                                 time.sleep(1)
     #                                 return True
-                        
+                                
     #                         except ImportError:
     #                             print(f"{log_prefix} [{profile_id}] ⚠ win32gui not available")
     #                             return False
-                
+                            
     #                 except (psutil.NoSuchProcess, psutil.AccessDenied):
     #                     continue
             
@@ -814,234 +1097,6 @@ class GoLoginProfileHelper:
     #         except Exception as e:
     #             print(f"{log_prefix} [{profile_id}] ⚠ Error: {e}")
     #             return False
-    #     # ===================================================================
-
-    @staticmethod
-    def bring_profile_to_front(profile_id, driver=None, log_prefix="[GOLOGIN]"):
-        """
-        Bring GoLogin profile window to front AND maximize it - THREAD SAFE
-    
-        Support 2 modes:
-        - With driver: Use Selenium to maximize (faster, more reliable)
-        - Without driver: Use win32gui to FORCE bring to front + maximize (for multi-threading)
-    
-        Args:
-            profile_id: Profile ID
-            driver: Optional Selenium WebDriver instance (for maximize)
-            log_prefix: Prefix for log messages
-        
-        Returns:
-            bool: True if successful
-        """
-        # ========== ACQUIRE WINDOW FOCUS LOCK TO PREVENT CONFLICTS ==========
-        with _window_focus_lock:
-            print(f"{log_prefix} [{profile_id}] Acquiring window focus lock...")
-        
-            try:
-                # MODE 1: If driver provided, use Selenium maximize (RECOMMENDED)
-                if driver:
-                    try:
-                        driver.maximize_window()
-                        print(f"{log_prefix} [{profile_id}] ✓ Browser maximized via Selenium")
-                    
-                        # Optional: Verify window size
-                        import time
-                        time.sleep(0.5)
-                        window_size = driver.get_window_size()
-                        print(f"{log_prefix} [{profile_id}] Window size: {window_size['width']}x{window_size['height']}")
-                    
-                        # Try to FORCE bring to front using win32gui (fallback to ensure focus)
-                        # This is needed when multiple Chrome windows are open
-                        try:
-                            import psutil
-                            import platform
-                        
-                            if platform.system() == "Windows":
-                                # Find the Chrome window for this profile
-                                for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-                                    try:
-                                        cmdline = proc.info.get('cmdline', [])
-                                        if not cmdline:
-                                            continue
-                                    
-                                        cmdline_str = ' '.join(cmdline).lower()
-                                    
-                                        # Check if this is the main browser process for this profile
-                                        if profile_id.lower() in cmdline_str and '--type=renderer' not in cmdline_str:
-                                            pid = proc.info['pid']
-                                        
-                                            import win32gui
-                                            import win32con
-                                            import win32process
-                                        
-                                            def enum_windows_callback(hwnd, pid_list):
-                                                if win32gui.IsWindowVisible(hwnd):
-                                                    _, found_pid = win32process.GetWindowThreadProcessId(hwnd)
-                                                    if found_pid == pid:
-                                                        pid_list.append(hwnd)
-                                                return True
-                                        
-                                            windows = []
-                                            win32gui.EnumWindows(enum_windows_callback, windows)
-                                        
-                                            if windows:
-                                                hwnd = windows[0]
-                                            
-                                                # ===== CHECK IF ALREADY IN FOREGROUND FIRST =====
-                                                foreground_hwnd = win32gui.GetForegroundWindow()
-                                            
-                                                if foreground_hwnd == hwnd:
-                                                    print(f"{log_prefix} [{profile_id}] ✓ Window already in foreground, skip bring to front")
-                                                    time.sleep(0.5)
-                                                    return True
-                                                # =================================================
-                                            
-                                                # FORCE bring to front with AttachThreadInput trick
-                                                try:
-                                                    # Get thread IDs
-                                                    foreground_thread = win32process.GetWindowThreadProcessId(foreground_hwnd)[0]
-                                                    target_thread = win32process.GetWindowThreadProcessId(hwnd)[0]
-                                                
-                                                    # Attach threads to allow SetForegroundWindow
-                                                    if foreground_thread != target_thread:
-                                                        win32process.AttachThreadInput(foreground_thread, target_thread, True)
-                                                
-                                                    # Restore if minimized
-                                                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                                                
-                                                    # Maximize
-                                                    win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
-                                                
-                                                    # Set foreground (now it works because threads are attached)
-                                                    win32gui.SetForegroundWindow(hwnd)
-                                                
-                                                    # Detach threads
-                                                    if foreground_thread != target_thread:
-                                                        win32process.AttachThreadInput(foreground_thread, target_thread, False)
-                                                
-                                                    print(f"{log_prefix} [{profile_id}] ✓ FORCED window to foreground")
-                                                
-                                                except Exception as force_err:
-                                                    print(f"{log_prefix} [{profile_id}] ⚠ Force foreground error: {force_err}")
-                                            
-                                                break
-                                            
-                                    except (psutil.NoSuchProcess, psutil.AccessDenied):
-                                        continue
-                        except Exception as force_err:
-                            print(f"{log_prefix} [{profile_id}] ℹ Could not force foreground (fallback OK): {force_err}")
-                    
-                        # Delay before releasing lock (let window settle)
-                        time.sleep(1)
-                        return True
-                    
-                    except Exception as e:
-                        print(f"{log_prefix} [{profile_id}] ⚠ Selenium maximize failed: {e}")
-                        # Continue to MODE 2 as fallback
-            
-                # MODE 2: Use win32gui to FORCE bring to front + maximize (for multi-threading or fallback)
-                import psutil
-                import platform
-            
-                if platform.system() != "Windows":
-                    print(f"{log_prefix} [{profile_id}] ℹ Window control not implemented for this OS")
-                    return False
-            
-                # Find GoLogin Chrome process for this profile
-                for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-                    try:
-                        cmdline = proc.info.get('cmdline', [])
-                        if not cmdline:
-                            continue
-                    
-                        cmdline_str = ' '.join(cmdline).lower()
-                    
-                        # Check if this is the main browser process for this profile
-                        if profile_id.lower() in cmdline_str and '--type=renderer' not in cmdline_str:
-                            pid = proc.info['pid']
-                        
-                            try:
-                                import win32gui
-                                import win32con
-                                import win32process
-                            
-                                def enum_windows_callback(hwnd, pid_list):
-                                    if win32gui.IsWindowVisible(hwnd):
-                                        _, found_pid = win32process.GetWindowThreadProcessId(hwnd)
-                                        if found_pid == pid:
-                                            pid_list.append(hwnd)
-                                    return True
-                            
-                                windows = []
-                                win32gui.EnumWindows(enum_windows_callback, windows)
-                            
-                                if windows:
-                                    hwnd = windows[0]
-                                
-                                    # ===== CHECK IF ALREADY IN FOREGROUND FIRST =====
-                                    foreground_hwnd = win32gui.GetForegroundWindow()
-                                
-                                    if foreground_hwnd == hwnd:
-                                        # Already in foreground, just make sure it's maximized
-                                        win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
-                                        print(f"{log_prefix} [{profile_id}] ✓ Already in foreground, ensured maximized")
-                                        import time
-                                        time.sleep(0.5)
-                                        return True
-                                    # =================================================
-                                
-                                    # FORCE bring to front with AttachThreadInput trick
-                                    try:
-                                        # Get thread IDs
-                                        foreground_thread = win32process.GetWindowThreadProcessId(foreground_hwnd)[0]
-                                        target_thread = win32process.GetWindowThreadProcessId(hwnd)[0]
-                                    
-                                        # Attach threads to allow SetForegroundWindow
-                                        if foreground_thread != target_thread:
-                                            win32process.AttachThreadInput(foreground_thread, target_thread, True)
-                                    
-                                        # Restore if minimized
-                                        win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                                    
-                                        # Maximize
-                                        win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
-                                    
-                                        # Set foreground (now it works because threads are attached)
-                                        win32gui.SetForegroundWindow(hwnd)
-                                    
-                                        # Detach threads
-                                        if foreground_thread != target_thread:
-                                            win32process.AttachThreadInput(foreground_thread, target_thread, False)
-                                    
-                                        print(f"{log_prefix} [{profile_id}] ✓ FORCED to front and maximized via win32gui")
-                                    
-                                    except Exception as force_err:
-                                        print(f"{log_prefix} [{profile_id}] ⚠ Force foreground error: {force_err}")
-                                        # Fallback to old method
-                                        win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                                        win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
-                                        win32gui.SetForegroundWindow(hwnd)
-                                        print(f"{log_prefix} [{profile_id}] ✓ Used fallback method")
-                                
-                                    # Delay before releasing lock
-                                    import time
-                                    time.sleep(1)
-                                    return True
-                                
-                            except ImportError:
-                                print(f"{log_prefix} [{profile_id}] ⚠ win32gui not available")
-                                return False
-                            
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        continue
-            
-                print(f"{log_prefix} [{profile_id}] ⚠ Could not find browser window")
-                return False
-            
-            except Exception as e:
-                print(f"{log_prefix} [{profile_id}] ⚠ Error: {e}")
-                return False
-
 
 
    

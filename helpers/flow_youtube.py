@@ -84,11 +84,11 @@ class YouTubeFlowIterator:
         #         'function': YouTubeFlow._video_interaction_chain,
         #         'args': (self.driver, self.keywords, self.profile_id, self.debugger_address, self.log_prefix, cycle_num)
         #     })
-        # chains.append({
-        #         'name': f'interaction_cycle',
-        #         'function': YouTubeFlow._video_interaction_chain,
-        #         'args': (self.driver, self.keywords, self.profile_id, self.debugger_address, self.log_prefix, 0)
-        #     })
+        chains.append({
+                'name': f'interaction_cycle',
+                'function': YouTubeFlow._video_interaction_chain,
+                'args': (self.driver, self.keywords, self.profile_id, self.debugger_address, self.log_prefix, 0)
+            })
         return chains
     
     def has_next_chain(self):

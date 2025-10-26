@@ -20,7 +20,20 @@ class YouTubeSearchAction(BaseYouTubeAction):  # ← CHỈ KẾ THỪA BaseYouTu
         """Execute YouTube search"""
         try:
             import random
-            keyword = random.choice(self.keywords)
+            keywords_youtube = self.keywords.get('keywords_youtube', [])
+            keyword = random.choice(keywords_youtube)
+            # Get suffix_prefix string từ keywords dict
+            suffix_prefix_string = self.keywords.get('suffix_prefix', '')
+
+            # Parse thành list
+            from helpers.keyword_variation_helper import KeywordVariationHelper
+            suffix_prefix_list = KeywordVariationHelper.parse_suffix_prefix_list(suffix_prefix_string)
+
+            # Generate keyword variation
+            keyword = KeywordVariationHelper.generate_keyword_variation(
+                keyword, suffix_prefix_list
+            )
+            
             self.log(f"Searching for keyword: '{keyword}'", "INFO")
             
             # Exit fullscreen if needed (search box is hidden in fullscreen)
