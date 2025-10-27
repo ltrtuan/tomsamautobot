@@ -15,10 +15,9 @@ from helpers.actions.youtube_mouse_move_action import YouTubeMouseMoveAction
 from helpers.actions.youtube_seek_video_action import YouTubeSeekVideoAction
 from helpers.actions.youtube_pause_resume_action import YouTubePauseResumeAction
 from helpers.actions.youtube_click_ad_action import YouTubeClickAdAction
+from helpers.actions.youtube_fullscreen_action import YouTubeFullscreenAction
+from helpers.actions.google_navigate_action import GoogleNavigateAction
 
-# Import TomSamAutobot actions
-from controllers.actions.mouse_move_action import MouseMoveAction
-from controllers.actions.keyboard_action import KeyboardAction
 from helpers.gologin_profile_helper import GoLoginProfileHelper
 
 
@@ -35,7 +34,7 @@ class YouTubeFlowIterator:
     3. execute_next_chain(): Execute 1 chain, tăng index, return result
     """
     
-    def __init__(self, driver, keyword, profile_id, debugger_address, log_prefix="[YOUTUBE]"):
+    def __init__(self, driver, keywords, profile_id, debugger_address, log_prefix="[YOUTUBE]"):
         """
         Khởi tạo flow iterator
         
@@ -47,7 +46,7 @@ class YouTubeFlowIterator:
             log_prefix: Prefix cho log messages
         """
         self.driver = driver
-        self.keyword = keyword
+        self.keywords = keywords
         self.profile_id = profile_id
         self.debugger_address = debugger_address
         self.log_prefix = log_prefix
@@ -71,21 +70,25 @@ class YouTubeFlowIterator:
         chains.append({
             'name': 'search_and_start_video',
             'function': YouTubeFlow._search_and_start_video_chain,
-            'args': (self.driver, self.keyword, self.profile_id, self.debugger_address, self.log_prefix)
+            'args': (self.driver, self.keywords, self.profile_id, self.debugger_address, self.log_prefix)
         })
         
         # Chains 2-N: Random interaction cycles (mỗi cycle là 1 chain)
         # Random 3-6 interaction cycles
-        num_interaction_cycles = random.randint(3, 6)
-        print(f"{self.log_prefix} [{self.profile_id}] Planning {num_interaction_cycles} interaction cycles")
+        # num_interaction_cycles = random.randint(3, 6)
+        # print(f"{self.log_prefix} [{self.profile_id}] Planning {num_interaction_cycles} interaction cycles")
         
-        for cycle_num in range(1, num_interaction_cycles + 1):
-            chains.append({
-                'name': f'interaction_cycle_{cycle_num}',
+        # for cycle_num in range(1, num_interaction_cycles + 1):
+        #     chains.append({
+        #         'name': f'interaction_cycle_{cycle_num}',
+        #         'function': YouTubeFlow._video_interaction_chain,
+        #         'args': (self.driver, self.keywords, self.profile_id, self.debugger_address, self.log_prefix, cycle_num)
+        #     })
+        chains.append({
+                'name': f'interaction_cycle',
                 'function': YouTubeFlow._video_interaction_chain,
-                'args': (self.driver, self.profile_id, self.debugger_address, self.log_prefix, cycle_num)
+                'args': (self.driver, self.keywords, self.profile_id, self.debugger_address, self.log_prefix, 0)
             })
-        
         return chains
     
     def has_next_chain(self):
@@ -165,7 +168,7 @@ class YouTubeFlow:
     """
     
     @staticmethod
-    def execute_main_flow(driver, keyword, profile_id, debugger_address, log_prefix="[YOUTUBE]"):
+    def execute_main_flow(driver, keywords, profile_id, debugger_address, log_prefix="[YOUTUBE]"):
         """
         MAIN FLOW - Natural mode:
         1. Search & Click video (LOCKED)
@@ -181,7 +184,7 @@ class YouTubeFlow:
         chain_success = ActionChainManager.execute_chain(
             profile_id,
             YouTubeFlow._search_and_start_video_chain,
-            driver, keyword, profile_id, debugger_address, log_prefix
+            driver, keywords, profile_id, debugger_address, log_prefix
         )
         
         if not chain_success:
@@ -192,30 +195,37 @@ class YouTubeFlow:
         print(f"{log_prefix} [{profile_id}] ========== VIDEO PLAYING, ENTERING NATURAL INTERACTION MODE ==========")
         
         # Random number of interaction cycles (3-6 times)
-        num_interaction_cycles = random.randint(3, 6)
-        print(f"{log_prefix} [{profile_id}] Will perform {num_interaction_cycles} interaction cycles")
+        # num_interaction_cycles = random.randint(3, 6)
+        # print(f"{log_prefix} [{profile_id}] Will perform {num_interaction_cycles} interaction cycles")
         
-        for cycle in range(num_interaction_cycles):
-            # NO SLEEP HERE - Profile tries to acquire lock immediately
-            # Other profiles may get lock first, that's natural!
+        # for cycle in range(num_interaction_cycles):
+        #     # NO SLEEP HERE - Profile tries to acquire lock immediately
+        #     # Other profiles may get lock first, that's natural!
             
-            print(f"{log_prefix} [{profile_id}] [Cycle {cycle+1}/{num_interaction_cycles}] Competing for lock...")
+        #     print(f"{log_prefix} [{profile_id}] [Cycle {cycle+1}/{num_interaction_cycles}] Competing for lock...")
             
-            # Execute interaction cycle (LOCKED - will wait for lock if needed)
-            interaction_success = ActionChainManager.execute_chain(
-                profile_id,
-                YouTubeFlow._video_interaction_chain,
-                driver, profile_id, debugger_address, log_prefix, cycle + 1
-            )
+        #     # Execute interaction cycle (LOCKED - will wait for lock if needed)
+        #     interaction_success = ActionChainManager.execute_chain(
+        #         profile_id,
+        #         YouTubeFlow._video_interaction_chain,
+        #         driver, keyword, profile_id, debugger_address, log_prefix, cycle + 1
+        #     )
             
-            if not interaction_success:
-                print(f"{log_prefix} [{profile_id}] ⚠ Interaction cycle {cycle+1} failed, continuing...")
-        
+        #     if not interaction_success:
+        #         print(f"{log_prefix} [{profile_id}] ⚠ Interaction cycle {cycle+1} failed, continuing...")
+        interaction_success = ActionChainManager.execute_chain(
+            profile_id,
+            YouTubeFlow._video_interaction_chain,
+            driver, keywords, profile_id, debugger_address, log_prefix,0
+        )
+            
+        if not interaction_success:
+            print(f"{log_prefix} [{profile_id}] ⚠ Interaction cycle 0 failed, continuing...")
         print(f"{log_prefix} [{profile_id}] ✓ Finished all interaction cycles (video may still be playing - that's natural)")
         return True
     
     @staticmethod
-    def create_flow_iterator(driver, keyword, profile_id, debugger_address, log_prefix="[YOUTUBE]"):
+    def create_flow_iterator(driver, keywords, profile_id, debugger_address, log_prefix="[YOUTUBE]"):
         """
         Factory method để tạo flow iterator cho round-robin execution
     
@@ -229,11 +239,11 @@ class YouTubeFlow:
         Returns:
             YouTubeFlowIterator: Flow iterator instance
         """
-        return YouTubeFlowIterator(driver, keyword, profile_id, debugger_address, log_prefix)
+        return YouTubeFlowIterator(driver, keywords, profile_id, debugger_address, log_prefix)
 
     
     @staticmethod
-    def _search_and_start_video_chain(driver, keyword, profile_id, debugger_address, log_prefix):
+    def _search_and_start_video_chain(driver, keywords, profile_id, debugger_address, log_prefix):
         """
         LOCKED CHAIN: Navigate → Search → Click video → Wait for playing
         Lock is released immediately after video starts playing
@@ -262,11 +272,13 @@ class YouTubeFlow:
         
             # Bring window to front AFTER fixing crashed tabs
             GoLoginProfileHelper.bring_profile_to_front(profile_id, driver=driver, log_prefix=log_prefix)
-            time.sleep(2)
+            
             
             # Step 1: Navigate to YouTube            
             YouTubeNavigateAction(driver, profile_id, log_prefix, debugger_address).execute()
             time.sleep(random.uniform(2, 4))
+            
+            time.sleep(2)
             
             # Step 2: Pre-search random actions
             YouTubeFlow._random_actions(driver, profile_id, debugger_address, log_prefix, num_actions=2)
@@ -276,53 +288,66 @@ class YouTubeFlow:
             # RE-BRING TO FRONT before critical action (in case other profile closed during setup)
             print(f"{log_prefix} [{profile_id}] Re-activating window before search...")
             GoLoginProfileHelper.bring_profile_to_front(profile_id, driver=driver, log_prefix=log_prefix)
-            time.sleep(0.5)
+            time.sleep(2)
             
-            YouTubeSearchAction(driver, profile_id, keyword, log_prefix, debugger_address).execute()
+            result_search = YouTubeSearchAction(driver, profile_id, keywords, log_prefix, debugger_address).execute()
             time.sleep(random.uniform(2, 4))
-            
-            ################################### Retry logic: Try to click video up to 3 times, scroll between retries
-            video_clicked = False
-            max_retries = 3
-
-            for attempt in range(1, max_retries + 1):
-                print(f"{log_prefix} [{profile_id}] ℹ Attempting to click video (try {attempt}/{max_retries})...")
-    
-                video_action = YouTubeClickVideoAction(
-                    driver, profile_id, log_prefix, debugger_address,
-                    video_index_range=(1, 10)
-                ).execute()
-    
-                if video_action:
-                    # Success: video clicked and started playing
-                    video_clicked = True
-                    print(f"{log_prefix} [{profile_id}] ✓ Video clicked successfully on attempt {attempt}")
-                    break
-                else:
-                    # Failed to find/click video
-                    if attempt < max_retries:
-                        print(f"{log_prefix} [{profile_id}] ⚠ No video found on screen, scrolling to find more...")
-            
-                        # Scroll down to load more videos
-                        YouTubeScrollAction(
-                            driver, profile_id, log_prefix, debugger_address,
-                            direction="down",
-                            times=random.randint(2, 4)
-                        ).execute()
-            
-                        # Wait for videos to load
-                        time.sleep(random.uniform(1.5, 2.5))
-                    else:
-                        print(f"{log_prefix} [{profile_id}] ✗ Failed to find clickable video after {max_retries} attempts")
-
-            # Check final result
-            if not video_clicked:
-                print(f"{log_prefix} [{profile_id}] ✗ Failed to start video playback")
+            if not result_search:
                 return False
+            ################################### Retry logic: Try to click video up to 3 times, scroll between retries
+            # video_clicked = False
+            # max_retries = 3
 
+            # for attempt in range(1, max_retries + 1):
+            #     print(f"{log_prefix} [{profile_id}] ℹ Attempting to click video (try {attempt}/{max_retries})...")
+    
+            #     video_action = YouTubeClickVideoAction(
+            #         driver, profile_id, log_prefix, debugger_address,
+            #         video_index_range=(1, 10)
+            #     ).execute()
+    
+            #     if video_action:
+            #         # Success: video clicked and started playing
+            #         video_clicked = True
+            #         print(f"{log_prefix} [{profile_id}] ✓ Video clicked successfully on attempt {attempt}")
+            #         break
+            #     else:
+            #         # Failed to find/click video
+            #         if attempt < max_retries:
+            #             print(f"{log_prefix} [{profile_id}] ⚠ No video found on screen, scrolling to find more...")
+            
+            #             # Scroll down to load more videos
+            #             YouTubeScrollAction(
+            #                 driver, profile_id, log_prefix, debugger_address,
+            #                 direction="down",
+            #                 times=random.randint(2, 4)
+            #             ).execute()
+            
+            #             # Wait for videos to load
+            #             time.sleep(random.uniform(1.5, 2.5))
+            #         else:
+            #             print(f"{log_prefix} [{profile_id}] ✗ Failed to find clickable video after {max_retries} attempts")
+
+            # # Check final result
+            # if not video_clicked:
+            #     print(f"{log_prefix} [{profile_id}] ✗ Failed to start video playback")
+            #     return False
+            
             
             YouTubeMouseMoveAction(driver, profile_id, log_prefix, debugger_address).execute()
-            time.sleep(random.uniform(15, 25))
+            
+            # 70% skip, 30% click
+            ads_choice = 'skip' if random.random() < 0.7 else 'click'
+            if ads_choice == 'skip':
+                time.sleep(random.uniform(5, 10))
+                YouTubeSkipAdsAction(driver, profile_id, log_prefix, debugger_address, wait_time=1).execute()
+                time.sleep(random.uniform(5, 10))
+                YouTubeSkipAdsAction(driver, profile_id, log_prefix, debugger_address, wait_time=1).execute()
+            else:
+                YouTubeClickAdAction(driver, profile_id, log_prefix, debugger_address).execute()
+            
+           
+            time.sleep(random.uniform(5, 10))
             
             # Step 5: Skip ads if present
             YouTubeSkipAdsAction(driver, profile_id, log_prefix, debugger_address, wait_time=1).execute()          
@@ -338,7 +363,7 @@ class YouTubeFlow:
             return False
     
     @staticmethod
-    def _video_interaction_chain(driver, profile_id, debugger_address, log_prefix, cycle_number):
+    def _video_interaction_chain(driver, keywords, profile_id, debugger_address, log_prefix, cycle_number):
         """
         LOCKED CHAIN: Perform human-like interactions
         Random selection and random repetitions = organic watch time
@@ -361,46 +386,81 @@ class YouTubeFlow:
                 print(f"{log_prefix} [{profile_id}] Current URL: {current_url}")
             except:
                 pass
+            print(f"{log_prefix} [{profile_id}] Will perform YouTubeSeekVideoAction")
+            GoogleNavigateAction(driver, profile_id, keywords, log_prefix, debugger_address).execute()
+            # YouTubeSeekVideoAction(driver, profile_id, log_prefix, debugger_address).execute()
+            # time.sleep(2)
+            # print(f"{log_prefix} [{profile_id}] Will perform YouTubePauseResumeAction")
+            # YouTubePauseResumeAction(driver, profile_id, log_prefix, debugger_address).execute()
+            # time.sleep(2)
+            # print(f"{log_prefix} [{profile_id}] Will perform YouTubeClickAdAction")
+            # YouTubeClickAdAction(driver, profile_id, log_prefix, debugger_address).execute()
+            # time.sleep(2)
+            # print(f"{log_prefix} [{profile_id}] Will perform YouTubeFullscreenAction")
+            # YouTubeFullscreenAction(driver, profile_id, log_prefix, debugger_address).execute()
+            time.sleep(2)
+            # print(f"{log_prefix} [{profile_id}] Will perform YouTubeClickVideoAction sideeeeeee")
+            # YouTubeClickVideoAction(driver, profile_id, log_prefix, debugger_address, (1,5), 'side').execute()
+            # time.sleep(2)
+            # print(f"{log_prefix} [{profile_id}] Will perform YouTubeSkipAdsAction")
+            # YouTubeSkipAdsAction(driver, profile_id, log_prefix, debugger_address).execute()
+            # time.sleep(2)
+            # print(f"{log_prefix} [{profile_id}] Will perform YouTubeSearchAction")
+            # YouTubeSearchAction(driver, profile_id, keywords, log_prefix, debugger_address).execute()
             
-            # Random number of interactions in this cycle (1-4)
-            num_interactions_this_cycle = random.randint(1, 4)
+            # # Random number of interactions in this cycle (1-4)
+            # num_interactions_this_cycle = random.randint(1, 4)
             
-            # Random selection of interaction types
-            interaction_types = [
-                'mouse_move',
-                'seek_video',
-                'pause_resume',
-                'click_ad',
-                'scroll_page'
-            ]
+            # # Random selection of interaction types
+            # interaction_types = [               
+            #     'seek_video',
+            #     'pause_resume',
+            #     'click_ad',
+            #     'skip_ads',
+            #     'scroll_page',
+            #     'full_screen',
+            #     'click_video_side',
+            #     'search_video'
+            # ]
             
-            selected_interactions = random.sample(
-                interaction_types, 
-                min(num_interactions_this_cycle, len(interaction_types))
-            )
+            # selected_interactions = random.sample(
+            #     interaction_types, 
+            #     min(num_interactions_this_cycle, len(interaction_types))
+            # )
             
-            print(f"{log_prefix} [{profile_id}] Will perform {num_interactions_this_cycle} interactions: {selected_interactions}")
+            # print(f"{log_prefix} [{profile_id}] Will perform {num_interactions_this_cycle} interactions: {selected_interactions}")
             
-            for interaction in selected_interactions:
-                if interaction == 'mouse_move':
-                    YouTubeMouseMoveAction(driver, profile_id, log_prefix, debugger_address, click=False).execute()
+            # for interaction in selected_interactions:
+            #     YouTubeMouseMoveAction(driver, profile_id, log_prefix, debugger_address, click=False).execute()               
     
-                elif interaction == 'seek_video':
-                    YouTubeSeekVideoAction(driver, profile_id, log_prefix, debugger_address).execute()
+            #     if interaction == 'seek_video':
+            #         YouTubeSeekVideoAction(driver, profile_id, log_prefix, debugger_address).execute()
     
-                elif interaction == 'pause_resume':
-                    YouTubePauseResumeAction(driver, profile_id, log_prefix, debugger_address).execute()
+            #     elif interaction == 'pause_resume':
+            #         YouTubePauseResumeAction(driver, profile_id, log_prefix, debugger_address).execute()
     
-                elif interaction == 'click_ad':
-                    YouTubeClickAdAction(driver, profile_id, log_prefix, debugger_address).execute()
+            #     elif interaction == 'click_ad':
+            #         YouTubeClickAdAction(driver, profile_id, log_prefix, debugger_address).execute()
     
-                elif interaction == 'scroll_page':
-                    YouTubeScrollAction(driver, profile_id, log_prefix, debugger_address).execute()
+            #     elif interaction == 'scroll_page':
+            #         YouTubeScrollAction(driver, profile_id, log_prefix, debugger_address).execute()
+                    
+            #     elif interaction == 'full_screen':
+            #         YouTubeFullscreenAction(driver, profile_id, log_prefix, debugger_address).execute()
+                    
+            #     elif interaction == 'click_video_side':
+            #         YouTubeClickVideoAction(driver, profile_id, log_prefix, debugger_address, (1,5), 'side').execute()
+                    
+            #     elif interaction == 'skip_ads':
+            #         YouTubeSkipAdsAction(driver, profile_id, log_prefix, debugger_address).execute()
+                    
+            #     elif interaction == 'search_video':
+            #         YouTubeSearchAction(driver, profile_id, keyword, log_prefix, debugger_address).execute()
                 
-                # Random wait between interactions (organic timing)
-                wait_time = random.uniform(1, 5)
-                print(f"{log_prefix} [{profile_id}] Waiting {wait_time:.1f}s before next interaction...")
-                time.sleep(wait_time)
+            #     # Random wait between interactions (organic timing)
+            #     wait_time = random.uniform(1, 5)
+            #     print(f"{log_prefix} [{profile_id}] Waiting {wait_time:.1f}s before next interaction...")
+            #     time.sleep(wait_time)
             
             print(f"{log_prefix} [{profile_id}] ========== INTERACTION CHAIN END: CYCLE {cycle_number} ==========")
             return True

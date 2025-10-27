@@ -6,8 +6,7 @@ from models.gologin_api import get_gologin_api
 import random
 import os
 import time
-import threading
-gologin_focus_lock = threading.Lock()
+
 # Import helpers
 from helpers.gologin_profile_helper import GoLoginProfileHelper
 from helpers.selenium_registry import register_selenium_driver, unregister_selenium_driver
@@ -143,14 +142,21 @@ class GoLoginSeleniumCollectAction(BaseAction):
     
         try:
             print(f"\n[GOLOGIN WARMUP] [{profile_id}] Starting warm up...")
-            GoLoginProfileHelper.kill_zombie_chrome_processes(profile_id, "[GOLOGIN WARMUP]")
+            # Kill zombie processes via API (includes force kill + cleanup)
+            print(f"[GOLOGIN WARMUP] [{profile_id}] Cleaning up zombie processes...")
+            # Get GoLogin API instance
+            gologin = get_gologin_api(api_token)
+            
+            try:
+                gologin.stop_profile(profile_id)  # This will force kill + cleanup
+                print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Zombie cleanup completed")
+            except Exception as zombie_err:
+                print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Zombie cleanup warning: {zombie_err}")
         
             # Get options
             refresh_fingerprint = self.params.get("refresh_fingerprint", False)
-            headless = self.params.get("headless", False)
-        
-            # Get GoLogin API instance
-            gologin = get_gologin_api(api_token)
+            headless = self.params.get("headless", False)        
+          
         
             # Refresh fingerprint if requested
             if refresh_fingerprint:
@@ -169,9 +175,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
                     "--mute-audio",
                     "--disable-background-networking",
                     "--disable-extensions",
-                    "--enable-features=NetworkService",
-                    "--enable-logging",
-                    "--v=1",
+                    "--enable-features=NetworkService",                 
                     "--disk-cache-size=0",
                     "--media-cache-size=0",
                     "--disable-features=CookiesWithoutSameSiteMustBeSecure",
@@ -199,9 +203,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
             else:
                 extra_params = [
                     "--enable-features=NetworkService",
-                    "--disable-features=CookiesWithoutSameSiteMustBeSecure",
-                    "--enable-logging",
-                    "--v=1",
+                    "--disable-features=CookiesWithoutSameSiteMustBeSecure",                   
                     "--disk-cache-size=0",
                     "--media-cache-size=0",
                     "--disable-sync",
@@ -227,7 +229,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
             
            
             # Check and fix crashed tabs FIRST
-            if not GoLoginProfileHelper.check_and_fix_crashed_tabs(driver, debugger_address, "[GOLOGIN WARMUP]"):
+            if not GoLoginProfileHelper.check_and_fix_crashed_tabs(driver, debugger_address, "[GOLOGIN WARMUP]", use_window_lock=False):
                 print(f"[GOLOGIN WARMUP] [{profile_id}] ✗ Could not fix crashed tabs")
                 driver.quit()
                 gologin.stop_profile(profile_id)
@@ -242,6 +244,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
             if not websites:
                 print(f"[GOLOGIN WARMUP] [{profile_id}] ✗ No websites to browse")
                 driver.quit()
+                time.sleep(5)
                 gologin.stop_profile(profile_id)
                 return False
         
@@ -291,54 +294,21 @@ class GoLoginSeleniumCollectAction(BaseAction):
             return False
     
         finally:
-            # Cleanup block (giữ nguyên)
+            # ========== USE CENTRALIZED CLEANUP ==========
             print(f"[GOLOGIN WARMUP] [{profile_id}] Running cleanup...")
-        
-            if driver:
+    
+            if driver and gologin:
                 try:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] Closing extra tabs before shutdown...")
-                    GoLoginProfileHelper.cleanup_browser_tabs(driver, "[GOLOGIN WARMUP]")
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Tabs cleaned up")
-                except Exception as tab_err:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Tab cleanup warning: {tab_err}")
-        
-            print(f"[GOLOGIN WARMUP] [{profile_id}] Waiting for browser to flush cookies/history...")
-            time.sleep(3)
-        
-            if driver:
-                try:
-                    unregister_selenium_driver(profile_id)
-                    driver.quit()
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Selenium disconnected")
+                    GoLoginProfileHelper.cleanup_profiles(
+                        profile_data={"profile_id": profile_id, "driver": driver},
+                        gologin_api=gologin,
+                        log_prefix="[GOLOGIN WARMUP]"
+                    )
                 except Exception as cleanup_err:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Selenium disconnect warning: {cleanup_err}")
-                finally:
-                    driver = None
-        
-            print(f"[GOLOGIN WARMUP] [{profile_id}] Waiting for Chrome process cleanup...")
-            time.sleep(15)
-        
-            if gologin:
-                try:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] Requesting profile stop (async)...")
-                    def async_stop():
-                        with gologin_focus_lock:
-                            try:
-                                # Gọi stop_profile trong thread riêng, tránh block main thread
-                                success, msg = gologin.stop_profile(profile_id)
-                                if success:
-                                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Profile stopped and data synced")
-                                else:
-                                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✗ Stop failed: {msg}")
-                            except Exception as stop_ex:
-                                print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Stop error: {stop_ex}")
+                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✗ Cleanup error: {cleanup_err}")
+                    import traceback
+                    traceback.print_exc()
 
-                    threading.Thread(target=async_stop, daemon=True).start()
-                    time.sleep(2)  # chờ sync nhẹ để thread stop bắt đầu
-                except Exception as stop_err:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Stop profile error: {stop_err}")
-        
-            print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Cleanup completed")
     
     def _warmup_parallel(self, profile_list, api_token):
         """Warm up multiple profiles in parallel using threading"""
@@ -363,10 +333,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
             duration_minutes = 5
         
         timeout_per_profile = int((duration_minutes + 5) * 60)
-        batches = math.ceil(len(profile_list) / max_workers)
-        total_timeout = timeout_per_profile * batches
-        
-        print(f"[GOLOGIN WARMUP] Timeout per profile: {timeout_per_profile}s ({timeout_per_profile/60:.1f} min)")
+        batches = math.ceil(len(profile_list) / max_workers)        
         
         # Store results
         results = []
@@ -385,7 +352,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
                     time.sleep(2)  # Stagger submissions
                 
                 future = executor.submit(
-                    self._warmup_single_profile_with_focus, 
+                    self._warmup_single_profile, 
                     profile_id, 
                     api_token
                 )
@@ -393,51 +360,40 @@ class GoLoginSeleniumCollectAction(BaseAction):
                 print(f"[GOLOGIN WARMUP] Submitted thread {i+1}/{len(profile_list)}: {profile_id}")
                 
                 # Cooling period every max_workers profiles
-                if (i + 1) % max_workers == 0:
-                    print("[GOLOGIN WARMUP] ⏸ Cooling down for 30 seconds...")
-                    time.sleep(30)
+                # if (i + 1) % max_workers == 0:
+                #     print("[GOLOGIN WARMUP] ⏸ Cooling down for 30 seconds...")
+                #     time.sleep(30)
             
-            # Wait for all threads to complete
-            print(f"[GOLOGIN WARMUP] Waiting for threads (timeout: {total_timeout}s)...")
+          
             
-            try:
-                for future in as_completed(future_to_profile, timeout=total_timeout):
-                    profile_id = future_to_profile[future]
-                    try:
-                        success = future.result(timeout=30)
-                        results.append(success)
-                        completed_profiles.append(profile_id)
+            
+            for future in as_completed(future_to_profile):
+                profile_id = future_to_profile[future]
+                try:
+                    success = future.result(timeout=30)
+                    results.append(success)
+                    completed_profiles.append(profile_id)
                         
-                        if success:
-                            print(f"[GOLOGIN WARMUP] ✓ Profile {profile_id} completed successfully")
-                        else:
-                            print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} failed")
+                    if success:
+                        print(f"[GOLOGIN WARMUP] ✓ Profile {profile_id} completed successfully")
+                    else:
+                        print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} failed")
                     
-                    except TimeoutError:
-                        print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} TIMEOUT")
-                        results.append(False)
-                        timeout_profiles.append(profile_id)
+                except TimeoutError:
+                    print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} TIMEOUT")
+                    results.append(False)
+                    timeout_profiles.append(profile_id)
                     
-                    except Exception as e:
-                        error_msg = str(e)
-                        if any(err in error_msg for err in ["Max retries", "Connection refused", "ConnectionResetError"]):
-                            print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} lost connection (browser crashed)")
-                            connection_error_profiles.append(profile_id)
-                        else:
-                            print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} exception: {e}")
-                        results.append(False)
-                        completed_profiles.append(profile_id)
-            
-            except TimeoutError:
-                print(f"[GOLOGIN WARMUP] ⚠ GLOBAL TIMEOUT reached after {total_timeout}s")
-                print(f"[GOLOGIN WARMUP] Completed: {len(completed_profiles)}/{len(profile_list)}")
-                
-                # Mark remaining profiles as timeout
-                for profile_id in profile_list:
-                    if profile_id not in completed_profiles and profile_id not in timeout_profiles:
-                        print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} TIMEOUT (global)")
-                        results.append(False)
-                        timeout_profiles.append(profile_id)
+                except Exception as e:
+                    error_msg = str(e)
+                    if any(err in error_msg for err in ["Max retries", "Connection refused", "ConnectionResetError"]):
+                        print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} lost connection (browser crashed)")
+                        connection_error_profiles.append(profile_id)
+                    else:
+                        print(f"[GOLOGIN WARMUP] ✗ Profile {profile_id} exception: {e}")
+                    results.append(False)
+                    completed_profiles.append(profile_id)
+        
         
         except Exception as e:
             print(f"[GOLOGIN WARMUP] ⚠ Parallel execution error: {e}")
@@ -473,34 +429,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
         
         self.set_variable(success_count > 0)
     
-    def _warmup_single_profile_with_focus(self, profile_id, api_token):
-        """
-        Warm up single profile and bring to front (for parallel mode)
-        
-        Args:
-            profile_id: Profile ID to warm up
-            api_token: GoLogin API token
-            
-        Returns:
-            bool: True if successful
-        """
-        try:
-            # Warm up profile normally
-            success = self._warmup_single_profile(profile_id, api_token)
-            
-            if not success:
-                return False
-            
-            # Bring window to front for better interaction
-            time.sleep(1)
-            GoLoginProfileHelper.bring_profile_to_front(profile_id, driver=None, log_prefix="[GOLOGIN WARMUP]")
-            time.sleep(1)
-            
-            return True
-        
-        except Exception as e:
-            print(f"[GOLOGIN WARMUP] [{profile_id}] Error in parallel warmup: {e}")
-            return False  
+    
     
     def _search_on_site(self, driver, url, keywords):
         """Perform search if on Google or YouTube"""

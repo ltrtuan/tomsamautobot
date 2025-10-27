@@ -133,62 +133,59 @@ class ProfileHealthMonitor:
     
         print(f"{log_prefix} [{profile_id}] 🔍 Monitoring started (check every {check_interval}s)")
     
+        # Main monitoring loop
         while not stop_event.is_set():
             try:
                 # ========== CHECK 1: PAUSE EVENT ==========
-                # Nếu đang pause (fixing crashed tab), skip health check
-                if pause_event.is_set():
+                if pause_event and pause_event.is_set():
+                    # Monitoring paused (e.g., during crashed tab fix)
                     # print(f"{log_prefix} [{profile_id}] ⏸ Monitoring paused")
                     time.sleep(check_interval)
                     continue
-            
-                # ========== CHECK 2: DRIVER HEALTH ==========
+        
+                # ========== CHECK 2: DRIVER HEALTH (NO PAGE LOAD BLOCKING) ==========
                 try:
-                    # Test 1: Driver có còn alive không
-                    _ = driver.current_url
-                
-                    # Test 2: Window có tồn tại không
-                    _ = driver.window_handles
-                
-                    # Health check passed
-                    consecutive_failures = 0
-                    # print(f"{log_prefix} [{profile_id}] ✓ Health check passed")
-                
+                    # Check window handles (fast, no page load wait)
+                    handles = driver.window_handles
+            
+                    # If we can get handles, driver is alive
+                    if handles and len(handles) > 0:
+                        # Driver alive, reset failure counter
+                        consecutive_failures = 0
+                        # print(f"{log_prefix} [{profile_id}] ✓ Driver alive ({len(handles)} tabs)")
+                    else:
+                        # No handles = browser closed
+                        raise Exception("No window handles found")
+        
                 except Exception as health_error:
+                    # Driver check failed
                     consecutive_failures += 1
                     print(f"{log_prefix} [{profile_id}] ⚠ Health check failed ({consecutive_failures}/{max_failures}): {health_error}")
-                
-                    # ========== TRIGGER FORCE RELEASE ==========
-                    if consecutive_failures >= max_failures:
-                        print(f"{log_prefix} [{profile_id}] ❌ PROFILE DEAD - Forcing lock release")
-                    
-                        # Call force release callback
-                        try:
-                            callback_on_close()
-                            print(f"{log_prefix} [{profile_id}] ✓ Lock force released")
-                        except Exception as release_error:
-                            print(f"{log_prefix} [{profile_id}] ✗ Failed to force release: {release_error}")
-                    
-                        # Exit monitoring loop
-                        print(f"{log_prefix} [{profile_id}] 🛑 Monitoring stopped (profile dead)")
-                        break
             
+                    # If max failures reached, force release lock
+                    if consecutive_failures >= max_failures:
+                        print(f"{log_prefix} [{profile_id}] ❌ Profile closed/crashed, force releasing lock")
+                
+                        # Call callback to force release lock
+                        if callback_on_close:
+                            try:
+                                callback_on_close()
+                            except Exception as callback_error:
+                                print(f"{log_prefix} [{profile_id}] Callback error: {callback_error}")
+                
+                        # Stop monitoring
+                        break
+        
                 # Sleep before next check
                 time.sleep(check_interval)
-            
-            except Exception as e:
-                print(f"{log_prefix} [{profile_id}] ✗ Monitoring error: {e}")
-                time.sleep(check_interval)
     
-        # Cleanup khi exit
-        print(f"{log_prefix} [{profile_id}] 🛑 Monitoring thread exiting")
-        with self.dict_lock:
-            if profile_id in self.active_monitors:
-                del self.active_monitors[profile_id]
-            if profile_id in self.stop_events:
-                del self.stop_events[profile_id]
-            if profile_id in self.pause_events:
-                del self.pause_events[profile_id]
+            except Exception as loop_error:
+                print(f"{log_prefix} [{profile_id}] Loop error: {loop_error}")
+                time.sleep(check_interval)
+
+        # Cleanup
+        print(f"{log_prefix} [{profile_id}] Monitor stopped")
+
 
 
     

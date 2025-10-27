@@ -21,15 +21,20 @@ class YouTubeScrollAction(BaseYouTubeAction):
         try:
             # ========== FIX: Move mouse to safe area before scroll ==========
             # Move mouse to right edge of screen to avoid dropdown/hover issues
+            if not self._exit_fullscreen_if_needed():
+                self.log("Failed to exit fullscreen", "ERROR")
+                return False
             try:
                 import pyautogui
                 screen_width, screen_height = pyautogui.size()
                 
                 # Move to right-center (safe area, no UI elements)
-                safe_x = screen_width - 50  # 50px from right edge
-                safe_y = screen_height // 2  # Middle of screen
-                
+                # Move to right edge, random Y (avoid top/bottom 100px)
+                safe_x = screen_width - 10  # 10px từ mép phải
+                safe_y = random.randint(100, screen_height - 100)  # Random từ 100px đến (height-100)px
+
                 MouseMoveAction.move_and_click_static(safe_x, safe_y, "single_click", fast=False)
+
                 self.log(f"Moved mouse to safe area ({safe_x}, {safe_y}) before scroll", "INFO")
                 time.sleep(0.3)  # Let UI settle
                 
@@ -38,35 +43,22 @@ class YouTubeScrollAction(BaseYouTubeAction):
                 # Continue anyway, scroll might still work
             # ================================================================
 
-            # Determine scroll method
-            use_page_keys = random.random() < 0.5
-
-            # Determine direction
-            if self.direction == "random":
-                direction_down = random.random() < 0.8
+            if random.random() < 0.5:
+                self._random_scroll_pyautogui()
             else:
-                direction_down = (self.direction == "down")
-
-            # Determine times
-            if self.times is None:
-                if use_page_keys:
-                    times = random.randint(1, 3)
+                # Determine direction
+                if self.direction == "random":
+                    direction_down = random.random() < 0.8
                 else:
-                    times = random.randint(3, 8)
-            else:
-                times = self.times
-
-            # Execute scroll
-            if use_page_keys:
-                key = "Page_Down" if direction_down else "Page_Up"
-                key_sequence = ";".join([key] * times)
-                KeyboardAction.press_key_static(key_sequence)
-                self.log(f"Scrolled with {key} x{times}", "SUCCESS")
-            else:
+                    direction_down = (self.direction == "down")
+        
+                times = random.randint(15, 30)
+            
                 key = "Down" if direction_down else "Up"
                 key_sequence = ";".join([key] * times)
                 KeyboardAction.press_key_static(key_sequence)
                 self.log(f"Scrolled with Arrow {key} x{times}", "SUCCESS")
+                
 
             return True
 
