@@ -64,6 +64,7 @@
             avoid_zone: Optional string to specify zone to avoid:
                 - None (default): Avoid center + edges (general use)
                 - 'top-right': Avoid top-right corner (YouTube Watch Later/Playlist icons)
+                - 'bottom-half': Avoid bottom 50% (YouTube main feed description area)
                 - 'top-left': Avoid top-left corner
                 - 'bottom-right': Avoid bottom-right corner
                 - 'bottom-left': Avoid bottom-left corner
@@ -92,7 +93,19 @@
                 # Generate random position in safe zone
                 random_offset_x = random.uniform(safe_x_min, safe_x_max)
                 random_offset_y = random.uniform(safe_y_min, safe_y_max)
+        
+            elif avoid_zone == 'bottom-half':
+                # For YouTube main feed: Avoid bottom 50% where description/metadata are
+                # Safe zone: Top 50% (title + thumbnail area)
+                safe_x_min = width * 0.15   # Avoid left edge (15%)
+                safe_x_max = width * 0.85   # Avoid right edge (15%)
+                safe_y_min = height * 0.15  # Avoid top edge (15%)
+                safe_y_max = height * 0.50  # Only use top 50% (avoid bottom half)
             
+                # Generate random position in safe zone
+                random_offset_x = random.uniform(safe_x_min, safe_x_max)
+                random_offset_y = random.uniform(safe_y_min, safe_y_max)
+        
             elif avoid_zone == 'top-left':
                 # Avoid top-left corner (30% width, 40% height)
                 safe_x_min = width * 0.30
@@ -102,7 +115,7 @@
             
                 random_offset_x = random.uniform(safe_x_min, safe_x_max)
                 random_offset_y = random.uniform(safe_y_min, safe_y_max)
-            
+        
             elif avoid_zone == 'bottom-right':
                 # Avoid bottom-right corner (30% width, 40% height)
                 safe_x_min = width * 0.15
@@ -112,7 +125,7 @@
             
                 random_offset_x = random.uniform(safe_x_min, safe_x_max)
                 random_offset_y = random.uniform(safe_y_min, safe_y_max)
-            
+        
             elif avoid_zone == 'bottom-left':
                 # Avoid bottom-left corner (30% width, 40% height)
                 safe_x_min = width * 0.30
@@ -186,6 +199,7 @@
                 else:
                     # Random choose a zone
                     chosen_zone = random.choice(zones)
+                
                     # Random position in chosen zone
                     random_offset_x = random.uniform(chosen_zone['x_min'], chosen_zone['x_max'])
                     random_offset_y = random.uniform(chosen_zone['y_min'], chosen_zone['y_max'])
@@ -195,8 +209,9 @@
             click_y = viewport_offset_y + viewport_coords['y'] + random_offset_y
         
             return click_x, click_y
-        
+    
         except Exception as e:
             print(f"[BaseFlowAction] Calculate position error: {e}")
             return None, None
+
 

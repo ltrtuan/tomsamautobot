@@ -38,8 +38,8 @@ class MouseMoveAction(BaseAction):
         
         # Click if needed
         if click_type == "single_click":
-            time.sleep(0.3)
+            time.sleep(1)
             pyautogui.click()
         elif click_type == "double_click":
-            time.sleep(0.3)
+            time.sleep(1)
             pyautogui.doubleClick()

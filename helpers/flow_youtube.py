@@ -290,49 +290,50 @@ class YouTubeFlow:
             GoLoginProfileHelper.bring_profile_to_front(profile_id, driver=driver, log_prefix=log_prefix)
             time.sleep(2)
             
-            YouTubeSearchAction(driver, profile_id, keywords, log_prefix, debugger_address).execute()
+            result_search = YouTubeSearchAction(driver, profile_id, keywords, log_prefix, debugger_address).execute()
             time.sleep(random.uniform(2, 4))
-            
-            ################################### Retry logic: Try to click video up to 3 times, scroll between retries
-            video_clicked = False
-            max_retries = 3
-
-            for attempt in range(1, max_retries + 1):
-                print(f"{log_prefix} [{profile_id}] ℹ Attempting to click video (try {attempt}/{max_retries})...")
-    
-                video_action = YouTubeClickVideoAction(
-                    driver, profile_id, log_prefix, debugger_address,
-                    video_index_range=(1, 10)
-                ).execute()
-    
-                if video_action:
-                    # Success: video clicked and started playing
-                    video_clicked = True
-                    print(f"{log_prefix} [{profile_id}] ✓ Video clicked successfully on attempt {attempt}")
-                    break
-                else:
-                    # Failed to find/click video
-                    if attempt < max_retries:
-                        print(f"{log_prefix} [{profile_id}] ⚠ No video found on screen, scrolling to find more...")
-            
-                        # Scroll down to load more videos
-                        YouTubeScrollAction(
-                            driver, profile_id, log_prefix, debugger_address,
-                            direction="down",
-                            times=random.randint(2, 4)
-                        ).execute()
-            
-                        # Wait for videos to load
-                        time.sleep(random.uniform(1.5, 2.5))
-                    else:
-                        print(f"{log_prefix} [{profile_id}] ✗ Failed to find clickable video after {max_retries} attempts")
-
-            # Check final result
-            if not video_clicked:
-                print(f"{log_prefix} [{profile_id}] ✗ Failed to start video playback")
+            if not result_search:
                 return False
-            
+            ################################### Retry logic: Try to click video up to 3 times, scroll between retries
+            # video_clicked = False
+            # max_retries = 3
 
+            # for attempt in range(1, max_retries + 1):
+            #     print(f"{log_prefix} [{profile_id}] ℹ Attempting to click video (try {attempt}/{max_retries})...")
+    
+            #     video_action = YouTubeClickVideoAction(
+            #         driver, profile_id, log_prefix, debugger_address,
+            #         video_index_range=(1, 10)
+            #     ).execute()
+    
+            #     if video_action:
+            #         # Success: video clicked and started playing
+            #         video_clicked = True
+            #         print(f"{log_prefix} [{profile_id}] ✓ Video clicked successfully on attempt {attempt}")
+            #         break
+            #     else:
+            #         # Failed to find/click video
+            #         if attempt < max_retries:
+            #             print(f"{log_prefix} [{profile_id}] ⚠ No video found on screen, scrolling to find more...")
+            
+            #             # Scroll down to load more videos
+            #             YouTubeScrollAction(
+            #                 driver, profile_id, log_prefix, debugger_address,
+            #                 direction="down",
+            #                 times=random.randint(2, 4)
+            #             ).execute()
+            
+            #             # Wait for videos to load
+            #             time.sleep(random.uniform(1.5, 2.5))
+            #         else:
+            #             print(f"{log_prefix} [{profile_id}] ✗ Failed to find clickable video after {max_retries} attempts")
+
+            # # Check final result
+            # if not video_clicked:
+            #     print(f"{log_prefix} [{profile_id}] ✗ Failed to start video playback")
+            #     return False
+            
+            
             YouTubeMouseMoveAction(driver, profile_id, log_prefix, debugger_address).execute()
             
             # 70% skip, 30% click

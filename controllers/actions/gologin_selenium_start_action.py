@@ -578,7 +578,41 @@ class GoLoginSeleniumStartAction(BaseAction):
             keywords_suffix_prefix = self.params.get("keywords_suffix_prefix", "").strip()
             keywords_youtube = GoLoginProfileHelper.load_keywords(self.params, "[Get Youtube Keywords]")
             keywords_google = GoLoginProfileHelper.load_keywords(self.params, "[Get Google Keywords]", "Google")
-            keywords = {"keywords_youtube" : keywords_youtube, "keywords_google" : keywords_google, "suffix_prefix" : keywords_suffix_prefix}
+            # ========== GET YOUTUBE OPTION PARAMS ==========
+            # Main Area coordinates
+            youtube_main_area_x = int(self.params.get("youtube_main_area_x", "0"))
+            youtube_main_area_y = int(self.params.get("youtube_main_area_y", "0"))
+            youtube_main_area_width = int(self.params.get("youtube_main_area_width", "1920"))
+            youtube_main_area_height = int(self.params.get("youtube_main_area_height", "1080"))
+        
+            # Logo image path
+            youtube_image_search_path = self.params.get("youtube_image_search_path", "").strip()
+        
+            # Sidebar Area coordinates (for future use)
+            youtube_sidebar_area_x = int(self.params.get("youtube_sidebar_area_x", "0"))
+            youtube_sidebar_area_y = int(self.params.get("youtube_sidebar_area_y", "0"))
+            youtube_sidebar_area_width = int(self.params.get("youtube_sidebar_area_width", "400"))
+            youtube_sidebar_area_height = int(self.params.get("youtube_sidebar_area_height", "1080"))
+            youtube_sidebar_image_search_path = self.params.get("youtube_sidebar_image_search_path", "").strip()
+            
+            keywords = {
+                "keywords_youtube" : keywords_youtube,
+                "keywords_google" : keywords_google,
+                "suffix_prefix" : keywords_suffix_prefix,
+                # Youtube Option params
+                "youtube_main_area_x": youtube_main_area_x,
+                "youtube_main_area_y": youtube_main_area_y,
+                "youtube_main_area_width": youtube_main_area_width,
+                "youtube_main_area_height": youtube_main_area_height,
+                "youtube_image_search_path": youtube_image_search_path,
+            
+                # Sidebar params (optional)
+                "youtube_sidebar_area_x": youtube_sidebar_area_x,
+                "youtube_sidebar_area_y": youtube_sidebar_area_y,
+                "youtube_sidebar_area_width": youtube_sidebar_area_width,
+                "youtube_sidebar_area_height": youtube_sidebar_area_height,
+                "youtube_sidebar_image_search_path": youtube_sidebar_image_search_path,
+            }
 
             if not keywords:
                 print("[PHASE 2] ✗ Failed to load keywords")
@@ -832,7 +866,42 @@ class GoLoginSeleniumStartAction(BaseAction):
             keywords_suffix_prefix = self.params.get("keywords_suffix_prefix", "").strip()
             keywords_youtube = GoLoginProfileHelper.load_keywords(self.params, "[Get Youtube Keywords]")
             keywords_google = GoLoginProfileHelper.load_keywords(self.params, "[Get Google Keywords]", "Google")
-            keywords = {"keywords_youtube" : keywords_youtube, "keywords_google" : keywords_google, "suffix_prefix" : keywords_suffix_prefix}
+            
+            # ========== GET YOUTUBE OPTION PARAMS ==========
+            # Main Area coordinates
+            youtube_main_area_x = int(self.params.get("youtube_main_area_x", "0"))
+            youtube_main_area_y = int(self.params.get("youtube_main_area_y", "0"))
+            youtube_main_area_width = int(self.params.get("youtube_main_area_width", "1920"))
+            youtube_main_area_height = int(self.params.get("youtube_main_area_height", "1080"))
+        
+            # Logo image path
+            youtube_image_search_path = self.params.get("youtube_image_search_path", "").strip()
+        
+            # Sidebar Area coordinates (for future use)
+            youtube_sidebar_area_x = int(self.params.get("youtube_sidebar_area_x", "0"))
+            youtube_sidebar_area_y = int(self.params.get("youtube_sidebar_area_y", "0"))
+            youtube_sidebar_area_width = int(self.params.get("youtube_sidebar_area_width", "400"))
+            youtube_sidebar_area_height = int(self.params.get("youtube_sidebar_area_height", "1080"))
+            youtube_sidebar_image_search_path = self.params.get("youtube_sidebar_image_search_path", "").strip()
+            
+            keywords = {
+                "keywords_youtube" : keywords_youtube,
+                "keywords_google" : keywords_google,
+                "suffix_prefix" : keywords_suffix_prefix,
+                # Youtube Option params
+                "youtube_main_area_x": youtube_main_area_x,
+                "youtube_main_area_y": youtube_main_area_y,
+                "youtube_main_area_width": youtube_main_area_width,
+                "youtube_main_area_height": youtube_main_area_height,
+                "youtube_image_search_path": youtube_image_search_path,
+            
+                # Sidebar params (optional)
+                "youtube_sidebar_area_x": youtube_sidebar_area_x,
+                "youtube_sidebar_area_y": youtube_sidebar_area_y,
+                "youtube_sidebar_area_width": youtube_sidebar_area_width,
+                "youtube_sidebar_area_height": youtube_sidebar_area_height,
+                "youtube_sidebar_image_search_path": youtube_sidebar_image_search_path,
+            }
             
             if action_type == "None":
                 print(f"[GOLOGIN START] [{profile_id}] No action required")

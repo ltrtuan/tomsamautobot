@@ -43,21 +43,21 @@ class YouTubeScrollAction(BaseYouTubeAction):
                 # Continue anyway, scroll might still work
             # ================================================================
 
-           
-
-            # Determine direction
-            if self.direction == "random":
-                direction_down = random.random() < 0.8
+            if random.random() < 0.5:
+                self._random_scroll_pyautogui()
             else:
-                direction_down = (self.direction == "down")
-
+                # Determine direction
+                if self.direction == "random":
+                    direction_down = random.random() < 0.8
+                else:
+                    direction_down = (self.direction == "down")
         
-            times = random.randint(15, 30)
+                times = random.randint(15, 30)
             
-            key = "Down" if direction_down else "Up"
-            key_sequence = ";".join([key] * times)
-            KeyboardAction.press_key_static(key_sequence)
-            self.log(f"Scrolled with Arrow {key} x{times}", "SUCCESS")
+                key = "Down" if direction_down else "Up"
+                key_sequence = ";".join([key] * times)
+                KeyboardAction.press_key_static(key_sequence)
+                self.log(f"Scrolled with Arrow {key} x{times}", "SUCCESS")
                 
 
             return True

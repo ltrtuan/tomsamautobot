@@ -6,7 +6,8 @@ import random
 from selenium.common.exceptions import WebDriverException
 from helpers.gologin_profile_helper import GoLoginProfileHelper
 from helpers.actions.base_flow_action import BaseFlowAction  # ← THÊM IMPORT
-
+from controllers.actions.mouse_move_action import MouseMoveAction
+import pyautogui
 
 class BaseYouTubeAction(BaseFlowAction, ABC):  # ← THÊM BaseFlowAction
     """
@@ -88,7 +89,40 @@ class BaseYouTubeAction(BaseFlowAction, ABC):  # ← THÊM BaseFlowAction
     
         return None
 
+    def _random_scroll_pyautogui(self, area_type="main"):
+        """
+        Random scroll page using pyautogui (giả lập chuột vật lý, tránh bot detection)
+        
+        Args:
+            area_type: "main" or "sidebar" (for different scroll amounts)
+        """
+        try:
+            # Different scroll amounts based on area
+            if area_type == "main":
+                # Main area: Scroll more (300-600px equivalent)
+                # pyautogui scroll units: negative = down, positive = up
+                # Each unit ≈ 100px on most systems
+                scroll_amount = random.randint(-700, -500)  # -3 to -6 units = 300-600px down
+            else:  # sidebar
+                # Sidebar: Scroll less (200-400px equivalent)
+                scroll_amount = random.randint(-400, -200)  # -2 to -4 units = 200-400px down
+            
+            self.log(f"Scrolling {abs(scroll_amount) * 100}px (pyautogui)...", "INFO")           
+            screen_width, screen_height = pyautogui.size()
+            # Move to right-center (safe area, no UI elements)
+            # Move to right edge, random Y (avoid top/bottom 100px)
+            safe_x = screen_width - random.randint(5,30)  # 10px từ mép phải
+            safe_y = random.randint(100, screen_height - 100)  # Random từ 100px đến (height-100)px
 
+            MouseMoveAction.move_and_click_static(safe_x, safe_y, "single_click", fast=False)
+            # Use pyautogui scroll (simulates physical mouse wheel)
+            pyautogui.scroll(scroll_amount)
+            
+            # Add small random delay after scroll (human-like behavior)
+            time.sleep(random.uniform(0.3, 0.6))
+        
+        except Exception as e:
+            self.log(f"Error scrolling with pyautogui: {e}", "ERROR")
 
     @abstractmethod
     def execute(self):
