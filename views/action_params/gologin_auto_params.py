@@ -13,7 +13,8 @@ class GoLoginAutoParams(BaseActionParams):
         self.youtube_option_frame = None  # Track Youtube Option frame
         self.youtube_select_area_button = None  # Track Select area button
         self.youtube_sidebar_select_area_button = None  # Track Sidebar Select area button
-
+        self.youtube_ads_select_area_button = None
+        self.youtube_skip_ads_select_area_button = None
 
     
     def create_params(self):
@@ -64,7 +65,9 @@ class GoLoginAutoParams(BaseActionParams):
         return {
             'select_program_button': select_program_button,
             'youtube_select_area_button': self.youtube_select_area_button,
-            'youtube_sidebar_select_area_button': self.youtube_sidebar_select_area_button
+            'youtube_sidebar_select_area_button': self.youtube_sidebar_select_area_button,
+            'youtube_ads_select_area_button': self.youtube_ads_select_area_button,
+            'youtube_skip_ads_select_area_button': self.youtube_skip_ads_select_area_button
         }
     
     def create_api_key_variable_section(self):
@@ -254,6 +257,69 @@ class GoLoginAutoParams(BaseActionParams):
         )
         browse_button.pack(side=tk.RIGHT, padx=5)
         
+        
+        # Search Icon Image Section
+        searchiconlabel = tk.Label(
+            self.youtube_option_frame, 
+            text="Search Icon Image (for YouTube search box detection)",
+            bg=cfg.LIGHT_BG_COLOR, 
+            font=("Segoe UI", 10, "bold")
+        )
+        searchiconlabel.pack(anchor=tk.W, pady=(5, 3))
+
+        searchiconbrowseframe = tk.Frame(self.youtube_option_frame, bg=cfg.LIGHT_BG_COLOR)
+        searchiconbrowseframe.pack(fill=tk.X, pady=(0, 5))
+
+        tk.Label(
+            searchiconbrowseframe, 
+            text="Đường dẫn hình ảnh:", 
+            bg=cfg.LIGHT_BG_COLOR
+        ).pack(side=tk.LEFT, padx=(0, 5))
+
+        self.youtube_search_icon_path_var = tk.StringVar()
+        if self.parameters:
+            self.youtube_search_icon_path_var.set(
+                self.parameters.get("youtube_search_icon_path", "")
+            )
+        else:
+            self.youtube_search_icon_path_var.set("")
+
+        searchiconentry = ttk.Entry(
+            searchiconbrowseframe,
+            textvariable=self.youtube_search_icon_path_var,
+            width=40
+        )
+        searchiconentry.pack(side=tk.LEFT, padx=(0, 5), fill=tk.X, expand=True)
+
+        def browse_youtube_search_icon():
+            filename = filedialog.askopenfilename(
+                title="Chọn một hình ảnh",
+                filetypes=[
+                    ("Image files", "*.png *.jpg *.jpeg *.bmp *.gif"),
+                    ("All files", "*.*")
+                ]
+            )
+            if filename:
+                self.youtube_search_icon_path_var.set(filename)
+                print(f"[YOUTUBE_SEARCH_ICON] Selected image: {filename}")
+
+        browsesearchiconbutton = ttk.Button(
+            searchiconbrowseframe,
+            text="Duyệt...",
+            command=browse_youtube_search_icon
+        )
+        browsesearchiconbutton.pack(side=tk.RIGHT, padx=5)
+
+        # Hint
+        searchicon_hint = tk.Label(
+            self.youtube_option_frame,
+            text="🔍 Icon này dùng để detect vị trí search box trên YouTube (hybrid method).",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 8),
+            fg="#666666"
+        )
+        searchicon_hint.pack(anchor=tk.W, pady=(0, 10))
+        
         # ========== SIDEBAR AREA YOUTUBE SECTION ==========
         separator2 = ttk.Separator(self.youtube_option_frame, orient="horizontal")
         separator2.pack(fill=tk.X, pady=10)
@@ -345,6 +411,9 @@ class GoLoginAutoParams(BaseActionParams):
             command=self.on_youtube_sidebar_select_area_click
         )
         self.youtube_sidebar_select_area_button.pack(side=tk.LEFT, padx=(15, 0))
+        
+
+        
 
         # ========== IMAGE SEARCH SIDEBAR AREA SECTION ==========
         separator3 = ttk.Separator(self.youtube_option_frame, orient="horizontal")
@@ -400,6 +469,216 @@ class GoLoginAutoParams(BaseActionParams):
             command=browse_youtube_sidebar_image
         )
         browse_sidebar_button.pack(side=tk.RIGHT, padx=5)
+        
+        # ========== ADS AREA YOUTUBE SECTION ==========
+        separator4 = ttk.Separator(self.youtube_option_frame, orient="horizontal")
+        separator4.pack(fill=tk.X, pady=10)
+
+        ads_area_label = tk.Label(
+            self.youtube_option_frame,
+            text="Ads Area Youtube (Skip Button Detection):",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10, "bold")
+        )
+        ads_area_label.pack(anchor=tk.W, pady=(5, 3))
+
+        # Frame chứa 4 inputs + Select area button cho Ads
+        ads_coords_frame = tk.Frame(self.youtube_option_frame, bg=cfg.LIGHT_BG_COLOR)
+        ads_coords_frame.pack(fill=tk.X, pady=(0, 10))
+
+        # X coordinate
+        tk.Label(
+            ads_coords_frame,
+            text="X:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9)
+        ).pack(side=tk.LEFT, padx=(0, 5))
+
+        self.youtube_ads_area_x_var = tk.StringVar()
+        if self.parameters:
+            self.youtube_ads_area_x_var.set(self.parameters.get("youtube_ads_area_x", "0"))
+        else:
+            self.youtube_ads_area_x_var.set("0")
+
+        ads_x_entry = ttk.Entry(ads_coords_frame, textvariable=self.youtube_ads_area_x_var, width=8)
+        ads_x_entry.pack(side=tk.LEFT, padx=5)
+
+        # Y coordinate
+        tk.Label(
+            ads_coords_frame,
+            text="Y:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9)
+        ).pack(side=tk.LEFT, padx=(15, 5))
+
+        self.youtube_ads_area_y_var = tk.StringVar()
+        if self.parameters:
+            self.youtube_ads_area_y_var.set(self.parameters.get("youtube_ads_area_y", "0"))
+        else:
+            self.youtube_ads_area_y_var.set("0")
+
+        ads_y_entry = ttk.Entry(ads_coords_frame, textvariable=self.youtube_ads_area_y_var, width=8)
+        ads_y_entry.pack(side=tk.LEFT, padx=5)
+
+        # Width
+        tk.Label(
+            ads_coords_frame,
+            text="Width:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9)
+        ).pack(side=tk.LEFT, padx=(15, 5))
+
+        self.youtube_ads_area_width_var = tk.StringVar()
+        if self.parameters:
+            self.youtube_ads_area_width_var.set(self.parameters.get("youtube_ads_area_width", "300"))
+        else:
+            self.youtube_ads_area_width_var.set("300")
+
+        ads_width_entry = ttk.Entry(ads_coords_frame, textvariable=self.youtube_ads_area_width_var, width=8)
+        ads_width_entry.pack(side=tk.LEFT, padx=5)
+
+        # Height
+        tk.Label(
+            ads_coords_frame,
+            text="Height:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9)
+        ).pack(side=tk.LEFT, padx=(15, 5))
+
+        self.youtube_ads_area_height_var = tk.StringVar()
+        if self.parameters:
+            self.youtube_ads_area_height_var.set(self.parameters.get("youtube_ads_area_height", "150"))
+        else:
+            self.youtube_ads_area_height_var.set("150")
+
+        ads_height_entry = ttk.Entry(ads_coords_frame, textvariable=self.youtube_ads_area_height_var, width=8)
+        ads_height_entry.pack(side=tk.LEFT, padx=5)
+
+        # Button "Select area" cho Ads - Bind command
+        self.youtube_ads_select_area_button = ttk.Button(
+            ads_coords_frame,
+            text="Select area",
+            command=self.on_youtube_ads_select_area_click
+        )
+        self.youtube_ads_select_area_button.pack(side=tk.LEFT, padx=(15, 0))
+
+        # Hint
+        ads_hint = tk.Label(
+            self.youtube_option_frame,
+            text="💡 Select area where Skip Ads button appears (usually bottom-right of video player)",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 8),
+            fg="#666666",
+            wraplength=500,
+            justify=tk.LEFT
+        )
+        ads_hint.pack(anchor=tk.W, pady=(0, 10))
+
+
+        # ========== SKIP ADS AREA YOUTUBE SECTION ==========
+        separator5 = ttk.Separator(self.youtube_option_frame, orient="horizontal")
+        separator5.pack(fill=tk.X, pady=10)
+
+        skip_ads_area_label = tk.Label(
+            self.youtube_option_frame,
+            text="Skip Ads Area Youtube (Skip Button Location):",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10, "bold")
+        )
+        skip_ads_area_label.pack(anchor=tk.W, pady=(5, 3))
+
+        # Frame chứa 4 inputs + Select area button cho Skip Ads
+        skip_ads_coords_frame = tk.Frame(self.youtube_option_frame, bg=cfg.LIGHT_BG_COLOR)
+        skip_ads_coords_frame.pack(fill=tk.X, pady=(0, 10))
+
+        # X coordinate
+        tk.Label(
+            skip_ads_coords_frame,
+            text="X:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9)
+        ).pack(side=tk.LEFT, padx=(0, 5))
+
+        self.youtube_skip_ads_area_x_var = tk.StringVar()
+        if self.parameters:
+            self.youtube_skip_ads_area_x_var.set(self.parameters.get("youtube_skip_ads_area_x", "0"))
+        else:
+            self.youtube_skip_ads_area_x_var.set("0")
+
+        skip_ads_x_entry = ttk.Entry(skip_ads_coords_frame, textvariable=self.youtube_skip_ads_area_x_var, width=8)
+        skip_ads_x_entry.pack(side=tk.LEFT, padx=5)
+
+        # Y coordinate
+        tk.Label(
+            skip_ads_coords_frame,
+            text="Y:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9)
+        ).pack(side=tk.LEFT, padx=(15, 5))
+
+        self.youtube_skip_ads_area_y_var = tk.StringVar()
+        if self.parameters:
+            self.youtube_skip_ads_area_y_var.set(self.parameters.get("youtube_skip_ads_area_y", "0"))
+        else:
+            self.youtube_skip_ads_area_y_var.set("0")
+
+        skip_ads_y_entry = ttk.Entry(skip_ads_coords_frame, textvariable=self.youtube_skip_ads_area_y_var, width=8)
+        skip_ads_y_entry.pack(side=tk.LEFT, padx=5)
+
+        # Width
+        tk.Label(
+            skip_ads_coords_frame,
+            text="Width:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9)
+        ).pack(side=tk.LEFT, padx=(15, 5))
+
+        self.youtube_skip_ads_area_width_var = tk.StringVar()
+        if self.parameters:
+            self.youtube_skip_ads_area_width_var.set(self.parameters.get("youtube_skip_ads_area_width", "200"))
+        else:
+            self.youtube_skip_ads_area_width_var.set("200")
+
+        skip_ads_width_entry = ttk.Entry(skip_ads_coords_frame, textvariable=self.youtube_skip_ads_area_width_var, width=8)
+        skip_ads_width_entry.pack(side=tk.LEFT, padx=5)
+
+        # Height
+        tk.Label(
+            skip_ads_coords_frame,
+            text="Height:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9)
+        ).pack(side=tk.LEFT, padx=(15, 5))
+
+        self.youtube_skip_ads_area_height_var = tk.StringVar()
+        if self.parameters:
+            self.youtube_skip_ads_area_height_var.set(self.parameters.get("youtube_skip_ads_area_height", "100"))
+        else:
+            self.youtube_skip_ads_area_height_var.set("100")
+
+        skip_ads_height_entry = ttk.Entry(skip_ads_coords_frame, textvariable=self.youtube_skip_ads_area_height_var, width=8)
+        skip_ads_height_entry.pack(side=tk.LEFT, padx=5)
+
+        # Button "Select area" cho Skip Ads
+        self.youtube_skip_ads_select_area_button = ttk.Button(
+            skip_ads_coords_frame,
+            text="Select area",
+            command=self.on_youtube_skip_ads_select_area_click
+        )
+        self.youtube_skip_ads_select_area_button.pack(side=tk.LEFT, padx=(15, 0))
+
+        # Hint
+        skip_ads_hint = tk.Label(
+            self.youtube_option_frame,
+            text="💡 Select area where Skip Ads button will appear (bottom-right corner of video)",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 8),
+            fg="#666666",
+            wraplength=500,
+            justify=tk.LEFT
+        )
+        skip_ads_hint.pack(anchor=tk.W, pady=(0, 10))
+
 
 
     def on_youtube_select_area_click(self):
@@ -446,7 +725,43 @@ class GoLoginAutoParams(BaseActionParams):
         )
         selector.show()
 
+    def on_youtube_ads_select_area_click(self):
+        """Handler khi click button Select area của Ads Youtube Option"""
+        from views.screen_area_selector import ScreenAreaSelector
+    
+        # Callback để update các textboxes
+        def update_coords(x, y, width, height):
+            self.youtube_ads_area_x_var.set(str(x))
+            self.youtube_ads_area_y_var.set(str(y))
+            self.youtube_ads_area_width_var.set(str(width))
+            self.youtube_ads_area_height_var.set(str(height))
+            print(f"[YOUTUBE_ADS_SELECT_AREA] Updated: x={x}, y={y}, w={width}, h={height}")
+    
+        # Tìm dialog cha (ActionDialogView)
+        dialog = self.parent_frame.winfo_toplevel()
+    
+        # Tạo và show selector
+        selector = ScreenAreaSelector(
+            parent_dialog=dialog,
+            callback=update_coords
+        )
+        selector.show()
 
+    def on_youtube_skip_ads_select_area_click(self):
+        """Handler khi click button Select area của Skip Ads Youtube Option"""
+        from views.screen_area_selector import ScreenAreaSelector
+    
+        def update_coords(x, y, width, height):
+            self.youtube_skip_ads_area_x_var.set(str(x))
+            self.youtube_skip_ads_area_y_var.set(str(y))
+            self.youtube_skip_ads_area_width_var.set(str(width))
+            self.youtube_skip_ads_area_height_var.set(str(height))
+            print(f"[YOUTUBE_SKIP_ADS_SELECT_AREA] Updated: x={x}, y={y}, w={width}, h={height}")
+    
+        dialog = self.parent_frame.winfo_toplevel()
+        selector = ScreenAreaSelector(parent_dialog=dialog, callback=update_coords)
+        selector.show()
+    
     def create_how_to_get_profile_section(self):
         """How to get profile selection"""
         get_frame = tk.Frame(self.parent_frame, bg=cfg.LIGHT_BG_COLOR)
@@ -1074,6 +1389,7 @@ class GoLoginAutoParams(BaseActionParams):
         params["youtube_main_area_width"] = self.youtube_main_area_width_var.get().strip()
         params["youtube_main_area_height"] = self.youtube_main_area_height_var.get().strip()
         params["youtube_image_search_path"] = self.youtube_image_search_path_var.get().strip()
+        params["youtube_search_icon_path"] = self.youtube_search_icon_path_var.get().strip()
 
         # Youtube Sidebar Option params
         params["youtube_sidebar_area_x"] = self.youtube_sidebar_area_x_var.get().strip()
@@ -1082,6 +1398,17 @@ class GoLoginAutoParams(BaseActionParams):
         params["youtube_sidebar_area_height"] = self.youtube_sidebar_area_height_var.get().strip()
         params["youtube_sidebar_image_search_path"] = self.youtube_sidebar_image_search_path_var.get().strip()
 
+        # Youtube Ads Area params
+        params["youtube_ads_area_x"] = self.youtube_ads_area_x_var.get().strip()
+        params["youtube_ads_area_y"] = self.youtube_ads_area_y_var.get().strip()
+        params["youtube_ads_area_width"] = self.youtube_ads_area_width_var.get().strip()
+        params["youtube_ads_area_height"] = self.youtube_ads_area_height_var.get().strip()
         
+        # Youtube Skip Ads Area params
+        params["youtube_skip_ads_area_x"] = self.youtube_skip_ads_area_x_var.get().strip()
+        params["youtube_skip_ads_area_y"] = self.youtube_skip_ads_area_y_var.get().strip()
+        params["youtube_skip_ads_area_width"] = self.youtube_skip_ads_area_width_var.get().strip()
+        params["youtube_skip_ads_area_height"] = self.youtube_skip_ads_area_height_var.get().strip()
+
 
         return params

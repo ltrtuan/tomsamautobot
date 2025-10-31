@@ -694,6 +694,7 @@ class GoLoginSeleniumStartAction(BaseAction):
                     if not flow.has_next_chain():
                         print(f"[BATCH {batch_num}][ROUND {round_num}][{profile_id}] ✓ All chains completed")
                         profiles_to_remove.append(profile_id)
+                        driver.quit()
                         continue
 
                 

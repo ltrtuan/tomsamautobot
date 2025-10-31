@@ -4,12 +4,17 @@ from controllers.actions.base_action import BaseAction
 from models.global_variables import GlobalVariables
 from models.gologin_api import get_gologin_api
 import random
+from pywinauto.application import Application
+from pywinauto.keyboard import send_keys
+import pyautogui
 import time
+import pywinauto.findwindows as fw
+import win32gui
 
+from controllers.actions.flow_auto.flow_youtube_auto import YouTubeFlowAuto
+from helpers.app_helpers import check_and_focus_window_by_title
 # Import helpers
 from helpers.gologin_profile_helper import GoLoginProfileHelper
-from helpers.flow_youtube import YouTubeFlow
-from helpers.flow_google import GoogleFlow
 from helpers.selenium_registry import register_selenium_driver, unregister_selenium_driver
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -18,6 +23,7 @@ class GoLoginAutoAction(BaseAction):
     
     def prepare_play(self):
         """Execute GoLogin Selenium Start Profile"""
+       
         try:
             # Get API token from variable name
             api_key_variable = self.params.get("api_key_variable", "").strip()
@@ -67,8 +73,7 @@ class GoLoginAutoAction(BaseAction):
                 print("[GOLOGIN START] ========== SEQUENTIAL MODE ==========")
                 how_to_get = self.params.get("how_to_get", "Random")
                 profile_id = GoLoginProfileHelper.select_profile(profile_list, how_to_get)
-                print(f"[GOLOGIN START] Selected profile ID: {profile_id}")
-                
+                print(f"[GOLOGIN START] Selected profile ID: {profile_id}")              
                 # Start single profile
                 success = self._start_single_profile(profile_id)
                 self.set_variable(success)
@@ -141,26 +146,33 @@ class GoLoginAutoAction(BaseAction):
     
     def _open_profile(self, profile_id, batch_num=None):
         """
-        Open profile via GoLogin SDK WITHOUT Selenium connection
-        Profile runs in MANUAL mode (no automation)
+        Open profile via pywinauto (Automate GoLogin App UI)
+    
+        Flow:
+        1. Connect to GoLogin app
+        2. Focus window
+        3. Send Ctrl+F to open search (using pywinauto)
+        4. Type profile ID + Enter (using pywinauto)
+        5. Click Run button (using pywinauto)
     
         Args:
             profile_id: Profile ID to open
             batch_num: Batch number for logging (optional)
     
         Returns:
-            dict: {
-                'success': bool,
-                'profile_id': str,
-                'error': str or None
-            }
+            dict: {'success': bool, 'profile_id': str, 'error': str or None}
         """
         log_prefix = f"[BATCH {batch_num}][{profile_id}]" if batch_num else f"[GOLOGIN AUTO][{profile_id}]"
     
         try:
-            print(f"{log_prefix} Opening profile (MANUAL mode - NO Selenium)...")
-            
-            # ========== CHECK REFRESH FINGERPRINT OPTION (NEW) ==========
+            # Import dependencies
+            from pywinauto.application import Application
+            from pywinauto.keyboard import send_keys
+            import time
+        
+            print(f"{log_prefix} Opening profile via GoLogin App UI automation...")
+        
+            # ========== REFRESH FINGERPRINT (OPTIONAL) ==========
             refresh_fingerprint = self.params.get("refresh_fingerprint", False)
         
             if refresh_fingerprint:
@@ -170,42 +182,216 @@ class GoLoginAutoAction(BaseAction):
                 if success:
                     print(f"{log_prefix} ✓ Fingerprint refreshed")
                 else:
-                    print(f"{log_prefix} ⚠️ Failed to refresh fingerprint")
+                    print(f"{log_prefix} ⚠️ Failed to refresh fingerprint")        
+         
         
-            # ========== START PROFILE VIA GOLOGIN SDK ==========
-            # GoLogin SDK starts Orbita browser in background
-            # Returns: (success: bool, debugger_address: str)
-            success, result = self.gologin_api.start_profile(profile_id)
+            # ========== STEP 2: CONNECT TO GOLOGIN APP ==========
+            print(f"{log_prefix} Connecting to GoLogin app...")
+            check_and_focus_window_by_title("GoLogin")
+            time.sleep(2)
+            # Try multiple methods to find GoLogin window
+            app = None
+            max_retries = 3
+
+            for attempt in range(1, max_retries + 1):
+                try:
+                    print(f"{log_prefix} Attempt {attempt}/{max_retries}: Searching for GoLogin window...")
         
-            if not success:
-                print(f"{log_prefix} ❌ Failed to start profile")
-                print(f"{log_prefix} Error: {result}")
+                    # Method 1: Try with UIA backend (more accurate but slower)
+                    try:
+                        app = Application(backend="uia").connect(title_re=".*[Gg]o[Ll]ogin.*", timeout=15)
+                        print(f"{log_prefix} ✓ Connected via UIA backend")
+                        break
+                    except Exception as e1:
+                        print(f"{log_prefix} UIA backend failed: {e1}")
+        
+                    # Method 2: Try with Win32 backend (faster but less accurate)
+                    try:
+                        app = Application(backend="win32").connect(title_re=".*[Gg]o[Ll]ogin.*", timeout=15)
+                        print(f"{log_prefix} ✓ Connected via Win32 backend")
+                        break
+                    except Exception as e2:
+                        print(f"{log_prefix} Win32 backend failed: {e2}")
+        
+                    # Method 3: Try to find by class name (fallback)
+                    try:
+                        import pywinauto.findwindows as fw
+                        windows = fw.find_windows(class_name_re=".*Chrome.*|.*Electron.*")
+            
+                        for hwnd in windows:
+                            try:
+                                import win32gui
+                                title = win32gui.GetWindowText(hwnd)
+                                if "gologin" in title.lower():
+                                    app = Application(backend="uia").connect(handle=hwnd)
+                                    print(f"{log_prefix} ✓ Connected via handle: {hwnd} (title: {title})")
+                                    break
+                            except:
+                                continue
+            
+                        if app:
+                            break
+                    except Exception as e3:
+                        print(f"{log_prefix} Handle search failed: {e3}")
+        
+                    # Wait before retry
+                    if attempt < max_retries:
+                        print(f"{log_prefix} Waiting 2s before retry...")
+                        time.sleep(2)
+    
+                except Exception as e:
+                    print(f"{log_prefix} Attempt {attempt} error: {e}")
+                    if attempt < max_retries:
+                        time.sleep(2)
+
+            # Check if connection successful
+            if not app:
+                print(f"{log_prefix} ❌ GoLogin app not found after {max_retries} attempts")
                 return {
                     'success': False,
                     'profile_id': profile_id,
-                    'error': result
+                    'error': f'GoLogin app not found after {max_retries} attempts'
+                }
+
+            print(f"{log_prefix} ✓ Successfully connected to GoLogin app")
+
+            
+            # ========== GET WINDOW OBJECT FROM APP ==========
+            try:
+                gologin_window = app.window(title_re=".*[Gg]o[Ll]ogin.*")
+                gologin_window.wait('visible', timeout=10)
+    
+            except Exception as e:
+                print(f"{log_prefix} ❌ Failed to get window object: {e}")
+                return {
+                    'success': False,
+                    'profile_id': profile_id,
+                    'error': f'Failed to get window: {e}'
+                }
+            
+
+            # ========== STEP 3: SEND CTRL+F TO OPEN SEARCH ==========
+            print(f"{log_prefix} Opening search with Ctrl+F...")
+        
+            try:
+                gologin_window.set_focus()
+                time.sleep(1)
+            
+                send_keys('^f')  # Ctrl+F
+                print(f"{log_prefix} ✓ Sent Ctrl+F")
+            
+                time.sleep(2)
+            
+            except Exception as e:
+                print(f"{log_prefix} ❌ Failed to send Ctrl+F: {e}")
+                return {
+                    'success': False,
+                    'profile_id': profile_id,
+                    'error': f'Failed to open search: {e}'
                 }
         
-            # ========== PROFILE STARTED SUCCESSFULLY ==========
-            # result = debugger_address (e.g., "127.0.0.1:9222")
-            # We don't need it since no Selenium connection
-            debugger_address = result
+            # ========== STEP 4: TYPE PROFILE ID + ENTER ==========
+            print(f"{log_prefix} Typing profile ID...")
+            import pyperclip
+            try:
+                # Clear existing text
+                send_keys('^a{BACKSPACE}')
+                time.sleep(0.5)
+    
+                # Type profile ID
+                pyperclip.copy(profile_id)
+    
+                # Paste using Ctrl+V
+                send_keys('^v')
+                print(f"{log_prefix} ✓ Typed profile ID: {profile_id}")
+    
+                time.sleep(0.5)
+    
+                # Press Enter to search
+                send_keys('{ENTER}')
+                print(f"{log_prefix} ✓ Pressed Enter to search")
+    
+            except Exception as e:
+                print(f"{log_prefix} ❌ Failed to type: {e}")
+                return {
+                    'success': False,
+                    'profile_id': profile_id,
+                    'error': f'Failed to type: {e}'
+                }
+
+            # ========== STEP 4.5: WAIT FOR RUN BUTTON (SMART TIMEOUT) ==========
+            print(f"{log_prefix} Waiting for profile to appear (max 10s)...")
+
+            run_button = None
+            timeout = 10  # Max wait time in seconds
+            check_interval = 0.5  # Check every 0.5 seconds
+            elapsed = 0
+
+            try:
+                while elapsed < timeout:
+                    try:
+                        # Try to find Run button
+                        run_button = gologin_window.child_window(title="Run", control_type="Button")
+            
+                        if run_button.exists():
+                            print(f"{log_prefix} ✓ Profile found after {elapsed:.1f}s")
+                            break  # Exit immediately when found!
         
-            print(f"{log_prefix} ✓ Profile opened successfully")
-            print(f"{log_prefix} ℹ️  Browser running in MANUAL mode")
-            print(f"{log_prefix} ℹ️  Debugger: {debugger_address} (not used)")
+                    except:
+                        pass  # Button not found yet, continue waiting
         
-            # ========== WAIT FOR BROWSER TO STABILIZE ==========
-            time.sleep(2)  # Give browser time to fully launch
+                    time.sleep(check_interval)
+                    elapsed += check_interval
+    
+                if run_button is None or not run_button.exists():
+                    print(f"{log_prefix} ❌ Profile not found after {timeout}s timeout")
+                    return {
+                        'success': False,
+                        'profile_id': profile_id,
+                        'error': f'Profile not found after {timeout}s (invalid profile ID or search failed)'
+                    }
+
+            except Exception as e:
+                print(f"{log_prefix} ⚠️ Error while waiting: {e}")
+                # Continue anyway, try to click
+
+            # ========== STEP 5: CLICK RUN BUTTON ==========
+            print(f"{log_prefix} Clicking Run button...")
+
+            try:
+                if run_button and run_button.exists():
+                    run_button.click_input()
+                    print(f"{log_prefix} ✓ Clicked Run button")
         
-            return {
-                'success': True,
-                'profile_id': profile_id,
-                'error': None
-            }
+                    time.sleep(3)  # Wait for profile to open
+        
+                    print(f"{log_prefix} ✓ Profile opened successfully")
+                    print(f"{log_prefix} ℹ️  Browser running in MANUAL mode (no Selenium)")
+        
+                    return {
+                        'success': True,
+                        'profile_id': profile_id,
+                        'error': None
+                    }
+                else:
+                    print(f"{log_prefix} ❌ Run button not accessible")
+                    return {
+                        'success': False,
+                        'profile_id': profile_id,
+                        'error': 'Run button not accessible'
+                    }
+        
+            except Exception as e:
+                print(f"{log_prefix} ❌ Failed to click Run button: {e}")
+                return {
+                    'success': False,
+                    'profile_id': profile_id,
+                    'error': f'Failed to click: {e}'
+                }
+
     
         except Exception as e:
-            print(f"{log_prefix} ❌ Exception while opening profile")
+            print(f"{log_prefix} ❌ Exception in _open_profile")
             print(f"{log_prefix} Error: {e}")
             import traceback
             traceback.print_exc()
@@ -215,6 +401,7 @@ class GoLoginAutoAction(BaseAction):
                 'profile_id': profile_id,
                 'error': str(e)
             }
+
 
         
     def _start_parallel(self, profile_list):
@@ -255,7 +442,8 @@ class GoLoginAutoAction(BaseAction):
     
         total_success = 0
         total_failed = 0
-    
+        # ========== ADD GLOBAL LOCK FOR PROFILE OPENING ==========
+        profile_open_lock = threading.Lock()  # ← THÊM LOCK MỚI
         # ========== PROCESS EACH BATCH ==========
         for batch_num, batch_profiles in enumerate(batches, 1):
             print("=" * 80)
@@ -272,10 +460,11 @@ class GoLoginAutoAction(BaseAction):
             def open_profile_thread(profile_id):
                 """Thread function to open 1 profile WITHOUT Selenium"""
                 try:
-                    print(f"[BATCH {batch_num}][{profile_id}] Opening profile...")
+                    with profile_open_lock:  # ← LOCK TOÀN BỘ OPEN PROCESS
+                        print(f"[BATCH {batch_num}][{profile_id}] Opening profile...")
                 
-                    # ========== CALL _open_profile() METHOD (NEW) ==========
-                    result = self._open_profile(profile_id, batch_num)
+                        # ========== CALL _open_profile() METHOD (NEW) ==========
+                        result = self._open_profile(profile_id, batch_num)
                 
                     with open_lock:
                         if result['success']:
@@ -366,33 +555,53 @@ class GoLoginAutoAction(BaseAction):
             keywords_google = GoLoginProfileHelper.load_keywords(self.params, "Get Google Keywords", "Google")
         
             # Youtube Options
-            youtube_main_area_x = int(self.params.get("youtube_main_area_x", 0))
-            youtube_main_area_y = int(self.params.get("youtube_main_area_y", 0))
-            youtube_main_area_width = int(self.params.get("youtube_main_area_width", 1920))
-            youtube_main_area_height = int(self.params.get("youtube_main_area_height", 1080))
+            youtube_area_x = int(self.params.get("youtube_area_x", 0))
+            youtube_area_y = int(self.params.get("youtube_area_y", 0))
+            youtube_area_width = int(self.params.get("youtube_area_width", 1920))
+            youtube_area_height = int(self.params.get("youtube_area_height", 1080))
             youtube_image_search_path = self.params.get("youtube_image_search_path", "").strip()
-        
+            youtube_search_icon_path = self.params.get("youtube_search_icon_path", "").strip()
             youtube_sidebar_area_x = int(self.params.get("youtube_sidebar_area_x", 0))
             youtube_sidebar_area_y = int(self.params.get("youtube_sidebar_area_y", 0))
             youtube_sidebar_area_width = int(self.params.get("youtube_sidebar_area_width", 400))
             youtube_sidebar_area_height = int(self.params.get("youtube_sidebar_area_height", 1080))
             youtube_sidebar_image_search_path = self.params.get("youtube_sidebar_image_search_path", "").strip()
-        
+
+            youtube_ads_area_x = int(self.params.get("youtube_ads_area_x", 0))
+            youtube_ads_area_y = int(self.params.get("youtube_ads_area_y", 0))
+            youtube_ads_area_width = int(self.params.get("youtube_ads_area_width", 300))
+            youtube_ads_area_height = int(self.params.get("youtube_ads_area_height", 150))
+            # Skip Ads Area params
+            youtube_skip_ads_area_x = int(self.params.get("youtube_skip_ads_area_x", 0))
+            youtube_skip_ads_area_y = int(self.params.get("youtube_skip_ads_area_y", 0))
+            youtube_skip_ads_area_width = int(self.params.get("youtube_skip_ads_area_width", 200))
+            youtube_skip_ads_area_height = int(self.params.get("youtube_skip_ads_area_height", 100))
+
             keywords = {
                 'keywords_youtube': keywords_youtube,
                 'keywords_google': keywords_google,
                 'suffix_prefix': keywords_suffix_prefix,
-                'youtube_main_area_x': youtube_main_area_x,
-                'youtube_main_area_y': youtube_main_area_y,
-                'youtube_main_area_width': youtube_main_area_width,
-                'youtube_main_area_height': youtube_main_area_height,
+                'youtube_area_x': youtube_area_x,
+                'youtube_area_y': youtube_area_y,
+                'youtube_area_width': youtube_area_width,
+                'youtube_area_height': youtube_area_height,
                 'youtube_image_search_path': youtube_image_search_path,
+                'youtube_search_icon_path': youtube_search_icon_path,
                 'youtube_sidebar_area_x': youtube_sidebar_area_x,
                 'youtube_sidebar_area_y': youtube_sidebar_area_y,
                 'youtube_sidebar_area_width': youtube_sidebar_area_width,
                 'youtube_sidebar_area_height': youtube_sidebar_area_height,
                 'youtube_sidebar_image_search_path': youtube_sidebar_image_search_path,
+                'youtube_ads_area_x': youtube_ads_area_x,
+                'youtube_ads_area_y': youtube_ads_area_y,
+                'youtube_ads_area_width': youtube_ads_area_width,
+                'youtube_ads_area_height': youtube_ads_area_height,
+                'youtube_skip_ads_area_x': youtube_skip_ads_area_x,  # ← THÊM
+                'youtube_skip_ads_area_y': youtube_skip_ads_area_y,  # ← THÊM
+                'youtube_skip_ads_area_width': youtube_skip_ads_area_width,  # ← THÊM
+                'youtube_skip_ads_area_height': youtube_skip_ads_area_height,  # ← THÊM
             }
+
         
             if not keywords:
                 print("[PHASE 2] Failed to load keywords")
@@ -408,21 +617,15 @@ class GoLoginAutoAction(BaseAction):
             
                 try:
                     if action_type == "Youtube":
-                        flow_iterator = YouTubeFlow.create_flow_iterator(
-                            driver=driver,
-                            keywords=keywords,
+                        flow_iterator = YouTubeFlowAuto.create_flow_iterator(
                             profile_id=profile_id,
-                            debugger_address=debugger_address,
+                            keywords=keywords,
                             log_prefix=f"[BATCH {batch_num}][{profile_id}]"
                         )
                     elif action_type == "Google":
-                        flow_iterator = GoogleFlow.create_flow_iterator(
-                            driver=driver,
-                            keywords=keywords,
-                            profile_id=profile_id,
-                            debugger_address=debugger_address,
-                            log_prefix=f"[BATCH {batch_num}][{profile_id}]"
-                        )
+                        # TODO: Implement GoogleFlowAuto later
+                        print(f"[BATCH {batch_num}][{profile_id}] Google flow not implemented for Auto Action yet")
+                        continue
                     else:
                         print(f"[BATCH {batch_num}][{profile_id}] Unknown action type: {action_type}")
                         continue
@@ -589,33 +792,53 @@ class GoLoginAutoAction(BaseAction):
         keywords_google = GoLoginProfileHelper.load_keywords(self.params, "Get Google Keywords", "Google")
     
         # Youtube Options
-        youtube_main_area_x = int(self.params.get("youtube_main_area_x", 0))
-        youtube_main_area_y = int(self.params.get("youtube_main_area_y", 0))
-        youtube_main_area_width = int(self.params.get("youtube_main_area_width", 1920))
-        youtube_main_area_height = int(self.params.get("youtube_main_area_height", 1080))
+        youtube_area_x = int(self.params.get("youtube_area_x", 0))
+        youtube_area_y = int(self.params.get("youtube_area_y", 0))
+        youtube_area_width = int(self.params.get("youtube_area_width", 1920))
+        youtube_area_height = int(self.params.get("youtube_area_height", 1080))
         youtube_image_search_path = self.params.get("youtube_image_search_path", "").strip()
-    
+        youtube_search_icon_path = self.params.get("youtube_search_icon_path", "").strip()
         youtube_sidebar_area_x = int(self.params.get("youtube_sidebar_area_x", 0))
         youtube_sidebar_area_y = int(self.params.get("youtube_sidebar_area_y", 0))
         youtube_sidebar_area_width = int(self.params.get("youtube_sidebar_area_width", 400))
         youtube_sidebar_area_height = int(self.params.get("youtube_sidebar_area_height", 1080))
         youtube_sidebar_image_search_path = self.params.get("youtube_sidebar_image_search_path", "").strip()
-    
+
+        youtube_ads_area_x = int(self.params.get("youtube_ads_area_x", 0))
+        youtube_ads_area_y = int(self.params.get("youtube_ads_area_y", 0))
+        youtube_ads_area_width = int(self.params.get("youtube_ads_area_width", 300))
+        youtube_ads_area_height = int(self.params.get("youtube_ads_area_height", 150))
+        # Skip Ads Area params
+        youtube_skip_ads_area_x = int(self.params.get("youtube_skip_ads_area_x", 0))
+        youtube_skip_ads_area_y = int(self.params.get("youtube_skip_ads_area_y", 0))
+        youtube_skip_ads_area_width = int(self.params.get("youtube_skip_ads_area_width", 200))
+        youtube_skip_ads_area_height = int(self.params.get("youtube_skip_ads_area_height", 100))
+
         keywords = {
             'keywords_youtube': keywords_youtube,
             'keywords_google': keywords_google,
             'suffix_prefix': keywords_suffix_prefix,
-            'youtube_main_area_x': youtube_main_area_x,
-            'youtube_main_area_y': youtube_main_area_y,
-            'youtube_main_area_width': youtube_main_area_width,
-            'youtube_main_area_height': youtube_main_area_height,
+            'youtube_area_x': youtube_area_x,
+            'youtube_area_y': youtube_area_y,
+            'youtube_area_width': youtube_area_width,
+            'youtube_area_height': youtube_area_height,
             'youtube_image_search_path': youtube_image_search_path,
+            'youtube_search_icon_path': youtube_search_icon_path,
             'youtube_sidebar_area_x': youtube_sidebar_area_x,
             'youtube_sidebar_area_y': youtube_sidebar_area_y,
             'youtube_sidebar_area_width': youtube_sidebar_area_width,
             'youtube_sidebar_area_height': youtube_sidebar_area_height,
             'youtube_sidebar_image_search_path': youtube_sidebar_image_search_path,
+            'youtube_ads_area_x': youtube_ads_area_x,
+            'youtube_ads_area_y': youtube_ads_area_y,
+            'youtube_ads_area_width': youtube_ads_area_width,
+            'youtube_ads_area_height': youtube_ads_area_height,
+            'youtube_skip_ads_area_x': youtube_skip_ads_area_x,  # ← THÊM
+            'youtube_skip_ads_area_y': youtube_skip_ads_area_y,  # ← THÊM
+            'youtube_skip_ads_area_width': youtube_skip_ads_area_width,  # ← THÊM
+            'youtube_skip_ads_area_height': youtube_skip_ads_area_height,  # ← THÊM
         }
+
     
         if not keywords:
             print(f"[{profile_id}] Failed to load keywords")
@@ -627,21 +850,16 @@ class GoLoginAutoAction(BaseAction):
     
         try:
             if action_type == "Youtube":
-                flow_iterator = YouTubeFlow.create_flow_iterator(
-                    driver=driver,
-                    keywords=keywords,
+                flow_iterator = YouTubeFlowAuto.create_flow_iterator(
                     profile_id=profile_id,
-                    debugger_address=debugger_address,
-                    log_prefix=f"[{profile_id}]"
+                    keywords=keywords,
+                    log_prefix=f"[AUTO][{profile_id}]"
                 )
             elif action_type == "Google":
-                flow_iterator = GoogleFlow.create_flow_iterator(
-                    driver=driver,
-                    keywords=keywords,
-                    profile_id=profile_id,
-                    debugger_address=debugger_address,
-                    log_prefix=f"[{profile_id}]"
-                )
+                # TODO: Implement GoogleFlowAuto later
+                print(f"[{profile_id}] Google flow not implemented for Auto Action yet")
+                GoLoginProfileHelper.cleanup_profiles(profile_data, self.gologin_api, f"[{profile_id}]")
+                return False
             else:
                 print(f"[{profile_id}] Unknown action type: {action_type}")
                 GoLoginProfileHelper.cleanup_profiles(profile_data, self.gologin_api, f"[{profile_id}]")

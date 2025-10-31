@@ -113,15 +113,33 @@ class GoLoginAPI:
                     gologin_config = {
                         "token": self.api_token,
                         "profile_id": profile_id,
-                        "tmpdir": self.tmpdir,
-                        "writeCookesFromServer": True,
+                        # "tmpdir": self.tmpdir,                      
                         "uploadCookiesToServer": True,
                         "port": random_port
                     }
-                
-                    # Add extra_params if provided (for headless mode)
+                    
+                    default_extra_params = [
+                        '--disable-blink-features=AutomationControlled',
+                        '--disable-infobars',
+                        '--start-maximized',
+                        '--no-first-run',
+                        '--no-default-browser-check',
+                        '--disable-popup-blocking',  # Optional: Tránh popup block
+                    ]
+
+                    # Start with defaults
+                    final_extra_params = default_extra_params.copy()
+
+                    # Override/Add custom params (nếu trùng → xóa default, thêm custom vào cuối)
                     if extra_params and isinstance(extra_params, list):
-                        gologin_config["extra_params"] = extra_params
+                        for param in extra_params:
+                            # Xóa param khỏi defaults nếu đã tồn tại (để tránh duplicate)
+                            if param in final_extra_params:
+                                final_extra_params.remove(param)
+                            # Thêm param vào cuối (custom override default)
+                            final_extra_params.append(param)
+
+                    gologin_config["extra_params"] = final_extra_params
                 
                     self.gl = GoLogin(gologin_config)
                 
@@ -199,7 +217,7 @@ class GoLoginAPI:
     
         # Result container (shared between threads)
         stop_result = {"success": False, "message": "Unknown error", "completed": False}
-    
+        
         def _stop_internal():
             """Internal stop logic with timeout protection"""
             max_retries = 3
@@ -252,8 +270,8 @@ class GoLoginAPI:
             except Exception as kill_err:
                 print(f"[GOLOGIN] ⚠ Force kill error: {kill_err}")
         
-            stop_result["success"] = False
-            stop_result["message"] = "Stop timeout - forced cleanup"
+            # stop_result["success"] = False
+            # stop_result["message"] = "Stop timeout - forced cleanup"
     
         else:
             # Thread completed - check if successful or error
@@ -356,7 +374,7 @@ class GoLoginAPI:
         else:
             print(f"[GOLOGIN] ⚠ Profile stopped with warnings: {stop_result['message']}")
             # Still return True because profile is cleaned up
-            return True, f"Stopped with warnings: {stop_result['message']}"
+            return False, f"Stopped with warnings: {stop_result['message']}"
 
 
     def _cleanup_temp_files(self, profile_id, max_retries=5):
