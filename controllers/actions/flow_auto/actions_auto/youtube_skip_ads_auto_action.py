@@ -5,6 +5,7 @@ import random
 import pyautogui
 import win32gui
 from controllers.actions.flow_auto.actions_auto.youtube_mouse_move_auto_action import YouTubeMouseMoveAutoAction
+from controllers.actions.flow_auto.actions_auto.youtube_random_move_scroll_auto_action import YouTubeRandomMoveScrollAutoAction
 from controllers.actions.flow_auto.actions_auto.base_flow_auto_action import BaseFlowAutoAction
 from controllers.actions.mouse_move_action import MouseMoveAction
 
@@ -48,8 +49,9 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
         
         self.log(f"Ads region: {self.ads_region}, Skip Ads region: {self.skip_ads_region}")
     
-    def execute(self):
+    def _execute_internal(self):
         """Execute skip ads with random strategy"""
+        
         try:
             self.log("Checking for ads")
             time.sleep(6)  # Wait for skip button to appear
@@ -205,7 +207,8 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
     
     def _interact_with_new_tab(self):
         """Random interactions in new tab: mouse move, fullscreen, scroll"""
-        num_actions = random.randint(1, 3)
+        time.sleep(random.uniform(1.5, 2.5))
+        num_actions = random.randint(2, 4)
         self.log(f"Performing {num_actions} random actions in new tab")
         
         for i in range(num_actions):
@@ -222,10 +225,8 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
                 )               
                 self.log(f"Action {i+1}: Mouse move to ({rand_x}, {rand_y})")
             
-            elif action == 'scroll':
-                scroll_clicks = random.randint(-900, -500)
-                pyautogui.scroll(scroll_clicks)
-                self.log(f"Action {i+1}: Scroll {abs(scroll_clicks)} clicks")
+            elif action == 'scroll':                
+                YouTubeRandomMoveScrollAutoAction(self.profile_id, 1, "main", self.log_prefix).execute()
             
             time.sleep(random.uniform(0.5, 1.5))
     

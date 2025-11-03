@@ -1,8 +1,7 @@
-﻿# controllers/actions/flow_auto/flow_youtube_auto.py
+﻿# controllers/actions/flow_auto/flow_youtube_browse_auto.py
 
 
 import random
-
 # Import all action classes
 from controllers.actions.flow_auto.actions_auto.youtube_navigate_auto_action import YouTubeNavigateAutoAction
 from controllers.actions.flow_auto.actions_auto.youtube_random_move_scroll_auto_action import YouTubeRandomMoveScrollAutoAction
@@ -16,7 +15,7 @@ from controllers.actions.flow_auto.actions_auto.youtube_fullscreen_auto_action i
 from controllers.actions.flow_auto.actions_auto.youtube_prev_next_auto_action import YouTubePrevNextAutoAction
 from controllers.actions.flow_auto.base_youtube_flow_auto import BaseYouTubeFlowAutoIterator
 
-class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
+class YouTubeFlowAutoBrowseIterator(BaseYouTubeFlowAutoIterator):
     """
     YouTube Auto Flow Iterator
     Compatible with round-robin execution pattern (giống Selenium version)
@@ -34,8 +33,11 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         self._build_search_and_start_video_chain()
         
         # ========== CHAIN 2-N: VIDEO INTERACTIONS (RANDOM) ==========
-        self._build_video_interaction_chains() 
-        self._build_video_interaction_chains() 
+        self._build_video_interaction_chains()        
+        
+        self._build_search_and_start_video_chain()
+        
+        self._build_video_interaction_chains()
         
         self.log(f"Built {len(self.chain_queue)} chains")
     
@@ -84,7 +86,8 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
                 self.profile_id,
                 self.keywords,     # Pass full keywords dict
                 self.log_prefix,   # log_prefix (positional or keyword)
-                area="main"        # area (keyword argument)
+                area="main",        # area (keyword argument)
+                flow_type="browse"
             ))
         )
         
@@ -195,4 +198,3 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         })
         
         self.log(f"Interaction chain built with {len(chain_actions)} actions")
-

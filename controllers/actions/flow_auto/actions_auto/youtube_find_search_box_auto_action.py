@@ -7,6 +7,7 @@ import os
 from controllers.actions.mouse_move_action import MouseMoveAction
 from controllers.actions.flow_auto.actions_auto.base_flow_auto_action import BaseFlowAutoAction
 
+
 class YouTubeFindSearchBoxAutoAction(BaseFlowAutoAction):
     """
     Find search box (retry 3 times) → Click random position → Type keyword with mistakes → Enter
@@ -27,7 +28,7 @@ class YouTubeFindSearchBoxAutoAction(BaseFlowAutoAction):
         super().__init__(profile_id, log_prefix)
         self.keywords = keywords
     
-    def execute(self):
+    def _execute_internal(self):
         """Execute find search box → click → type keyword → enter"""
         try:
             # ========== STEP 1: GENERATE KEYWORD ==========
@@ -101,7 +102,7 @@ class YouTubeFindSearchBoxAutoAction(BaseFlowAutoAction):
             self.log(f"Typing keyword: '{keyword}'")
             
             # 20% chance to make mistakes while typing (more realistic)
-            if random.random() < 0.2:
+            if random.random() < 0.4:
                 self._type_with_mistakes(keyword, mistake_rate=0.05)
             else:
                 self._type_human_like(keyword)

@@ -544,6 +544,114 @@ class GoLoginAPI:
             traceback.print_exc()
 
 
+    def remove_proxy_for_profiles(self, profile_ids):
+        """
+        Remove proxy (set to 'Without proxy') for multiple profiles
+    
+        Flow: GET profile → modify proxyEnabled + proxy object → PUT profile
+        API: GET/PUT https://api.gologin.com/browser/:profileId
+    
+        Args:
+            profile_ids: List of profile IDs or single profile_id (string)
+    
+        Returns:
+            (success: bool, message: str)
+        """
+        try:
+            if isinstance(profile_ids, str):
+                profile_ids = [profile_ids]
+        
+            print(f"[GOLOGIN] Removing proxy for {len(profile_ids)} profile(s)...")
+        
+            failed_profiles = []
+            success_count = 0
+        
+            for profile_id in profile_ids:
+                try:
+                    url = f"{self.base_url}/browser/{profile_id}"
+                
+                    # Step 1: GET current profile data
+                    get_response = requests.get(url, headers=self.headers, timeout=30)
+                
+                    if get_response.status_code != 200:
+                        print(f"[GOLOGIN] ✗ Failed to GET profile {profile_id[:8]}...: Status {get_response.status_code}")
+                        failed_profiles.append(profile_id)
+                        continue
+                
+                    profile_data = get_response.json()
+                
+                    # Step 2: Modify proxy settings (BOTH proxyEnabled AND proxy object)
+                    profile_data['proxyEnabled'] = False  # ← Disable proxy
+                    profile_data['proxy'] = {              # ← Reset proxy object to "none"
+                        "id": None,
+                        "mode": "none",
+                        "host": "",
+                        "port": 0,
+                        "username": "",
+                        "password": "",
+                        "changeIpUrl": None,
+                        "customName": None,
+                        "autoProxyRegion": "",
+                        "torProxyRegion": ""
+                    }
+                
+                    # Step 3: PUT updated profile back (with retry)
+                    max_retries = 3
+                    retry_delay = 2
+                
+                    for attempt in range(1, max_retries + 1):
+                        try:
+                            put_response = requests.put(url, json=profile_data, headers=self.headers, timeout=30)
+                        
+                            if put_response.status_code in [200, 201, 204]:
+                                print(f"[GOLOGIN] ✓ Proxy removed for profile {profile_id[:8]}...")
+                                success_count += 1
+                                break
+                            else:
+                                error_msg = f"Status {put_response.status_code}"
+                                try:
+                                    error_data = put_response.json()
+                                    error_msg = error_data.get('message', error_msg)
+                                except:
+                                    pass
+                            
+                                if attempt == max_retries:
+                                    print(f"[GOLOGIN] ✗ Failed PUT for {profile_id[:8]}...: {error_msg}")
+                                    failed_profiles.append(profile_id)
+                    
+                        except (requests.exceptions.SSLError, ConnectionError, requests.exceptions.ConnectionError) as e:
+                            if attempt < max_retries:
+                                wait_time = retry_delay * (2 ** (attempt - 1))
+                                print(f"[GOLOGIN] Retry {attempt}/{max_retries} for {profile_id[:8]}...")
+                                time.sleep(wait_time)
+                            else:
+                                print(f"[GOLOGIN] ✗ SSL error for {profile_id[:8]}...")
+                                failed_profiles.append(profile_id)
+                    
+                        except requests.exceptions.Timeout:
+                            if attempt < max_retries:
+                                time.sleep(retry_delay)
+                            else:
+                                print(f"[GOLOGIN] ✗ Timeout for {profile_id[:8]}...")
+                                failed_profiles.append(profile_id)
+            
+                except Exception as e:
+                    print(f"[GOLOGIN] ✗ Exception for {profile_id[:8]}...: {e}")
+                    failed_profiles.append(profile_id)
+        
+            # Summary
+            if failed_profiles:
+                return False, f"Removed proxy for {success_count}/{len(profile_ids)} profiles. Failed: {len(failed_profiles)}"
+            else:
+                print(f"[GOLOGIN] ✓ Proxy removed for all {len(profile_ids)} profiles")
+                return True, f"Proxy removed for {len(profile_ids)} profiles"
+    
+        except Exception as e:
+            print(f"[GOLOGIN] Error removing proxy: {e}")
+            import traceback
+            traceback.print_exc()
+            return False, str(e)
+
 
 
     # def stop_profile(self, profile_id, clean_profile=False):
@@ -664,7 +772,7 @@ class GoLoginAPI:
         
             print(f"[DEBUG] Response Status: {response.status_code}")
         
-            if response.status_code in [200, 201]:
+            if response.status_code in [200, 201, 204]:
                 print(f"[GOLOGIN] ✓ Profile fingerprint(s) refreshed successfully")
                 try:
                     result = response.json()
@@ -692,86 +800,114 @@ class GoLoginAPI:
     def update_proxy_for_profiles(self, profile_ids, proxy_config):
         """
         Update proxy for multiple profiles using GoLogin API
+    
         API: PATCH https://api.gologin.com/browser/proxy/many/v2
         Documentation: https://gologin.com/docs/api-reference/profile/update-proxy-for-multiple-profiles
     
         Args:
             profile_ids: List of profile IDs
-            proxy_config: Dict with keys: mode, host, port, username, password
-                - mode: Proxy type (e.g., 'http', 'socks5')
-                - host: Proxy host/IP address
-                - port: Proxy port (int or str, will be converted to int)
-                - username: Proxy username
-                - password: Proxy password
+            proxy_config: Dict with keys (mode, host, port, username, password)
     
         Returns:
             (success: bool, message: str)
         """
         try:
-            # Validate all 5 required fields are present
-            required_fields = ["mode", "host", "port", "username", "password"]
+            # Validate inputs
+            if isinstance(profile_ids, str):
+                profile_ids = [profile_ids]
+        
+            required_fields = ['mode', 'host', 'port', 'username', 'password']
             for field in required_fields:
                 if not proxy_config.get(field):
                     return False, f"Proxy field '{field}' is missing or empty"
         
-            # Convert port to integer
+            # Convert port to int
             try:
-                port = int(proxy_config["port"])
+                port = int(proxy_config['port'])
             except ValueError:
                 return False, f"Invalid port number: {proxy_config['port']}"
-        
-            # Ensure profile_ids is a list
-            if isinstance(profile_ids, str):
-                profile_ids = [profile_ids]
         
             print(f"[GOLOGIN] Updating proxy for {len(profile_ids)} profile(s)...")
             print(f"[GOLOGIN] Proxy: {proxy_config['mode']}://{proxy_config['host']}:{port}")
         
-            # Build API request payload
-            url = f"{self.base_url}/browser/proxy/many/v2"
-        
-            # Build proxies array for all profiles
+            # Build payload
             proxies_array = []
             for profile_id in profile_ids:
                 proxy_data = {
                     "profileId": profile_id,
                     "proxy": {
-                        "id": None,  # null for new proxy
+                        "id": None,
                         "mode": proxy_config["mode"],
                         "host": proxy_config["host"],
                         "port": port,
                         "username": proxy_config["username"],
                         "password": proxy_config["password"],
-                        "changeIpUrl": None,  # null
-                        "customName": None   # null
+                        "changeIpUrl": None,
+                        "customName": None
                     }
                 }
                 proxies_array.append(proxy_data)
         
             payload = {"proxies": proxies_array}
+            url = f"{self.base_url}/browser/proxy/many/v2"
         
-            # Send PATCH request
-            response = requests.patch(url, json=payload, headers=self.headers, timeout=30)
+            # RETRY LOGIC FOR SSL ERRORS (FIX)
+            max_retries = 3
+            retry_delay = 2  # seconds (exponential backoff)
         
-            if response.status_code in [200, 201]:
-                print(f"[GOLOGIN] ✓ Proxy updated successfully for all profiles")
-                return True, f"Proxy updated for {len(profile_ids)} profile(s)"
-            else:
-                error_msg = f"API returned status {response.status_code}"
+            for attempt in range(1, max_retries + 1):
                 try:
-                    error_data = response.json()
-                    error_msg = error_data.get("message", error_msg)
-                except:
-                    error_msg = f"{error_msg}: {response.text[:200]}"
+                    # Send PATCH request
+                    response = requests.patch(url, json=payload, headers=self.headers, timeout=30)
+                
+                    # Check response status
+                    if response.status_code in [200, 201, 204]:
+                        print(f"[GOLOGIN] ✓ Proxy updated successfully for all profiles")
+                        return True, f"Proxy updated for {len(profile_ids)} profiles"
+                    else:
+                        error_msg = f"API returned status {response.status_code}"
+                        try:
+                            error_data = response.json()
+                            error_msg = error_data.get('message', error_msg)
+                        except:
+                            error_msg = f"{error_msg}: {response.text[:200]}"
+                    
+                        print(f"[GOLOGIN] Proxy update failed: {error_msg}")
+                        return False, error_msg
             
-                print(f"[GOLOGIN] ✗ Proxy update failed: {error_msg}")
-                return False, error_msg
+                except (requests.exceptions.SSLError, 
+                        ConnectionError, 
+                        requests.exceptions.ConnectionError) as e:
+                    # SSL/Connection errors - retry with backoff
+                    error_str = str(e)
+                    print(f"[GOLOGIN] Attempt {attempt}/{max_retries} - SSL/Connection error: {error_str[:150]}")
+                
+                    if attempt < max_retries:
+                        wait_time = retry_delay * (2 ** (attempt - 1))  # Exponential backoff: 2s, 4s, 8s
+                        print(f"[GOLOGIN] Retrying in {wait_time}s...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        # All retries exhausted
+                        print(f"[GOLOGIN] ❌ All {max_retries} attempts failed - SSL/Connection error")
+                        return False, f"SSL/Connection error after {max_retries} attempts: {error_str[:200]}"
             
+                except requests.exceptions.Timeout:
+                    # Timeout - retry
+                    print(f"[GOLOGIN] Attempt {attempt}/{max_retries} - Request timeout (30s)")
+                    if attempt < max_retries:
+                        print(f"[GOLOGIN] Retrying in {retry_delay}s...")
+                        time.sleep(retry_delay)
+                        continue
+                    else:
+                        return False, f"Request timeout after {max_retries} attempts"
+    
         except Exception as e:
             print(f"[GOLOGIN] Error updating proxy: {e}")
             import traceback
             traceback.print_exc()
             return False, str(e)
+
 
 
 

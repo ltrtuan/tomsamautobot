@@ -39,10 +39,14 @@
     <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_mouse_move_auto_action.py" />
     <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_navigate_auto_action.py" />
     <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_pause_resume_auto_action.py" />
+    <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_prev_next_auto_action.py" />
     <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_random_move_scroll_auto_action.py" />
     <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_find_search_box_auto_action.py" />
     <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_skip_ads_auto_action.py" />
+    <Compile Include="controllers\actions\flow_auto\base_youtube_flow_auto.py" />
     <Compile Include="controllers\actions\flow_auto\flow_youtube_auto.py" />
+    <Compile Include="controllers\actions\flow_auto\flow_youtube_browse_auto.py" />
+    <Compile Include="controllers\actions\flow_auto\youtube_flow_factory.py" />
     <Compile Include="controllers\actions\for_action.py" />
     <Compile Include="controllers\actions\get_new_proxy_action.py" />
     <Compile Include="controllers\actions\gologin_auto_action.py" />
@@ -165,6 +169,10 @@
   </ItemGroup>
   <ItemGroup>
     <InterpreterReference Include="Global|PythonCore|3.12" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="controllers\actions\gologin_auto_action.py-bak-3-11-2025" />
+    <Content Include="views\action_params\gologin_auto_params.py-bak-3-11-2025" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in

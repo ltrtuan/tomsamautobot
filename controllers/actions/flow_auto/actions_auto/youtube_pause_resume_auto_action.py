@@ -18,7 +18,7 @@ class YouTubePauseResumeAutoAction(BaseFlowAutoAction):
         """
         super().__init__(profile_id, log_prefix)
     
-    def execute(self):
+    def _execute_internal(self):
         """Execute pause/resume action"""
         try:
             # Pause video

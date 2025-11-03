@@ -15,7 +15,7 @@ class YouTubeRandomMoveScrollAutoAction(BaseFlowAutoAction):
         self.area = area
         self.log_prefix = log_prefix
     
-    def execute(self):
+    def _execute_internal(self):
         """Execute random actions"""
         try:
             self.log(f"Performing {self.num_actions} random actions")
@@ -36,9 +36,10 @@ class YouTubeRandomMoveScrollAutoAction(BaseFlowAutoAction):
                     scroll_amount = random.randint(-400, -200)  # Scroll down
                     
                 pyautogui.scroll(scroll_amount)
-                time.sleep(random.uniform(1, 2))
             
             self.log("✓ Random actions completed")
+            
+            time.sleep(random.uniform(0.3, 1))
             return True
             
         except Exception as e:

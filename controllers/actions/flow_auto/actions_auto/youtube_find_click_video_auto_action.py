@@ -6,6 +6,7 @@ import pyautogui
 import os
 from controllers.actions.mouse_move_action import MouseMoveAction
 from controllers.actions.flow_auto.actions_auto.base_flow_auto_action import BaseFlowAutoAction
+from controllers.actions.flow_auto.actions_auto.youtube_random_move_scroll_auto_action import YouTubeRandomMoveScrollAutoAction
 
 class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
     """
@@ -13,7 +14,7 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
     Support both main feed and sidebar areas
     """
     
-    def __init__(self, profile_id, keywords, log_prefix="[YOUTUBE AUTO]", area="main"):
+    def __init__(self, profile_id, keywords, log_prefix="[YOUTUBE AUTO]", area="main", flow_type="search"):
 
         """
         Initialize find and click video action
@@ -27,7 +28,7 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
         super().__init__(profile_id, log_prefix)
         self.keywords = keywords
         self.area = area.lower()
-        
+        self.flow_type = flow_type
         # ========== EXTRACT PARAMS BASED ON AREA ==========
         if self.area == "sidebar":
             # Sidebar params
@@ -51,12 +52,16 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
         
         self.log(f"Initialized for area: {self.area.upper()}, region: {self.region}")
     
-    def execute(self):
+    def _execute_internal(self):
         """Execute find logo → calculate video position → click video"""
         try:
             # ========== FIND LOGO WITH RETRY & SCROLL ==========
-            max_retries = 5
-        
+            # Browse does not need search logo
+            if self.flow_type == "browse":
+                max_retries = 1
+            else:
+                max_retries = 5
+                
             for attempt in range(1, max_retries + 1):
                 self.log(f"Attempt {attempt}/{max_retries}: Looking for logo in {self.area} area")
             
@@ -86,23 +91,23 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
                     return True
             
                 # Not found: Scroll and retry
-                if attempt < max_retries:
-                    scroll_amount = random.randint(500, 700)
-                    self.log(f"Logo not found, scrolling down {scroll_amount}px")
-                    pyautogui.scroll(-scroll_amount)
+                if attempt < max_retries:                   
+                    YouTubeRandomMoveScrollAutoAction(self.profile_id, 1, "main", self.log_prefix).execute()
                     time.sleep(random.uniform(1, 2))        
          
             # ========== FALLBACK: CLICK RANDOM HAND CURSOR ==========
             self.log(f"✗ Logo not found after {max_retries} attempts", "WARNING")
-            return self._fallback_click_for_cookies()
+            
+            if self.flow_type == "browse":
+                return self._fallback_click_for_cookies_only_browse()
+            else:
+                return self._fallback_click_for_cookies()
         
         except Exception as e:
             self.log(f"✗ Find and click video error: {e}", "ERROR")
             import traceback
             traceback.print_exc()
-            return False
-
-        
+            return False        
 
     
     def _find_and_calculate_click_position(self):
@@ -161,31 +166,25 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
             bool: True if clicked successfully
         """
         try:
-            self.log("Using fallback: move mouse to find clickable element")
-        
-            # Get search region
-            if self.region:
-                region_x, region_y, region_width, region_height = self.region
-            else:
-                # Use screen center if no region defined
-                screen_width, screen_height = pyautogui.size()
-                region_x = int(screen_width * 0.1)
-                region_y = int(screen_height * 0.2)
-                region_width = int(screen_width * 0.6)
-                region_height = int(screen_height * 0.6)
+            self.log("Using fallback: move mouse to find clickable element")        
         
             # Try multiple random positions
             max_attempts = 5
         
-            for attempt in range(1, max_attempts + 1):
+            for attempt in range(1, max_attempts + 1):                
+                YouTubeRandomMoveScrollAutoAction(self.profile_id, 1, "main", self.log_prefix).execute()
                 # Random position within area
-                random_x = region_x + random.randint(0, region_width)
-                random_y = region_y + random.randint(0, region_height)
+                random_x = 500 + random.randint(0, 300)
+                random_y = 400 + random.randint(0, 200)
             
                 self.log(f"Fallback attempt {attempt}/{max_attempts}: Moving to ({random_x}, {random_y})")
             
                 # Move mouse using pyautogui (for cursor check)
-                pyautogui.moveTo(random_x, random_y, duration=random.uniform(0.5, 1.0))
+                MouseMoveAction.move_and_click_static(
+                        random_x, random_y,
+                        click_type=None,
+                        fast=False
+                    )
                 time.sleep(0.3)
             
                 # Check if cursor is hand (clickable)
@@ -193,11 +192,7 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
                     self.log(f"✓ Found clickable element at ({random_x}, {random_y})")
                 
                     # Click using MouseMoveAction for consistency
-                    MouseMoveAction.move_and_click_static(
-                        random_x, random_y,
-                        click_type="single_click",
-                        fast=False
-                    )
+                    pyautogui.click()
                 
                     self.log("Clicked for cookie collection")
                 
@@ -211,8 +206,8 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
             self.log(f"No clickable found, clicking last position anyway", "WARNING")
         
             # Get last random position
-            random_x = region_x + random.randint(0, region_width)
-            random_y = region_y + random.randint(0, region_height)
+            random_x = 500 + random.randint(0, 300)
+            random_y = 400 + random.randint(0, 200)
         
             MouseMoveAction.move_and_click_static(
                 random_x, random_y,
@@ -227,3 +222,68 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
             self.log(f"Fallback click error: {e}", "ERROR")
             return False
 
+
+    def _fallback_click_for_cookies_only_browse(self):
+        """
+        Fallback: Move mouse to random positions, check hand cursor, click
+    
+        Returns:
+            bool: True if clicked successfully
+        """
+        try:
+            self.log("Using fallback: move mouse to find clickable element")        
+        
+            # Try multiple random positions
+            max_attempts = 15
+        
+            for attempt in range(1, max_attempts + 1):
+                if attempt % 4 == 1:
+                    YouTubeRandomMoveScrollAutoAction(self.profile_id, 4, "main", self.log_prefix).execute()
+                # Random position within area
+                random_x = 500 + random.randint(0, 300)
+                random_y = 400 + random.randint(0, 200)
+            
+                self.log(f"Fallback attempt {attempt}/{max_attempts}: Moving to ({random_x}, {random_y})")
+            
+                # Move mouse using pyautogui (for cursor check)
+                MouseMoveAction.move_and_click_static(
+                        random_x, random_y,
+                        click_type=None,
+                        fast=False
+                    )
+                time.sleep(0.3)
+            
+                # Check if cursor is hand (clickable)
+                if self._is_hand_cursor():
+                    self.log(f"✓ Found clickable element at ({random_x}, {random_y})")
+                
+                    # Click using MouseMoveAction for consistency
+                    pyautogui.click()
+                
+                    self.log("Clicked for cookie collection")
+                
+                    # Wait for page load
+                    wait_time = random.uniform(3, 5)
+                    time.sleep(wait_time)
+                
+                    return True
+        
+            # If no clickable found, click last position anyway
+            self.log(f"No clickable found, clicking last position anyway", "WARNING")
+        
+            # Get last random position
+            random_x = 500 + random.randint(0, 300)
+            random_y = 400 + random.randint(0, 200)
+        
+            MouseMoveAction.move_and_click_static(
+                random_x, random_y,
+                click_type="single_click",
+                fast=False
+            )
+        
+            time.sleep(random.uniform(3, 5))
+            return True
+        
+        except Exception as e:
+            self.log(f"Fallback click error: {e}", "ERROR")
+            return False

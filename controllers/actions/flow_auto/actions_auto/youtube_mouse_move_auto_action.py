@@ -21,7 +21,7 @@ class YouTubeMouseMoveAutoAction(BaseFlowAutoAction):
         super().__init__(profile_id, log_prefix)
         self.click = click
     
-    def execute(self):
+    def _execute_internal(self):
         """Execute mouse move action"""
         try:
             # Get screen size

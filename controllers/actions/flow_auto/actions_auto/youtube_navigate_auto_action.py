@@ -5,6 +5,7 @@ import random
 import pyautogui
 from helpers.gologin_profile_helper import GoLoginProfileHelper
 from controllers.actions.flow_auto.actions_auto.base_flow_auto_action import BaseFlowAutoAction
+import pyperclip
 
 class YouTubeNavigateAutoAction(BaseFlowAutoAction):
     """Navigate to YouTube using Ctrl+L keyboard shortcut"""
@@ -13,7 +14,7 @@ class YouTubeNavigateAutoAction(BaseFlowAutoAction):
         self.profile_id = profile_id
         self.log_prefix = log_prefix
     
-    def execute(self):
+    def _execute_internal(self):
         """Execute navigate action"""
         try:
             self.log("Navigating to YouTube")
@@ -21,15 +22,18 @@ class YouTubeNavigateAutoAction(BaseFlowAutoAction):
             # Bring to front
             GoLoginProfileHelper.bring_profile_to_front(self.profile_id, driver=None)
             time.sleep(1)
-            
+            self._close_extra_tabs_keep_first()
+            time.sleep(1)
             # Ctrl+L to focus address bar
             pyautogui.hotkey('ctrl', 'l')
             time.sleep(0.3)
             
             # Type URL
-            self._type_human_like('youtube.com  ')
+            pyperclip.copy('youtube.com')
+
+            # Paste using Ctrl+V
+            pyautogui.hotkey('ctrl', 'v')
             
-            self._random_short_pause()
             pyautogui.press('enter')
             
             # Wait for page load
