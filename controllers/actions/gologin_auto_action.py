@@ -731,86 +731,24 @@ class GoLoginAutoAction(BaseAction):
     
             # ========== PHASE 2: CREATE FLOW ITERATORS (KEEP ORIGINAL) ==========
             print(f"[BATCH {batch_num}] PHASE 2: Creating flow iterators for opened profiles...")
-
-            # Load keywords
-            keywords_suffix_prefix = self.params.get("keywords_suffix_prefix", "").strip()
-            keywords_youtube = GoLoginProfileHelper.load_keywords(self.params, "Get Youtube Keywords")
-            keywords_google = GoLoginProfileHelper.load_keywords(self.params, "Get Google Keywords", "Google")
-    
-            # Youtube Options
-            youtube_area_x = int(self.params.get("youtube_area_x", 0))
-            youtube_area_y = int(self.params.get("youtube_area_y", 0))
-            youtube_area_width = int(self.params.get("youtube_area_width", 1920))
-            youtube_area_height = int(self.params.get("youtube_area_height", 1080))
-            youtube_image_search_path = self.params.get("youtube_image_search_path", "").strip()
-            youtube_search_icon_path = self.params.get("youtube_search_icon_path", "").strip()
-            youtube_sidebar_area_x = int(self.params.get("youtube_sidebar_area_x", 0))
-            youtube_sidebar_area_y = int(self.params.get("youtube_sidebar_area_y", 0))
-            youtube_sidebar_area_width = int(self.params.get("youtube_sidebar_area_width", 400))
-            youtube_sidebar_area_height = int(self.params.get("youtube_sidebar_area_height", 1080))
-            youtube_sidebar_image_search_path = self.params.get("youtube_sidebar_image_search_path", "").strip()
-
-            youtube_ads_area_x = int(self.params.get("youtube_ads_area_x", 0))
-            youtube_ads_area_y = int(self.params.get("youtube_ads_area_y", 0))
-            youtube_ads_area_width = int(self.params.get("youtube_ads_area_width", 300))
-            youtube_ads_area_height = int(self.params.get("youtube_ads_area_height", 150))
-            # Skip Ads Area params
-            youtube_skip_ads_area_x = int(self.params.get("youtube_skip_ads_area_x", 0))
-            youtube_skip_ads_area_y = int(self.params.get("youtube_skip_ads_area_y", 0))
-            youtube_skip_ads_area_width = int(self.params.get("youtube_skip_ads_area_width", 200))
-            youtube_skip_ads_area_height = int(self.params.get("youtube_skip_ads_area_height", 100))
-
-            keywords = {
-                'keywords_youtube': keywords_youtube,
-                'keywords_google': keywords_google,
-                'suffix_prefix': keywords_suffix_prefix,
-                'youtube_area_x': youtube_area_x,
-                'youtube_area_y': youtube_area_y,
-                'youtube_area_width': youtube_area_width,
-                'youtube_area_height': youtube_area_height,
-                'youtube_image_search_path': youtube_image_search_path,
-                'youtube_search_icon_path': youtube_search_icon_path,
-                'youtube_sidebar_area_x': youtube_sidebar_area_x,
-                'youtube_sidebar_area_y': youtube_sidebar_area_y,
-                'youtube_sidebar_area_width': youtube_sidebar_area_width,
-                'youtube_sidebar_area_height': youtube_sidebar_area_height,
-                'youtube_sidebar_image_search_path': youtube_sidebar_image_search_path,
-                'youtube_ads_area_x': youtube_ads_area_x,
-                'youtube_ads_area_y': youtube_ads_area_y,
-                'youtube_ads_area_width': youtube_ads_area_width,
-                'youtube_ads_area_height': youtube_ads_area_height,
-                'youtube_skip_ads_area_x': youtube_skip_ads_area_x,  # ← THÊM
-                'youtube_skip_ads_area_y': youtube_skip_ads_area_y,  # ← THÊM
-                'youtube_skip_ads_area_width': youtube_skip_ads_area_width,  # ← THÊM
-                'youtube_skip_ads_area_height': youtube_skip_ads_area_height,  # ← THÊM
-            }
-
-    
-            if not keywords:
-                print("[PHASE 2] Failed to load keywords")
-                GoLoginProfileHelper.cleanup_profiles(profile_data, self.gologin_api, "[CLEANUP]")
-                self.set_variable(False)
-                return
     
             flow_iterators = {}  # profile_id → flow_iterator
     
-            for profile_id in opened_profiles:
-                driver = profile_data[profile_id]['driver']  # ← Will be None
-                debugger_address = profile_data[profile_id]['debugger_address']  # ← Will be None
+            for profile_id in opened_profiles:              
         
                 try:
                     if action_type == "Youtube":
                         if browse_youtube:
                             flow_iterator = YouTubeFlowAuto.create_flow_iterator(
                                 profile_id=profile_id,
-                                keywords=keywords,
+                                parameters=self.params,
                                 log_prefix=f"[BATCH {batch_num}][{profile_id}]",
                                 flow_type="browse"
                             )
                         else:
                             flow_iterator = YouTubeFlowAuto.create_flow_iterator(
                                 profile_id=profile_id,
-                                keywords=keywords,
+                                parameters=self.params,
                                 log_prefix=f"[BATCH {batch_num}][{profile_id}]"
                             )
                       
@@ -1049,66 +987,7 @@ class GoLoginAutoAction(BaseAction):
             return True  # Success - profile opened
 
         # ========== PHASE 2: CREATE FLOW ITERATOR (KEEP ORIGINAL) ==========
-        print(f"[{profile_id}] PHASE 2: Creating flow iterator...")
-
-        # Load keywords
-        keywords_suffix_prefix = self.params.get("keywords_suffix_prefix", "").strip()
-        keywords_youtube = GoLoginProfileHelper.load_keywords(self.params, "Get Youtube Keywords")
-        keywords_google = GoLoginProfileHelper.load_keywords(self.params, "Get Google Keywords", "Google")
-
-        # Youtube Options
-        youtube_area_x = int(self.params.get("youtube_area_x", 0))
-        youtube_area_y = int(self.params.get("youtube_area_y", 0))
-        youtube_area_width = int(self.params.get("youtube_area_width", 1920))
-        youtube_area_height = int(self.params.get("youtube_area_height", 1080))
-        youtube_image_search_path = self.params.get("youtube_image_search_path", "").strip()
-        youtube_search_icon_path = self.params.get("youtube_search_icon_path", "").strip()
-        youtube_sidebar_area_x = int(self.params.get("youtube_sidebar_area_x", 0))
-        youtube_sidebar_area_y = int(self.params.get("youtube_sidebar_area_y", 0))
-        youtube_sidebar_area_width = int(self.params.get("youtube_sidebar_area_width", 400))
-        youtube_sidebar_area_height = int(self.params.get("youtube_sidebar_area_height", 1080))
-        youtube_sidebar_image_search_path = self.params.get("youtube_sidebar_image_search_path", "").strip()
-
-        youtube_ads_area_x = int(self.params.get("youtube_ads_area_x", 0))
-        youtube_ads_area_y = int(self.params.get("youtube_ads_area_y", 0))
-        youtube_ads_area_width = int(self.params.get("youtube_ads_area_width", 300))
-        youtube_ads_area_height = int(self.params.get("youtube_ads_area_height", 150))
-        # Skip Ads Area params
-        youtube_skip_ads_area_x = int(self.params.get("youtube_skip_ads_area_x", 0))
-        youtube_skip_ads_area_y = int(self.params.get("youtube_skip_ads_area_y", 0))
-        youtube_skip_ads_area_width = int(self.params.get("youtube_skip_ads_area_width", 200))
-        youtube_skip_ads_area_height = int(self.params.get("youtube_skip_ads_area_height", 100))
-
-        keywords = {
-            'keywords_youtube': keywords_youtube,
-            'keywords_google': keywords_google,
-            'suffix_prefix': keywords_suffix_prefix,
-            'youtube_area_x': youtube_area_x,
-            'youtube_area_y': youtube_area_y,
-            'youtube_area_width': youtube_area_width,
-            'youtube_area_height': youtube_area_height,
-            'youtube_image_search_path': youtube_image_search_path,
-            'youtube_search_icon_path': youtube_search_icon_path,
-            'youtube_sidebar_area_x': youtube_sidebar_area_x,
-            'youtube_sidebar_area_y': youtube_sidebar_area_y,
-            'youtube_sidebar_area_width': youtube_sidebar_area_width,
-            'youtube_sidebar_area_height': youtube_sidebar_area_height,
-            'youtube_sidebar_image_search_path': youtube_sidebar_image_search_path,
-            'youtube_ads_area_x': youtube_ads_area_x,
-            'youtube_ads_area_y': youtube_ads_area_y,
-            'youtube_ads_area_width': youtube_ads_area_width,
-            'youtube_ads_area_height': youtube_ads_area_height,
-            'youtube_skip_ads_area_x': youtube_skip_ads_area_x,  # ← THÊM
-            'youtube_skip_ads_area_y': youtube_skip_ads_area_y,  # ← THÊM
-            'youtube_skip_ads_area_width': youtube_skip_ads_area_width,  # ← THÊM
-            'youtube_skip_ads_area_height': youtube_skip_ads_area_height,  # ← THÊM
-        }
-
-
-        if not keywords:
-            print(f"[{profile_id}] Failed to load keywords")
-            GoLoginProfileHelper.cleanup_profiles(profile_data, self.gologin_api, f"[{profile_id}]")
-            return False
+        print(f"[{profile_id}] PHASE 2: Creating flow iterator...")        
 
         driver = None  # ← Will be None for manual mode
         debugger_address = None  # ← Will be None for manual mode
@@ -1118,14 +997,14 @@ class GoLoginAutoAction(BaseAction):
                 if browse_youtube:
                     flow_iterator = YouTubeFlowAuto.create_flow_iterator(
                         profile_id=profile_id,
-                        keywords=keywords,
+                        parameters=self.params,
                         log_prefix=f"[AUTO][{profile_id}]",
                         flow_type="browse"
                     )
                 else:
                     flow_iterator = YouTubeFlowAuto.create_flow_iterator(
                         profile_id=profile_id,
-                        keywords=keywords,
+                        parameters=self.params,
                         log_prefix=f"[AUTO][{profile_id}]"
                     )
             elif action_type == "Google":
@@ -1220,8 +1099,6 @@ class GoLoginAutoAction(BaseAction):
             import traceback
             traceback.print_exc()
             return False
-
-
 
 
     

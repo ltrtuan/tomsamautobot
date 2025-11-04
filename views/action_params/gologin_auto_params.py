@@ -15,6 +15,8 @@ class GoLoginAutoParams(BaseActionParams):
         self.youtube_sidebar_select_area_button = None  # Track Sidebar Select area button
         self.youtube_ads_select_area_button = None
         self.youtube_skip_ads_select_area_button = None
+        self.youtube_search_area_select_area_button = None  # Track Search Area select button
+
         # NEW: Multi-channel tracking
         self.youtube_channels = []  # List of channel configs
         self.youtube_channels_container = None  # Container frame for channels
@@ -30,12 +32,6 @@ class GoLoginAutoParams(BaseActionParams):
         self.create_youtube_option_section()  # YOUTUBE OPTION SECTION
         
         self.create_action_type_section()
-        
-        
-        self.create_suffix_prefix_section()
-        
-        # ========== KEYWORDS YOUTUBE SECTION ==========
-        self.create_keywords_youtube_section()
 
         # ========== KEYWORDS GOOGLE SECTION ==========
         self.create_keywords_google_section()
@@ -231,6 +227,72 @@ class GoLoginAutoParams(BaseActionParams):
             command=self.on_youtube_select_area_click
         )
         self.youtube_select_area_button.pack(side=tk.LEFT, padx=(15, 0))
+        
+
+        # ========== SEARCH AREA YOUTUBE (GLOBAL) ==========
+        separator_search = ttk.Separator(self.youtube_option_frame, orient="horizontal")
+        separator_search.pack(fill=tk.X, pady=10)
+
+        search_area_label = tk.Label(
+            self.youtube_option_frame,
+            text="Search Area Youtube:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10, "bold")
+        )
+        search_area_label.pack(anchor=tk.W, pady=(5, 3))
+
+        search_coords_frame = tk.Frame(self.youtube_option_frame, bg=cfg.LIGHT_BG_COLOR)
+        search_coords_frame.pack(fill=tk.X, pady=(0, 10))
+
+        # X
+        tk.Label(search_coords_frame, text="X:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0, 5))
+        self.youtube_search_area_x_var = tk.StringVar()
+        if self.parameters:
+            self.youtube_search_area_x_var.set(self.parameters.get("youtube_search_area_x", "0"))
+        else:
+            self.youtube_search_area_x_var.set("0")
+        x_entry = ttk.Entry(search_coords_frame, textvariable=self.youtube_search_area_x_var, width=8)
+        x_entry.pack(side=tk.LEFT, padx=5)
+
+        # Y
+        tk.Label(search_coords_frame, text="Y:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(15, 5))
+        self.youtube_search_area_y_var = tk.StringVar()
+        if self.parameters:
+            self.youtube_search_area_y_var.set(self.parameters.get("youtube_search_area_y", "0"))
+        else:
+            self.youtube_search_area_y_var.set("0")
+        y_entry = ttk.Entry(search_coords_frame, textvariable=self.youtube_search_area_y_var, width=8)
+        y_entry.pack(side=tk.LEFT, padx=5)
+
+        # Width
+        tk.Label(search_coords_frame, text="Width:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(15, 5))
+        self.youtube_search_area_width_var = tk.StringVar()
+        if self.parameters:
+            self.youtube_search_area_width_var.set(self.parameters.get("youtube_search_area_width", "800"))
+        else:
+            self.youtube_search_area_width_var.set("800")
+        width_entry = ttk.Entry(search_coords_frame, textvariable=self.youtube_search_area_width_var, width=8)
+        width_entry.pack(side=tk.LEFT, padx=5)
+
+        # Height
+        tk.Label(search_coords_frame, text="Height:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(15, 5))
+        self.youtube_search_area_height_var = tk.StringVar()
+        if self.parameters:
+            self.youtube_search_area_height_var.set(self.parameters.get("youtube_search_area_height", "200"))
+        else:
+            self.youtube_search_area_height_var.set("200")
+        height_entry = ttk.Entry(search_coords_frame, textvariable=self.youtube_search_area_height_var, width=8)
+        height_entry.pack(side=tk.LEFT, padx=5)
+
+        # Select area button
+        self.youtube_search_area_select_area_button = ttk.Button(
+            search_coords_frame,
+            text="Select area",
+            command=self.on_youtube_search_area_select_area_click
+        )
+        self.youtube_search_area_select_area_button.pack(side=tk.LEFT, padx=(15, 0))
+
+
     
         # ========== SEARCH ICON IMAGE (GLOBAL) ==========
         separator = ttk.Separator(self.youtube_option_frame, orient="horizontal")
@@ -268,6 +330,44 @@ class GoLoginAutoParams(BaseActionParams):
     
         browse_search_icon_button = ttk.Button(search_icon_browse_frame, text="Duyệt...", command=browse_youtube_search_icon)
         browse_search_icon_button.pack(side=tk.RIGHT, padx=5)
+        
+        # ========== VIDEOS MENU CHANNEL IMAGE (GLOBAL) ==========
+        separator_videos_menu = ttk.Separator(self.youtube_option_frame, orient="horizontal")
+        separator_videos_menu.pack(fill=tk.X, pady=10)
+
+        videos_menu_label = tk.Label(
+            self.youtube_option_frame,
+            text="Videos Menu Channel Image",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10, "bold")
+        )
+        videos_menu_label.pack(anchor=tk.W, pady=(5, 3))
+
+        videos_menu_browse_frame = tk.Frame(self.youtube_option_frame, bg=cfg.LIGHT_BG_COLOR)
+        videos_menu_browse_frame.pack(fill=tk.X, pady=(0, 5))
+
+        tk.Label(videos_menu_browse_frame, text="Đường dẫn hình ảnh:", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT, padx=(0, 5))
+
+        self.youtube_videos_menu_channel_path_var = tk.StringVar()
+        if self.parameters:
+            self.youtube_videos_menu_channel_path_var.set(self.parameters.get("youtube_videos_menu_channel_path", ""))
+        else:
+            self.youtube_videos_menu_channel_path_var.set("")
+
+        videos_menu_entry = ttk.Entry(videos_menu_browse_frame, textvariable=self.youtube_videos_menu_channel_path_var, width=40)
+        videos_menu_entry.pack(side=tk.LEFT, padx=(0, 5), fill=tk.X, expand=True)
+
+        def browse_youtube_videos_menu_channel():
+            filename = filedialog.askopenfilename(
+                title="Chọn một hình ảnh",
+                filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp *.gif"), ("All files", "*.*")]
+            )
+            if filename:
+                self.youtube_videos_menu_channel_path_var.set(filename)
+
+        browse_videos_menu_button = ttk.Button(videos_menu_browse_frame, text="Duyệt...", command=browse_youtube_videos_menu_channel)
+        browse_videos_menu_button.pack(side=tk.RIGHT, padx=5)
+
     
         # ========== SIDEBAR AREA YOUTUBE (GLOBAL) ==========
         separator2 = ttk.Separator(self.youtube_option_frame, orient="horizontal")
@@ -1040,6 +1140,22 @@ class GoLoginAutoParams(BaseActionParams):
             callback=update_coords
         )
         selector.show()
+        
+    def on_youtube_search_area_select_area_click(self):
+        """Handler for Search Area select button"""
+        from views.screen_area_selector import ScreenAreaSelector
+    
+        def update_coords(x, y, width, height):
+            self.youtube_search_area_x_var.set(str(x))
+            self.youtube_search_area_y_var.set(str(y))
+            self.youtube_search_area_width_var.set(str(width))
+            self.youtube_search_area_height_var.set(str(height))
+            print(f"[SEARCH_AREA] Updated: x={x}, y={y}, w={width}, h={height}")
+    
+        dialog = self.parent_frame.winfo_toplevel()
+        selector = ScreenAreaSelector(parent_dialog=dialog, callback=update_coords)
+        selector.show()
+
 
     def on_youtube_sidebar_select_area_click(self):
         """Handler khi click button Select area của Sidebar Youtube Option"""
@@ -1126,88 +1242,7 @@ class GoLoginAutoParams(BaseActionParams):
             state="readonly",
             width=20
         )
-        combo.pack(side=tk.LEFT, padx=5)
-        
-    def create_keywords_youtube_section(self):
-        """Keywords Youtube file browse section"""
-        keywords_frame = tk.LabelFrame(
-            self.parent_frame,
-            text="Search Keywords Youtube",
-            bg=cfg.LIGHT_BG_COLOR,
-            pady=10,
-            padx=10
-        )
-        keywords_frame.pack(fill=tk.X, pady=10)
-    
-        # Option 1: Browse keywords TXT file
-        keywords_browse_label = tk.Label(
-            keywords_frame,
-            text="Option 1: Keywords TXT file (one keyword per line):",
-            bg=cfg.LIGHT_BG_COLOR,
-            font=("Segoe UI", 9)
-        )
-        keywords_browse_label.pack(anchor=tk.W, pady=(0, 3))
-    
-        keywords_browse_frame = tk.Frame(keywords_frame, bg=cfg.LIGHT_BG_COLOR)
-        keywords_browse_frame.pack(fill=tk.X, pady=(0, 10))
-    
-        self.keywords_file_var = tk.StringVar()
-        if self.parameters:
-            self.keywords_file_var.set(self.parameters.get("keywords_file", ""))
-    
-        keywords_entry = tk.Entry(
-            keywords_browse_frame,
-            textvariable=self.keywords_file_var,
-            font=("Segoe UI", 10)
-        )
-        keywords_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
-    
-        def browse_keywords_file():
-            filename = filedialog.askopenfilename(
-                title="Select Keywords TXT File",
-                filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
-            )
-            if filename:
-                self.keywords_file_var.set(filename)
-    
-        browse_keywords_button = ttk.Button(
-            keywords_browse_frame,
-            text="Browse",
-            command=browse_keywords_file
-        )
-        browse_keywords_button.pack(side=tk.LEFT)
-    
-        # Option 2: Variable name
-        keywords_var_label = tk.Label(
-            keywords_frame,
-            text="Option 2: Variable name containing keywords TXT file path:",
-            bg=cfg.LIGHT_BG_COLOR,
-            font=("Segoe UI", 9)
-        )
-        keywords_var_label.pack(anchor=tk.W, pady=(0, 3))
-    
-        self.keywords_variable_var = tk.StringVar()
-        if self.parameters:
-            self.keywords_variable_var.set(self.parameters.get("keywords_variable", ""))
-    
-        keywords_var_entry = tk.Entry(
-            keywords_frame,
-            textvariable=self.keywords_variable_var,
-            font=("Segoe UI", 10)
-        )
-        keywords_var_entry.pack(fill=tk.X, pady=(0, 5))
-    
-        # Hint
-        keywords_hint = tk.Label(
-            keywords_frame,
-            text="💡 Keywords will be used when Action Type is YouTube. Random keyword per search.",
-            bg=cfg.LIGHT_BG_COLOR,
-            font=("Segoe UI", 8),
-            fg="#666666",
-            wraplength=500,
-            justify=tk.LEFT
-        )
-        keywords_hint.pack(anchor=tk.W)
+        combo.pack(side=tk.LEFT, padx=5)         
 
 
     def create_keywords_google_section(self):
@@ -1684,9 +1719,7 @@ class GoLoginAutoParams(BaseActionParams):
         # ========== ACTION TYPE ==========
         params["action_type"] = self.action_type_var.get()
     
-        # ========== KEYWORDS (YouTube & Google) - GLOBAL ==========
-        params["keywords_file"] = self.keywords_file_var.get().strip()
-        params["keywords_variable"] = self.keywords_variable_var.get().strip()
+        # ========== KEYWORDS (YouTube & Google) - GLOBAL ==========     
         params["keywords_google_file"] = self.keywords_google_file_var.get().strip()
         params["keywords_google_variable"] = self.keywords_google_variable_var.get().strip()
     
@@ -1705,8 +1738,17 @@ class GoLoginAutoParams(BaseActionParams):
         params["youtube_main_area_y"] = self.youtube_main_area_y_var.get()
         params["youtube_main_area_width"] = self.youtube_main_area_width_var.get()
         params["youtube_main_area_height"] = self.youtube_main_area_height_var.get()
+        
+        # Search Area Youtube
+        params['youtube_search_area_x'] = self.youtube_search_area_x_var.get()
+        params['youtube_search_area_y'] = self.youtube_search_area_y_var.get()
+        params['youtube_search_area_width'] = self.youtube_search_area_width_var.get()
+        params['youtube_search_area_height'] = self.youtube_search_area_height_var.get()
+
     
         params["youtube_search_icon_path"] = self.youtube_search_icon_path_var.get()
+        params["youtube_videos_menu_channel_path"] = self.youtube_videos_menu_channel_path_var.get()
+
     
         params["youtube_sidebar_area_x"] = self.youtube_sidebar_area_x_var.get()
         params["youtube_sidebar_area_y"] = self.youtube_sidebar_area_y_var.get()

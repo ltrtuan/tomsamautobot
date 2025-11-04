@@ -63,12 +63,14 @@ def check_and_focus_window_by_title(window_title_filter):
     target_hwnd = None
     
     def enum_windows_callback(hwnd, results):
+        # KEEP ORIGINAL: Only check visible (simple)
         if not win32gui.IsWindowVisible(hwnd):
             return True
         
         try:
             window_title = win32gui.GetWindowText(hwnd)
             if window_title_filter_lower in window_title.lower():
+                # KEEP ORIGINAL: 2-element tuple
                 results.append((hwnd, window_title))
                 print(f"[APP HELPER] Found matching window: '{window_title}'")
         except:
@@ -80,11 +82,34 @@ def check_and_focus_window_by_title(window_title_filter):
     found_windows = []
     win32gui.EnumWindows(enum_windows_callback, found_windows)
     
+    # ========== NEW: If not found, search again including hidden windows ==========
+    if not found_windows:
+        print(f"[APP HELPER] No visible window found, searching hidden/tray windows...")
+        
+        def enum_all_windows_callback(hwnd, results):
+            # Check all windows (including hidden/tray)
+            if not win32gui.IsWindowEnabled(hwnd):
+                return True
+            
+            try:
+                window_title = win32gui.GetWindowText(hwnd)
+                if window_title_filter_lower in window_title.lower():
+                    results.append((hwnd, window_title))
+                    is_visible = win32gui.IsWindowVisible(hwnd)
+                    visibility = "visible" if is_visible else "hidden/tray"
+                    print(f"[APP HELPER] Found matching window: '{window_title}' ({visibility})")
+            except:
+                pass
+            
+            return True
+        
+        win32gui.EnumWindows(enum_all_windows_callback, found_windows)
+    
     if not found_windows:
         print(f"[APP HELPER] ✗ No window found with title: '{window_title_filter}'")
         return False
     
-    # Use first matching window
+    # Use first matching window (KEEP ORIGINAL: 2-element tuple)
     target_hwnd, target_title = found_windows[0]
     
     if len(found_windows) > 1:
@@ -92,11 +117,19 @@ def check_and_focus_window_by_title(window_title_filter):
     
     # ========== STEP 3: BRING TO FRONT AND MAXIMIZE ==========
     try:
-        # Restore if minimized
-        if win32gui.IsIconic(target_hwnd):
-            print(f"[APP HELPER] Restoring from minimized...")
+        # Check if window is visible
+        is_visible = win32gui.IsWindowVisible(target_hwnd)
+        is_minimized = win32gui.IsIconic(target_hwnd)
+        
+        # Restore if minimized OR not visible (tray)
+        if is_minimized or not is_visible:
+            if not is_visible:
+                print(f"[APP HELPER] Restoring from System Tray...")
+            else:
+                print(f"[APP HELPER] Restoring from minimized...")
+            
             win32gui.ShowWindow(target_hwnd, win32con.SW_RESTORE)
-            time.sleep(0.3)
+            time.sleep(0.5)  # Wait for restore to complete
         
         # Bring to foreground
         print(f"[APP HELPER] Bringing to front...")
@@ -119,4 +152,6 @@ def check_and_focus_window_by_title(window_title_filter):
     
     except Exception as e:
         print(f"[APP HELPER] Error bringing window to front: {e}")
+        import traceback
+        traceback.print_exc()
         return False

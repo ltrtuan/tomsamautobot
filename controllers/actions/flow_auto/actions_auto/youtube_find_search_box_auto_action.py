@@ -13,26 +13,35 @@ class YouTubeFindSearchBoxAutoAction(BaseFlowAutoAction):
     Find search box (retry 3 times) → Click random position → Type keyword with mistakes → Enter
     """
     
-    def __init__(self, profile_id, keywords, log_prefix="[YOUTUBE AUTO]"):
+    def __init__(self, profile_id, parameters, log_prefix="[YOUTUBE AUTO]"):
         """
         Initialize find search box action
-        
+    
         Args:
             profile_id: GoLogin profile ID
-            keywords: Dict containing:
+            parameters: Full parameters dict containing:
                 - youtube_search_icon_path: Search icon image path
-                - keywords_youtube: List of keywords
-                - suffix_prefix: Suffix/prefix for variation
+                - keywords_youtube: List of keywords (cached from channel)
+                - suffix_prefix: Suffix/prefix for variation (cached from channel)
+                - youtube_area_x/y/width/height: Search area coords
+                - ... (other params)
             log_prefix: Log prefix
         """
         super().__init__(profile_id, log_prefix)
-        self.keywords = keywords
+        self.parameters = parameters
+
     
     def _execute_internal(self):
         """Execute find search box → click → type keyword → enter"""
         try:
             # ========== STEP 1: GENERATE KEYWORD ==========
-            keyword = self._generate_keyword(self.keywords)
+            # Build minimal dict for _generate_keyword()
+            keywords_dict = {
+                'keywords_youtube': self.parameters.get('keywords_youtube', []),
+                'suffix_prefix': self.parameters.get('suffix_prefix', '')
+            }
+            keyword = self._generate_keyword(keywords_dict)  # ← Pass minimal dict
+
             if not keyword:
                 self.log("No keywords available", "ERROR")
                 return False
@@ -40,7 +49,7 @@ class YouTubeFindSearchBoxAutoAction(BaseFlowAutoAction):
             self.log(f"Will search for keyword: '{keyword}'")
             
             # ========== STEP 2: FIND SEARCH BOX (RETRY 3 TIMES) ==========
-            search_icon_path = self.keywords.get('youtube_search_icon_path', '').strip()
+            search_icon_path = self.parameters.get('youtube_search_icon_path', '').strip()
             
             icon_pos = None
             max_retries = 3

@@ -35,7 +35,6 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         
         # ========== CHAIN 2-N: VIDEO INTERACTIONS (RANDOM) ==========
         self._build_video_interaction_chains() 
-        self._build_video_interaction_chains() 
         
         self.log(f"Built {len(self.chain_queue)} chains")
     
@@ -67,12 +66,13 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         )
         
         # Action 3: Search (if keywords available)
-        if self.keywords_youtube:         
+        keywords_list = self.parameters.get("keywords_youtube", [])
+        if keywords_list:  # ← Check dict, not instance var
             
             chain1_actions.append(
                 ("find_search_box", YouTubeFindSearchBoxAutoAction(
                     self.profile_id, 
-                    self.keywords,  # Pass full keywords dict
+                    self.parameters,  # Pass full keywords dict
                     self.log_prefix
                 ))
             )
@@ -82,9 +82,9 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         chain1_actions.append(
             ("find_click_video", YouTubeFindClickVideoAutoAction(
                 self.profile_id,
-                self.keywords,     # Pass full keywords dict
+                self.parameters,     # Pass full keywords dict
                 self.log_prefix,   # log_prefix (positional or keyword)
-                area="main"        # area (keyword argument)
+                area="search"        # area (keyword argument)
             ))
         )
         
@@ -101,13 +101,13 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         )
       
         chain1_actions.append(
-            ("delay", random.uniform(4, 7))  # ← DELAY TUPLE: ("delay", seconds)
+            ("delay", random.uniform(1, 3))  # ← DELAY TUPLE: ("delay", seconds)
         )   
 
         chain1_actions.append(
             ("skip_ads", YouTubeSkipAdsAutoAction(
                 profile_id=self.profile_id,
-                keywords=self.keywords,  # Pass keywords dict for ads area params
+                parameters=self.parameters,  # Pass keywords dict for ads area params
                 log_prefix=self.log_prefix
             ))
         )
@@ -130,63 +130,124 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         - Mỗi chain có 1-3 actions
         - Loại action: scroll, mouse_move, pause_resume, fullscreen
         """
-       
+        chain_actions = []    
         self.log(f"Building interaction chains")
-    
-        # Available action types
-        action_types = ['mouse_move', 'pause_resume', 'fullscreen', 'prev_next']
-    
-        chain_actions = []       
-      
+        clicked_second_video = False
         
-        # ========== RANDOM 1-3 ACTIONS PER CHAIN ==========
-        num_actions = random.randint(2, 4)
-        
-        for j in range(num_actions):
-            chain_actions.append(
-                ("delay", random.randint(2,5))  # ← DELAY TUPLE: ("delay", seconds)
-            )
-            action_type = random.choice(action_types)
-          
-            if action_type == 'scroll':
-                num_random_actions = random.randint(1, 3)
+        # 50% oppotunity to click second video of the channel - sidebar or channel page
+        if random.random() < 0.4:
+
+            clicked_second_video = True
+            second_video = ['sidebar', 'channel']            
+            second_video_area = random.choice(second_video)
+            if second_video_area == "sidebar":
+                action = YouTubeFindClickVideoAutoAction(
+                    self.profile_id,
+                    self.parameters,     # Pass full keywords dict
+                    self.log_prefix,   # log_prefix (positional or keyword)
+                    area="sidebar"        # area (keyword argument)
+                )
+                chain_actions.append(("sidebar", action))                
+               
+            else:
+                # Scroll small to see the logo channe;
                 action = YouTubeRandomMoveScrollAutoAction(
                     profile_id=self.profile_id,
-                    num_actions=num_random_actions,
-                    area="main",
+                    num_actions=1,
+                    area="sidebar",
                     log_prefix=self.log_prefix
                 )
-            
-            elif action_type == 'mouse_move':              
-                action = YouTubeMouseMoveAutoAction(
-                    profile_id=self.profile_id,
-                    click=False,
-                    log_prefix=self.log_prefix,
-                )
-            
-            elif action_type == 'pause_resume':
-                action = YouTubePauseResumeAutoAction(
-                    profile_id=self.profile_id,
-                    log_prefix=self.log_prefix
-                )
-            
-            elif action_type == 'fullscreen':
-                action = YouTubeFullscreenAutoAction(
-                    profile_id=self.profile_id,
-                    log_prefix=self.log_prefix
-                )
+                chain_actions.append(("scroll", action))  
                 
-            elif action_type == 'prev_next':
-                action = YouTubePrevNextAutoAction(
-                    profile_id=self.profile_id,
-                    log_prefix=self.log_prefix
-                )                
+                # Step 1 click logo channel -> If true store to Global Variabel
+                action = YouTubeFindClickVideoAutoAction(
+                    self.profile_id,
+                    self.parameters,     # Pass full keywords dict
+                    self.log_prefix,   # log_prefix (positional or keyword)
+                    area="channel"        # area (keyword argument)
+                )
+                chain_actions.append(("channel", action))  
+                
+                # Step 2 click menu Videos channel
+                action = YouTubeFindClickVideoAutoAction(
+                    self.profile_id,
+                    self.parameters,     # Pass full keywords dict
+                    self.log_prefix,   # log_prefix (positional or keyword)
+                    area="menu_videos_channel"        # area (keyword argument)
+                )
+                chain_actions.append(("menu_videos_channel", action))  
+                
+                # Step 3 random click Videos channel
+                action = YouTubeFindClickVideoAutoAction(
+                    self.profile_id,
+                    self.parameters,     # Pass full keywords dict
+                    self.log_prefix,   # log_prefix (positional or keyword)
+                    area="video_channel"        # area (keyword argument)
+                )
+                chain_actions.append(("video_channel", action))  
+                
+            chain_actions.append(
+                ("delay", random.uniform(1, 3))  # ← DELAY TUPLE: ("delay", seconds)
+            )
+                
+            action = YouTubeSkipAdsAutoAction(
+                self.profile_id,
+                self.parameters,     # Pass full keywords dict
+                self.log_prefix,   # log_prefix (positional or keyword)
+            )
+            chain_actions.append(("skip_ads", action))
+                
+    
+        # Available action types
+        if not clicked_second_video:
+            action_types = ['mouse_move', 'pause_resume', 'fullscreen', 'prev_next']
         
-
-            else:
-                continue
+            # ========== RANDOM 1-3 ACTIONS PER CHAIN ==========
+            num_actions = random.randint(2, 4)
+        
+            for j in range(num_actions):
+                chain_actions.append(
+                    ("delay", random.randint(2,5))  # ← DELAY TUPLE: ("delay", seconds)
+                )
+                action_type = random.choice(action_types)
+          
+                if action_type == 'scroll':
+                    num_random_actions = random.randint(1, 3)
+                    action = YouTubeRandomMoveScrollAutoAction(
+                        profile_id=self.profile_id,
+                        num_actions=num_random_actions,
+                        area="main",
+                        log_prefix=self.log_prefix
+                    )
             
-            chain_actions.append((action_type, action))
+                elif action_type == 'mouse_move':              
+                    action = YouTubeMouseMoveAutoAction(
+                        profile_id=self.profile_id,
+                        click=False,
+                        log_prefix=self.log_prefix,
+                    )
+            
+                elif action_type == 'pause_resume':
+                    action = YouTubePauseResumeAutoAction(
+                        profile_id=self.profile_id,
+                        log_prefix=self.log_prefix
+                    )
+            
+                elif action_type == 'fullscreen':
+                    action = YouTubeFullscreenAutoAction(
+                        profile_id=self.profile_id,
+                        log_prefix=self.log_prefix
+                    )
+                
+                elif action_type == 'prev_next':
+                    action = YouTubePrevNextAutoAction(
+                        profile_id=self.profile_id,
+                        log_prefix=self.log_prefix
+                    )  
+                else:
+                    continue
+            
+                chain_actions.append((action_type, action))
         
         # Add chain to queue
         self.chain_queue.append({

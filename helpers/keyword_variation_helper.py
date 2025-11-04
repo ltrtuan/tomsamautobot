@@ -44,7 +44,8 @@ class KeywordVariationHelper:
             str: Final keyword variation
         """
         # 50% return original keyword
-        if random.random() < 0.5:
+        rand_generate_keyword = random.random()
+        if rand_generate_keyword < 0.5:
             return original_keyword
         
         # 50% combine với K1 và/hoặc K2

@@ -4,6 +4,7 @@ import time
 import random
 import pyautogui
 import os
+from models.global_variables import GlobalVariables
 from controllers.actions.mouse_move_action import MouseMoveAction
 from controllers.actions.flow_auto.actions_auto.base_flow_auto_action import BaseFlowAutoAction
 from controllers.actions.flow_auto.actions_auto.youtube_random_move_scroll_auto_action import YouTubeRandomMoveScrollAutoAction
@@ -14,36 +15,56 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
     Support both main feed and sidebar areas
     """
     
-    def __init__(self, profile_id, keywords, log_prefix="[YOUTUBE AUTO]", area="main", flow_type="search"):
-
+    def __init__(self, profile_id, parameters, log_prefix="[YOUTUBE AUTO]", area="search", flow_type="search"):
         """
         Initialize find and click video action
-        
+    
         Args:
             profile_id: GoLogin profile ID
-            keywords: Dict containing logo paths and area info
-            area: 'main' or 'sidebar' - determines which area to search
+            parameters: Full parameters dict containing:
+                - youtube_image_search_path: Main area logo path (channel-specific)
+                - youtube_sidebar_image_search_path: Sidebar logo path (channel-specific)
+                - youtube_area_x/y/width/height: Main area coords
+                - youtube_sidebar_area_x/y/width/height: Sidebar area coords
+                - ... (other params)
+            area: 'main', 'sidebar', 'channel', 'video_channel' , 'menu_videos_channel'  - determines which area to search
             log_prefix: Log prefix
+            flow_type: 'search' or 'browse'
         """
         super().__init__(profile_id, log_prefix)
-        self.keywords = keywords
+        self.parameters = parameters
         self.area = area.lower()
-        self.flow_type = flow_type
+        self.flow_type = flow_type    
+
         # ========== EXTRACT PARAMS BASED ON AREA ==========
         if self.area == "sidebar":
-            # Sidebar params
-            self.logo_path = keywords.get('youtube_sidebar_image_search_path', '').strip()
-            area_x = int(keywords.get('youtube_sidebar_area_x', 0))
-            area_y = int(keywords.get('youtube_sidebar_area_y', 0))
-            area_width = int(keywords.get('youtube_sidebar_area_width', 400))
-            area_height = int(keywords.get('youtube_sidebar_area_height', 1080))
+            self.logo_path = parameters.get('youtube_sidebar_image_search_path', '').strip()
+            area_x = int(parameters.get('youtube_sidebar_area_x', 0))
+            area_y = int(parameters.get('youtube_sidebar_area_y', 0))
+            area_width = int(parameters.get('youtube_sidebar_area_width', 400))
+            area_height = int(parameters.get('youtube_sidebar_area_height', 1080))
+            
+        elif self.area == "main" or self.area == "channel":
+            self.logo_path = parameters.get('youtube_channel_logo_path', '').strip()
+            area_x = int(parameters.get('youtube_main_area_x', 0))
+            area_y = int(parameters.get('youtube_main_area_y', 0))
+            area_width = int(parameters.get('youtube_main_area_width', 400))
+            area_height = int(parameters.get('youtube_main_area_height', 1080))
+            
+        elif self.area == "menu_videos_channel":
+            self.logo_path = parameters.get('youtube_videos_menu_channel_path', '').strip()
+            area_x = int(parameters.get('youtube_main_area_x', 0))
+            area_y = int(parameters.get('youtube_main_area_y', 0))
+            area_width = int(parameters.get('youtube_main_area_width', 400))
+            area_height = int(parameters.get('youtube_main_area_height', 1080))
+            
         else:
-            # Main feed params (default)
-            self.logo_path = keywords.get('youtube_image_search_path', '').strip()
-            area_x = int(keywords.get('youtube_area_x', 0))
-            area_y = int(keywords.get('youtube_area_y', 0))
-            area_width = int(keywords.get('youtube_area_width', 1920))
-            area_height = int(keywords.get('youtube_area_height', 1080))
+            self.logo_path = parameters.get('youtube_image_search_path', '').strip()
+            area_x = int(parameters.get('youtube_search_area_x', 0))
+            area_y = int(parameters.get('youtube_search_area_y', 0))
+            area_width = int(parameters.get('youtube_search_area_width', 1920))
+            area_height = int(parameters.get('youtube_search_area_height', 1080))
+
         
         # Define search region
         self.region = None
@@ -55,12 +76,86 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
     def _execute_internal(self):
         """Execute find logo → calculate video position → click video"""
         try:
+            # If find logo channel when view a video , just try once
+            if self.area == "channel":
+                # Find logo and calculate video click position
+                video_position = self._find_and_calculate_click_position()
+            
+                if video_position:
+                    self.log(f"✓ Found logo Channellllllllllllllllll")
+                
+                    # ========== CLICK VIDEO DIRECTLY ==========
+                    click_x, click_y = video_position
+                
+                    # Click using human-like movement
+                    MouseMoveAction.move_and_click_static(
+                        click_x, click_y,
+                        click_type="single_click",
+                        fast=False
+                    )
+                
+                    # Wait for video to start
+                    wait_time = random.uniform(2, 4)
+                    self.log(f"Waiting {wait_time:.1f}s for video to start")
+                    time.sleep(wait_time)
+                    GlobalVariables().set('found_logo_channel', True)
+                    return True
+                return False
+            
+            # Just move mouse on menu Videos of The Channel and click to show all videos of the channel
+            if self.area == "menu_videos_channel":
+                found_logo_channel = GlobalVariables().get('found_logo_channel', False)
+                if found_logo_channel:
+                    for attempt in range(1, 2):
+                        menu_position = self._find_and_calculate_click_position()
+                        if menu_position:
+                            # ========== CLICK VIDEO DIRECTLY ==========
+                            click_x, click_y = menu_position
+                            self.log(f"✓ Found Menu Videos Channellllllllllllllll")
+                
+                            # Click using human-like movement
+                            MouseMoveAction.move_and_click_static(
+                                click_x, click_y,
+                                click_type="single_click",
+                                fast=False
+                            )
+                
+                            # Wait for video to start
+                            wait_time = random.uniform(1, 2)
+                            time.sleep(wait_time)
+                            GlobalVariables().set('found_menu_videos_channel', True)
+                            return True
+                return False
+            
+            # Just move mouse on channel page -> Cursor hand -> click
+            if self.area == "video_channel":
+                found_menu_videos_channel = GlobalVariables().get('found_menu_videos_channel', False)
+                if found_menu_videos_channel:
+                    # Scroll to list videos
+                    YouTubeRandomMoveScrollAutoAction(self.profile_id, random.randint(1, 4), "main", self.log_prefix).execute()
+                    time.sleep(random.randint(2, 4))
+                    for attempt in range(1, 5):
+                        is_hand_cursor = self._hover_and_check_hand_cursor()
+                        if is_hand_cursor:
+                            pyautogui.click()
+                            wait_time = random.uniform(4, 7)
+                            time.sleep(wait_time)
+                            self.log(f"✓ Found Videos Channellllllllllllllllllll")
+                            GlobalVariables().set('found_menu_videos_channel', False)
+                            GlobalVariables().set('found_logo_channel', False)
+                            return True
+                return False
+
             # ========== FIND LOGO WITH RETRY & SCROLL ==========
             # Browse does not need search logo
             if self.flow_type == "browse":
                 max_retries = 1
             else:
-                max_retries = 5
+                # if search home, do not need scroll to much
+                if self.area == "main":
+                    max_retries = 2
+                else:
+                    max_retries = 5
                 
             for attempt in range(1, max_retries + 1):
                 self.log(f"Attempt {attempt}/{max_retries}: Looking for logo in {self.area} area")
@@ -83,7 +178,7 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
                     )
                 
                     # Wait for video to start
-                    wait_time = random.uniform(4, 6)
+                    wait_time = random.uniform(4, 7)
                     self.log(f"Waiting {wait_time:.1f}s for video to start")
                     time.sleep(wait_time)
                 
@@ -109,6 +204,42 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
             traceback.print_exc()
             return False        
 
+    def _hover_and_check_hand_cursor(self):
+        """
+        Hover mouse and check hand cursor
+        
+        Returns:
+            bool: True if cursor = hand (clickable), False otherwise
+        """
+        if not self.region:          
+            return False
+        
+        region_x, region_y, region_width, region_height = self.region
+        
+        # Random position in ads area
+        random_x = region_x + random.randint(0, region_width)
+        random_y = region_y + random.randint(0, region_height)
+        
+        self.log(f"Hovering on CHANNEL PAGE")
+        
+        # Move mouse (NO CLICK)
+        MouseMoveAction.move_and_click_static(
+            random_x, random_y,
+            click_type=None,  # No click, just hover
+            fast=False
+        )
+        
+        time.sleep(0.2)  # Wait for cursor to update
+        
+        # Check if cursor = hand
+        is_hand = self._is_hand_cursor()
+        
+        if is_hand:
+            self.log("✓ Cursor = HAND (ads clickable)")
+        else:
+            self.log("Cursor NOT hand (no clickable ads)")
+        
+        return is_hand
     
     def _find_and_calculate_click_position(self):
         """
@@ -130,7 +261,7 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
         result = self._find_image_on_screen(
             image_path=self.logo_path,
             region=search_region,  # ← FIX: Always pass valid region
-            accuracy=0.7,
+            accuracy=0.8,
             click_offset_x=0,  # Return center of logo
             click_offset_y=0
         )
@@ -143,10 +274,18 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
         # ========== CALCULATE CLICK POSITION BASED ON AREA ==========
         if self.area == "sidebar":
             # Sidebar: Logo ở bên phải, video thumbnail ở bên TRÁI
-            offset_x = random.randint(-280, -50)
-            offset_y = random.randint(-60, 60)
+            offset_x = random.randint(-110, -60)
+            offset_y = random.randint(-20, 20)
+        elif self.area == "main":
+            # Home: Logo ở dưới, video thumbnail ở trên
+            offset_x = random.randint(-140, -70)
+            offset_y = random.randint(0, 220)
+        elif self.area == "channel" or self.area == "menu_videos_channel":
+            # Cần click vào logo channel khi xem video -> vào channel page
+            offset_x = random.randint(-1, 1)
+            offset_y = random.randint(-1, 1)
         else:
-            # Main feed: Logo ở bên phải, video thumbnail ở bên TRÁI
+            # Search feed: Logo ở bên phải, video thumbnail ở bên TRÁI
             offset_x = random.randint(-320, -50)
             offset_y = random.randint(-10, 80)
     

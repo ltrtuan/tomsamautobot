@@ -11,37 +11,43 @@ from controllers.actions.mouse_move_action import MouseMoveAction
 
 class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
     """
-    Skip YouTube ads with 2 strategies:
-    - 30% Case 1: Click Ads Area → Open new tab → Interact → Close tab → Skip ads
-    - 70% Case 2: Direct skip ads in Skip Ads Area
+    Skip YouTube ads with new strategy:
+    1. Hover mouse vào ADS area
+    2. If cursor = hand:
+       - 30% → Click ads (Case 1: Open tab → Interact → Close → Skip)
+       - 70% → Move to Skip Ads area → Check hand → Click (Case 2)
+    3. If cursor NOT hand → Try skip directly
     """
     
-    def __init__(self, profile_id, keywords, log_prefix="[YOUTUBE AUTO]"):
+    def __init__(self, profile_id, parameters, log_prefix="[YOUTUBE AUTO]"):
         """
         Initialize skip ads action
         
         Args:
             profile_id: GoLogin profile ID
-            keywords: Dict containing ads area and skip ads area params
+            parameters: Full parameters dict containing:
+                - youtube_ads_area_x/y/width/height: Ads area coords
+                - youtube_skip_ads_area_x/y/width/height: Skip ads area coords
             log_prefix: Log prefix
         """
         super().__init__(profile_id, log_prefix)
         self.profile_id = profile_id
-        # Extract Ads Area params (for clicking ads - Case 1)
-        ads_area_x = int(keywords.get('youtube_ads_area_x', 0))
-        ads_area_y = int(keywords.get('youtube_ads_area_y', 0))
-        ads_area_width = int(keywords.get('youtube_ads_area_width', 300))
-        ads_area_height = int(keywords.get('youtube_ads_area_height', 150))
+        
+        # ========== EXTRACT ADS AREA PARAMS (for clicking ads - Case 1) ==========
+        ads_area_x = int(parameters.get('youtube_ads_area_x', 0))
+        ads_area_y = int(parameters.get('youtube_ads_area_y', 0))
+        ads_area_width = int(parameters.get('youtube_ads_area_width', 300))
+        ads_area_height = int(parameters.get('youtube_ads_area_height', 150))
         
         self.ads_region = None
         if ads_area_width > 0 and ads_area_height > 0:
             self.ads_region = (ads_area_x, ads_area_y, ads_area_width, ads_area_height)
         
-        # Extract Skip Ads Area params (for skip button - Case 2)
-        skip_ads_x = int(keywords.get('youtube_skip_ads_area_x', 0))
-        skip_ads_y = int(keywords.get('youtube_skip_ads_area_y', 0))
-        skip_ads_width = int(keywords.get('youtube_skip_ads_area_width', 200))
-        skip_ads_height = int(keywords.get('youtube_skip_ads_area_height', 100))
+        # ========== EXTRACT SKIP ADS AREA PARAMS (for skip button - Case 2) ==========
+        skip_ads_x = int(parameters.get('youtube_skip_ads_area_x', 0))
+        skip_ads_y = int(parameters.get('youtube_skip_ads_area_y', 0))
+        skip_ads_width = int(parameters.get('youtube_skip_ads_area_width', 200))
+        skip_ads_height = int(parameters.get('youtube_skip_ads_area_height', 100))
         
         self.skip_ads_region = None
         if skip_ads_width > 0 and skip_ads_height > 0:
@@ -50,19 +56,26 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
         self.log(f"Ads region: {self.ads_region}, Skip Ads region: {self.skip_ads_region}")
     
     def _execute_internal(self):
-        """Execute skip ads with random strategy"""
-        
+        """Execute skip ads with new hover-first strategy"""
+        # Logic : if click ads -> Ads (maybe) show one time. But if skip ads or miss skip ads , Ads maybe show 2 times
         try:
             self.log("Checking for ads")
             time.sleep(6)  # Wait for skip button to appear
             
-            # Random strategy selection: 30% Case 1, 70% Case 2
-            if random.random() < 0.3:
-                self.log("Selected CASE 1: Click ads → Interact → Skip")
-                return self._case1_click_ads_then_skip()
-            else:
-                self.log("Selected CASE 2: Direct skip ads")
-                return self._case2_direct_skip()
+            # ========== NEW STRATEGY: HOVER ADS AREA FIRST ==========
+            # Step 1: Hover mouse vào ADS area
+            ads_hand_cursor = self._hover_and_check_ads_area()
+            
+            if ads_hand_cursor:
+                # Cursor = hand → Random select Case 1 (30%) or Case 2 (70%)
+                if random.random() < 0.3:
+                    self.log("Selected CASE 1: Click ads → Interact → Skip (30%)")
+                    return self._case1_click_ads_then_skip()
+                else:
+                    self.log("Selected CASE 2: Move to Skip Ads area → Check hand → Click (70%)")
+                    self._case2_hover_skip_ads_then_click()
+                    time.sleep(random.uniform(5, 7))
+                    return self._case2_hover_skip_ads_then_click()
             
         except Exception as e:
             self.log(f"Skip ads error: {e}", "ERROR")
@@ -70,24 +83,64 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
             traceback.print_exc()
             return True  # Not critical
     
+    def _hover_and_check_ads_area(self):
+        """
+        Hover mouse vào ADS area và check cursor
+        
+        Returns:
+            bool: True if cursor = hand (clickable), False otherwise
+        """
+        if not self.ads_region:
+            self.log("No ads region defined")
+            return False
+        
+        region_x, region_y, region_width, region_height = self.ads_region
+        
+        # Random position in ads area
+        random_x = region_x + random.randint(0, region_width)
+        random_y = region_y + random.randint(0, region_height)
+        
+        self.log(f"Hovering ads area at ({random_x}, {random_y})")
+        
+        # Move mouse (NO CLICK)
+        MouseMoveAction.move_and_click_static(
+            random_x, random_y,
+            click_type=None,  # No click, just hover
+            fast=False
+        )
+        
+        time.sleep(0.2)  # Wait for cursor to update
+        
+        # Check if cursor = hand
+        is_hand = self._is_hand_cursor()
+        
+        if is_hand:
+            self.log("✓ Cursor = HAND (ads clickable)")
+        else:
+            self.log("Cursor NOT hand (no clickable ads)")
+        
+        return is_hand
+    
     def _case1_click_ads_then_skip(self):
-        """Case 1: Click ads area → Open new tab → Interact → Close → Skip"""
+        """Case 1 (30%): Click ads → Open tab → Interact → Close → Skip"""
         try:
-            # Step 1: Try to click ads
-            if not self._click_ads_area():
-                self.log("No clickable ads found, falling back to direct skip")
-                return self._case2_direct_skip()
+            # Step 1: Click ads (mouse already hovering from _hover_and_check_ads_area)
+            click_delay = random.uniform(0.5, 1.5)
+            self.log(f"Clicking ads (delay {click_delay:.1f}s)")
+            time.sleep(click_delay)
+            pyautogui.click()
+            self.log("✓ Clicked ads")
             
-            # Step 2: Wait and check if new tab opened (by checking window title)
+            # Step 2: Wait and check if new tab opened
             time.sleep(2)
             
             if not self._check_new_tab_opened():
                 self.log("No new tab opened, falling back to direct skip")
-                return self._case2_direct_skip()
+                return self._try_skip_ads_once()()
             
             self.log("✓ New tab opened, interacting...")
             
-            # Step 3: Interact with new tab (random actions)
+            # Step 3: Interact with new tab
             self._interact_with_new_tab()
             
             # Step 4: Close new tab
@@ -99,35 +152,37 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
             # Step 6: Resume YouTube video
             self._resume_youtube_video()
             
-            # Step 7: Skip ads (retry 3 times)
+            # Step 7: Skip ads
             return self._try_skip_ads_once()
             
         except Exception as e:
             self.log(f"Case 1 error: {e}", "ERROR")
             return True
     
-    def _case2_direct_skip(self):
-        """Case 2: Direct skip ads in Skip Ads Area"""
-        skip_ads = self._try_skip_ads_once()
-        if skip_ads:
-            return skip_ads
-        YouTubeMouseMoveAutoAction(profile_id=self.profile_id, click=False, log_prefix=self.log_prefix)
-        time.sleep(random.uniform(5, 7))
-        return self._try_skip_ads_once()    
-    
+    def _case2_hover_skip_ads_then_click(self):
+        """Case 2 (70%): Move to Skip Ads area → Check hand → Click"""
+        try:
+            # Reuse _try_skip_ads_once() (same logic: hover + check hand + click)
+            if self._try_skip_ads_once():
+                return True      
+        
+        except Exception as e:
+            self.log(f"Case 2 error: {e}", "ERROR")
+            return True
+
     
     def _try_skip_ads_once(self):
-        """Try to find and click skip button once"""
+        """Try to find and click skip button once (with hand cursor check)"""
         if self.skip_ads_region:
-            # Use defined skip ads area
             region_x, region_y, region_width, region_height = self.skip_ads_region
           
             random_x = region_x + random.randint(0, region_width)
             random_y = region_y + random.randint(0, region_height)
+            
             MouseMoveAction.move_and_click_static(
-                    random_x, random_y,
-                    click_type=None,
-                    fast=False
+                random_x, random_y,
+                click_type=None,
+                fast=False
             )
             
             time.sleep(0.2)
@@ -141,56 +196,20 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
                 return True
             
         return False
-
-
-    def _click_ads_area(self):
-        """Click random position in ads area if hand cursor found"""
-        if not self.ads_region:
-            self.log("No ads region defined")
-            return False
-        
-        region_x, region_y, region_width, region_height = self.ads_region
-        max_attempts = 5
-        
-        for attempt in range(1, max_attempts + 1):
-            random_x = region_x + random.randint(0, region_width)
-            random_y = region_y + random.randint(0, region_height)
-            
-            self.log(f"Ads click attempt {attempt}/{max_attempts}: ({random_x}, {random_y})")
-            MouseMoveAction.move_and_click_static(
-                    random_x, random_y,
-                    click_type=None,
-                    fast=False
-            )
-          
-            time.sleep(0.2)
-            
-            if self._is_hand_cursor():
-                click_delay = random.uniform(0.5, 1.5)
-                self.log(f"✓ Found clickable ads, waiting {click_delay:.1f}s")
-                time.sleep(click_delay)
-                pyautogui.click()
-                self.log("✓ Clicked ads")
-                return True
-        
-        return False
     
     def _check_new_tab_opened(self):
         """
         Check if new tab opened by checking window title
-        If title doesn't contain "YouTube", we're in new tab (ads page)
         
         Returns:
-            bool: True if new tab opened (not on YouTube), False if still on YouTube
+            bool: True if new tab opened (not on YouTube)
         """
         try:
-            # Get foreground window title
             hwnd = win32gui.GetForegroundWindow()
             window_title = win32gui.GetWindowText(hwnd)
             
             self.log(f"Current window title: '{window_title}'")
             
-            # Check if "YouTube" in title (case-insensitive)
             is_youtube = "youtube" in window_title.lower()
             
             if is_youtube:
@@ -202,11 +221,10 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
                 
         except Exception as e:
             self.log(f"Error checking window title: {e}", "WARNING")
-            # Fallback: assume new tab opened
             return True
     
     def _interact_with_new_tab(self):
-        """Random interactions in new tab: mouse move, fullscreen, scroll"""
+        """Random interactions in new tab: mouse move, scroll"""
         time.sleep(random.uniform(1.5, 2.5))
         num_actions = random.randint(2, 4)
         self.log(f"Performing {num_actions} random actions in new tab")
@@ -219,9 +237,9 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
                 rand_x = random.randint(100, screen_width - 100)
                 rand_y = random.randint(100, screen_height - 100)
                 MouseMoveAction.move_and_click_static(
-                        rand_x, rand_y,
-                        click_type="single_click",
-                        fast=False
+                    rand_x, rand_y,
+                    click_type="single_click",
+                    fast=False
                 )               
                 self.log(f"Action {i+1}: Mouse move to ({rand_x}, {rand_y})")
             
@@ -237,10 +255,7 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
         time.sleep(1)
     
     def _return_to_youtube_tab(self):
-        """
-        Return to YouTube tab after closing ads tab
-        Try Ctrl+Tab or Ctrl+Shift+Tab to switch to YouTube tab
-        """
+        """Return to YouTube tab after closing ads tab"""
         try:
             self.log("Switching back to YouTube tab")
             
@@ -248,7 +263,6 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
             pyautogui.hotkey('ctrl', 'shift', 'tab')
             time.sleep(0.5)
             
-            # Check if we're on YouTube now
             if self._is_on_youtube_tab():
                 self.log("✓ Returned to YouTube tab")
                 return True
@@ -270,12 +284,7 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
             return True
     
     def _is_on_youtube_tab(self):
-        """
-        Check if current tab is YouTube
-        
-        Returns:
-            bool: True if on YouTube tab
-        """
+        """Check if current tab is YouTube"""
         try:
             hwnd = win32gui.GetForegroundWindow()
             window_title = win32gui.GetWindowText(hwnd)

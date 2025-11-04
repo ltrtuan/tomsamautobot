@@ -69,12 +69,13 @@ class YouTubeFlowAutoBrowseIterator(BaseYouTubeFlowAutoIterator):
         )
         
         # Action 3: Search (if keywords available)
-        if self.keywords_youtube:         
+        keywords_list = self.parameters.get("keywords_youtube", [])
+        if keywords_list:  # ← Check dict, not instance var       
             
             chain1_actions.append(
                 ("find_search_box", YouTubeFindSearchBoxAutoAction(
                     self.profile_id, 
-                    self.keywords,  # Pass full keywords dict
+                    self.parameters,  # Pass full keywords dict
                     self.log_prefix
                 ))
             )
@@ -84,9 +85,9 @@ class YouTubeFlowAutoBrowseIterator(BaseYouTubeFlowAutoIterator):
         chain1_actions.append(
             ("find_click_video", YouTubeFindClickVideoAutoAction(
                 self.profile_id,
-                self.keywords,     # Pass full keywords dict
+                self.parameters,     # Pass full keywords dict
                 self.log_prefix,   # log_prefix (positional or keyword)
-                area="main",        # area (keyword argument)
+                area="search",        # area (keyword argument)
                 flow_type="browse"
             ))
         )
@@ -110,7 +111,7 @@ class YouTubeFlowAutoBrowseIterator(BaseYouTubeFlowAutoIterator):
         chain1_actions.append(
             ("skip_ads", YouTubeSkipAdsAutoAction(
                 profile_id=self.profile_id,
-                keywords=self.keywords,  # Pass keywords dict for ads area params
+                parameters=self.parameters,
                 log_prefix=self.log_prefix
             ))
         )
