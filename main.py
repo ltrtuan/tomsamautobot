@@ -9,6 +9,50 @@ import config as cfg
 from login_window import LoginWindow
 import atexit
 
+import sys
+import traceback
+from helpers.email_notifier import send_email, format_crash_email
+import logging
+logger = logging.getLogger('TomSamAutobot')
+
+def global_exception_handler(exc_type, exc_value, exc_traceback):
+    """
+    Catch all uncaught exceptions and send email alert
+    This is the LAST line of defense before app crash
+    """
+    # Skip keyboard interrupt (Ctrl+C)
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    
+    # Log error
+    logger.critical("UNCAUGHT EXCEPTION - APP CRASH", exc_info=(exc_type, exc_value, exc_traceback))
+    
+    # Format crash email
+    title, content = format_crash_email(
+        exception_type=exc_type.__name__,
+        exception_message=str(exc_value),
+        traceback_str=traceback.format_exc(),
+        context={
+            'App': 'TomSamAutobot',
+            'Version': '1.0.0',  # Add version if you have
+        }
+    )
+    
+    # Send email (non-blocking)
+    send_email(
+        title=title,
+        content=content,
+        throttle_seconds=0  # No throttle for crashes (always send)
+    )
+    
+    # Call default exception handler (print to console)
+    sys.__excepthook__(exc_type, exc_value, exc_traceback)
+
+# ========== INSTALL EXCEPTION HANDLER ==========
+sys.excepthook = global_exception_handler
+
+
 # ========== GLOBAL SELENIUM DRIVER REGISTRY ==========
 _active_selenium_drivers = []  # Global list to track all Selenium drivers
 
