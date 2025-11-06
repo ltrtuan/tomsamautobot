@@ -10,6 +10,7 @@ from models.global_variables import GlobalVariables
 from controllers.actions.mouse_move_action import MouseMoveAction
 from controllers.actions.flow_auto.actions_auto.base_flow_auto_action import BaseFlowAutoAction
 from controllers.actions.flow_auto.actions_auto.youtube_random_move_scroll_auto_action import YouTubeRandomMoveScrollAutoAction
+from controllers.actions.flow_auto.actions_auto.youtube_mouse_move_auto_action import YouTubeMouseMoveAutoAction
 
 class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
     """
@@ -34,10 +35,11 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
             flow_type: 'search' or 'browse'
         """
         super().__init__(profile_id, log_prefix)
+        self.profile_id = profile_id
         self.parameters = parameters
         self.area = area.lower()
-        self.flow_type = flow_type    
-
+        self.flow_type = flow_type            
+        
         # ========== EXTRACT PARAMS BASED ON AREA ==========
         if self.area == "sidebar":
             self.logo_path = parameters.get('youtube_sidebar_image_search_path', '').strip()
@@ -114,6 +116,11 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
             if self.area == "menu_videos_channel":
                 found_logo_channel = GlobalVariables().get('found_logo_channel', False)
                 if found_logo_channel:
+                    YouTubeMouseMoveAutoAction(
+                        profile_id=self.profile_id,
+                        click=False,
+                        log_prefix=self.log_prefix,
+                    )
                     for attempt in range(1, 2):
                         menu_position = self._find_and_calculate_click_position()
                         if menu_position:
@@ -210,6 +217,7 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
                 return self._fallback_click_for_cookies_only_browse()
             else:
                 return self._fallback_click_for_cookies()
+                
         
         except Exception as e:
             self.log(f"✗ Find and click video error: {e}", "ERROR")
@@ -274,7 +282,7 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
         result = self._find_image_on_screen(
             image_path=self.logo_path,
             region=search_region,  # ← FIX: Always pass valid region
-            accuracy=0.8,
+            accuracy=0.7,
             click_offset_x=0,  # Return center of logo
             click_offset_y=0
         )

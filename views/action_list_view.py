@@ -1281,33 +1281,7 @@ class ActionListView(ttk.Frame):
         )
         sidebar_header.pack(fill=tk.X)
     
-        # Các nút trong sidebar - nhỏ gọn hơn
-        actions_btn = tk.Button(
-            sidebar,
-            text="Hành động",
-            bg=cfg.PRIMARY_COLOR,
-            fg="white",
-            font=("Segoe UI", 9),  # Giảm kích thước font
-            relief=tk.FLAT,
-            padx=4,  # Giảm padding
-            pady=4,
-            cursor="hand2"
-        )
-        actions_btn.pack(fill=tk.X, padx=4, pady=2)
-    
-        variables_btn = tk.Button(
-            sidebar,
-            text="Biến",
-            bg="#f0f0f0",
-            fg="#333333",
-            font=("Segoe UI", 9),  # Giảm kích thước font
-            relief=tk.FLAT,
-            padx=4,  # Giảm padding
-            pady=4,
-            cursor="hand2",
-            command=self.open_settings
-        )
-        variables_btn.pack(fill=tk.X, padx=4, pady=2)
+        # Các nút trong sidebar - nhỏ gọn hơn       
     
         # Thêm nút Cài đặt - phong cách PAD
         settings_btn = tk.Button(
@@ -1319,7 +1293,8 @@ class ActionListView(ttk.Frame):
             relief=tk.FLAT,
             padx=4,
             pady=4,
-            cursor="hand2"
+            cursor="hand2",
+            command=self.open_settings
         )
         settings_btn.pack(fill=tk.X, padx=4, pady=2)
     

@@ -12,6 +12,8 @@ import pywinauto.findwindows as fw
 import win32gui
 import os
 import itertools
+import logging
+logger = logging.getLogger('TomSamAutobot')
 
 from exceptions.gologin_exceptions import ProxyAssignmentFailed
 
@@ -33,18 +35,18 @@ class GoLoginAutoAction(BaseAction):
             # Get API token from variable name (original)
             api_key_variable = self.params.get("api_key_variable", "").strip()
             if not api_key_variable:
-                print("[GOLOGIN START] Error: API key variable name is required")
+                logger.error("[GOLOGIN START] Error: API key variable name is required")
                 self.set_variable(False)
                 return
         
             # Get API token value from GlobalVariables (original)
             api_token = GlobalVariables().get(api_key_variable, "")
             if not api_token:
-                print(f"[GOLOGIN START] Error: Variable '{api_key_variable}' is empty or not set")
+                logger.error(f"[GOLOGIN START] Error: Variable '{api_key_variable}' is empty or not set")
                 self.set_variable(False)
                 return
         
-            print(f"[GOLOGIN START] Using API token from variable: {api_key_variable}")
+            logger.info(f"[GOLOGIN START] Using API token from variable: {api_key_variable}")
         
             # ========== INITIALIZE GOLOGIN API INSTANCE ==========
             self.gologin_api = get_gologin_api(api_token)
@@ -61,26 +63,22 @@ class GoLoginAutoAction(BaseAction):
                 return
         
             profile_list = result
-            print(f"[GOLOGIN START] Total profiles to start: {len(profile_list)}")
-        
-            # New: Proxy settings (check file existence, set require - default True for YouTube critical)
-            proxy_file = self.params.get('proxy_file', '').strip()
-           
+            logger.info(f"[GOLOGIN START] Total profiles to start: {len(profile_list)}")        
         
             # ========== CHECK MULTI-THREADING ==========
             enable_threading = self.params.get("enable_threading", False)
         
             if enable_threading and len(profile_list) > 1:
                 # PARALLEL MODE (original, but pass proxy args)
-                print("[GOLOGIN START] ========== PARALLEL MODE ==========")
+                logger.info("[GOLOGIN START] ========== PARALLEL MODE ==========")
                 self._start_parallel(profile_list)
                 self.set_variable(True)  # Assume success if no raise
             else:
                 # SEQUENTIAL MODE - Select 1 profile and start (original, but pass proxy args)
-                print("[GOLOGIN START] ========== SEQUENTIAL MODE ==========")
+                logger.info("[GOLOGIN START] ========== SEQUENTIAL MODE ==========")
                 how_to_get = self.params.get("how_to_get", "Random")
                 profile_id = GoLoginProfileHelper.select_profile(profile_list, how_to_get)
-                print(f"[GOLOGIN START] Selected profile ID: {profile_id}")              
+                logger.info(f"[GOLOGIN START] Selected profile ID: {profile_id}")              
             
                 # Start single profile (updated call)
                 single_success = self._start_single_profile(profile_id)
@@ -88,19 +86,62 @@ class GoLoginAutoAction(BaseAction):
             
         except ProxyAssignmentFailed as e:
             # New: Catch proxy fail - stop entire action (critical for YouTube IP safety)
-            print(f"[GOLOGIN START] ❌ Proxy assignment failed: {e}")
-            print("[GOLOGIN START] Stopping action - no proxy means IP duplication risk, no YouTube views")
+            logger.error(f"[GOLOGIN START] ❌ Proxy assignment failed: {e}")
+            logger.error("[GOLOGIN START] Stopping action - no proxy means IP duplication risk, no YouTube views")
             self.set_variable(False)
             # Optional: Cleanup (stop all if partial)
             # self.gologin_api.stop_all_active_profiles()
             return
         except Exception as e:
             # Original except
-            print(f"[GOLOGIN START] Error: {e}")
+            logger.error(f"[GOLOGIN START] Error: {e}")
             import traceback
             traceback.print_exc()
             self.set_variable(False)
+
+
+    def _type_profile_id_and_enter(self, profile_id, log_prefix):
+        """
+        Helper method: Type profile ID and press Enter in GoLogin search box
+    
+        Args:
+            profile_id: Profile ID to type
+            log_prefix: Log prefix for messages
+    
+        Returns:
+            bool: True if typing succeeded, False otherwise
+        """
+        try:
+            import pyperclip
+            from pywinauto.keyboard import send_keys
+            from helpers.app_helpers import check_and_focus_window_by_title
+        
+            # Clear existing text
+            check_and_focus_window_by_title("GoLogin")
             
+            
+            # ========== STEP 3: SEND CTRL+F TO OPEN SEARCH ==========         
+            send_keys('^f')  # Ctrl+F
+            time.sleep(0.5)
+            
+            send_keys("^a{BACKSPACE}")  # Ctrl+A (select all)
+            time.sleep(0.5)
+        
+            # Type profile ID via clipboard (safe with special characters)
+            pyperclip.copy(profile_id)
+            send_keys("^v")  # Ctrl+V (paste)
+            time.sleep(0.5)
+        
+            # Press Enter to search
+            send_keys("{ENTER}")
+            logger.info(f"{log_prefix} Typed profile ID and pressed Enter")
+        
+            return True
+        
+        except Exception as e:
+            logger.error(f"{log_prefix} Failed to type profile ID: {e}")
+            return False
+
     
     def _open_profile(self, profile_id, batch_num=None):
         """
@@ -129,13 +170,11 @@ class GoLoginAutoAction(BaseAction):
         if remove_proxy:
             try:
                 self.gologin_api.remove_proxy_for_profiles(profile_id)
-                print(f"{log_prefix} ✓ Proxy removed")
             except Exception as e:
-                print(f"{log_prefix} ⚠ Remove proxy error: {e}")
+                logger.error(f"{log_prefix} ⚠ Remove proxy error: {e}")
 
         # Phase 2: Assign proxy from file using helper
-        if proxy_file and os.path.exists(proxy_file):
-            print(f"{log_prefix} Assigning proxy from file: {proxy_file}")
+        if proxy_file and os.path.exists(proxy_file):            
             try:
                 success, message = GoLoginProfileHelper.assign_proxy_to_profile(
                     profile_id,
@@ -144,15 +183,12 @@ class GoLoginAutoAction(BaseAction):
                     False,
                     log_prefix
                 )
-                print(f"{log_prefix} ✓ {message}")
+                logger.info(f"{log_prefix} ✓ {message}")
     
             except ProxyAssignmentFailed as e:
-                # Catch exception nếu MUỐN continue (không stop action)
-                print(f"{log_prefix} ⚠ {e}")
-                print(f"{log_prefix} Proceeding without proxy (using local IP)")
-                raise
-        else:
-            print(f"{log_prefix} No proxy file - skipping assignment (using local IP)")
+                # Catch exception nếu MUỐN continue (không stop action)               
+                logger.error(f"{log_prefix} Proceeding without proxy (using local IP)")
+                raise        
 
         # Original UI code (kept 100% unchanged, from refresh to end)
         try:
@@ -161,35 +197,26 @@ class GoLoginAutoAction(BaseAction):
             from pywinauto.keyboard import send_keys
             import time
     
-            print(f"{log_prefix} Opening profile via GoLogin App UI automation...")
-    
             # ========== REFRESH FINGERPRINT (OPTIONAL) ==========
             refresh_fingerprint = self.params.get("refresh_fingerprint", False)
     
-            if refresh_fingerprint:
-                print(f"{log_prefix} Refreshing fingerprint...")
-                success = self.gologin_api.refresh_fingerprint(profile_id)
-        
-                if success:
-                    print(f"{log_prefix} ✓ Fingerprint refreshed")
-                else:
-                    print(f"{log_prefix} ⚠️ Failed to refresh fingerprint")        
+            if refresh_fingerprint:               
+                success = self.gologin_api.refresh_fingerprint(profile_id)        
+                if not success:
+                    logger.error(f"{log_prefix} ⚠️ Failed to refresh fingerprint")        
     
             # ========== STEP 2: CONNECT TO GOLOGIN APP (OPTIMIZED WITH HELPER) ==========
-            print(f"{log_prefix} Connecting to GoLogin app...")
+           
 
             # Use helper to find and focus window (fast, no hang)
             success = check_and_focus_window_by_title("GoLogin")
             if not success:
-                print(f"{log_prefix} ❌ GoLogin window not found via helper after focus attempt")
+                logger.error(f"{log_prefix} ❌ GoLogin window not found via helper after focus attempt")
                 return {
                     'success': False,
                     'profile_id': profile_id,
                     'error': 'GoLogin window not found'
                 }
-
-            # Window focused by helper, now get handle and connect (direct, no search hang)
-            print(f"{log_prefix} Window focused by helper, connecting via handle...")
 
             app = None
             try:
@@ -200,12 +227,12 @@ class GoLoginAutoAction(BaseAction):
     
                 # Verify it's GoLogin (safety check)
                 if "gologin" not in window_title.lower():
-                    print(f"{log_prefix} ⚠️ Foreground window mismatch: '{window_title}', searching manually...")
+                    logger.error(f"{log_prefix} ⚠️ Foreground window mismatch: '{window_title}', searching manually...")
                     # Fallback: Manual search for GoLogin hwnd
                     import pywinauto.findwindows as fw
                     windows = fw.find_windows(title_re=".*[Gg]o[Ll]ogin.*")
                     if not windows:
-                        print(f"{log_prefix} ❌ No GoLogin window found in search")
+                        logger.error(f"{log_prefix} ❌ No GoLogin window found in search")
                         return {
                             'success': False,
                             'profile_id': profile_id,
@@ -213,15 +240,15 @@ class GoLoginAutoAction(BaseAction):
                         }
                     hwnd = windows[0]  # Use first match
                     window_title = win32gui.GetWindowText(hwnd)
-                    print(f"{log_prefix} Found window via search: '{window_title}'")
+                    logger.info(f"{log_prefix} Found window via search: '{window_title}'")
     
                 # Connect by handle (direct, no title search hang)
                 from pywinauto.application import Application
                 app = Application(backend="uia").connect(handle=hwnd)
-                print(f"{log_prefix} ✓ Connected via handle {hwnd} (title: '{window_title}')")
+                logger.info(f"{log_prefix} ✓ Connected via handle {hwnd} (title: '{window_title}')")
 
             except Exception as e:
-                print(f"{log_prefix} ❌ Failed to connect by handle: {e}")
+                logger.error(f"{log_prefix} ❌ Failed to connect by handle: {e}")
                 import traceback
                 traceback.print_exc()
                 return {
@@ -231,14 +258,14 @@ class GoLoginAutoAction(BaseAction):
                 }
 
             if not app:
-                print(f"{log_prefix} ❌ App object not created")
+                logger.error(f"{log_prefix} ❌ App object not created")
                 return {
                     'success': False,
                     'profile_id': profile_id,
                     'error': 'App connection failed'
                 }
 
-            print(f"{log_prefix} ✓ Successfully connected to GoLogin app")
+            logger.info(f"{log_prefix} ✓ Successfully connected to GoLogin app")
 
             # ========== GET WINDOW OBJECT FROM APP (as before) ==========
             try:
@@ -254,105 +281,61 @@ class GoLoginAutoAction(BaseAction):
 
             # ... (Continue with Ctrl+F, type, click Run as before - no change needed)
 
-
-        
-
-            # ========== STEP 3: SEND CTRL+F TO OPEN SEARCH ==========
-            print(f"{log_prefix} Opening search with Ctrl+F...")
-    
-            try:              
-                time.sleep(1)
-        
-                send_keys('^f')  # Ctrl+F
-                print(f"{log_prefix} ✓ Sent Ctrl+F")
-        
-                time.sleep(2)
-        
-            except Exception as e:
-                print(f"{log_prefix} ❌ Failed to send Ctrl+F: {e}")
-                return {
-                    'success': False,
-                    'profile_id': profile_id,
-                    'error': f'Failed to open search: {e}'
-                }
     
             # ========== STEP 4: TYPE PROFILE ID + ENTER ==========
-            print(f"{log_prefix} Typing profile ID...")
-            import pyperclip
-            try:
-                # Clear existing text
-                send_keys('^a{BACKSPACE}')
-                time.sleep(0.5)
+            if not self._type_profile_id_and_enter(profile_id, log_prefix):
+                return {'success': False, 'profile_id': profile_id, 'error': "Failed to type profile ID"}
+           
 
-                # Type profile ID
-                pyperclip.copy(profile_id)
+            # ========== STEP 4.5: RETRY TYPING UNTIL PROFILE FOUND (SMART RETRY) ==========
+            max_retries = 3  # Retry typing 3 times total (initial + 2 retries)
+            retry_interval = 2  # Wait 2s between retries
+            run_button = None
 
-                # Paste using Ctrl+V
-                send_keys('^v')
-                print(f"{log_prefix} ✓ Typed profile ID: {profile_id}")
+            for attempt in range(1, max_retries + 1):
+                logger.info(f"{log_prefix} Attempt {attempt}/{max_retries}: Checking if profile found...")
+    
+                # Wait for profile to load after typing
+                time.sleep(retry_interval)
+    
+                # Try to find Run button
+                check_and_focus_window_by_title("GoLogin")
+                try:
+                    run_button = gologin_window.child_window(title="Run", control_type="Button")
+                    if run_button.exists():
+                        logger.info(f"{log_prefix} ✓ Profile found on attempt {attempt}")
+                        break  # Exit retry loop - profile found!
+                    else:
+                        logger.warning(f"{log_prefix} Profile not found on attempt {attempt}")
+                except Exception as e:
+                    logger.warning(f"{log_prefix} Run button not accessible on attempt {attempt}: {e}")
+    
+                # If not last attempt, retry typing
+                if attempt < max_retries:
+                    logger.info(f"{log_prefix} Retrying: Type profile ID again (attempt {attempt + 1}/{max_retries})...")
+        
+                    # Re-type profile ID + Enter
+                    if not self._type_profile_id_and_enter(profile_id, log_prefix):
+                        logger.error(f"{log_prefix} Failed to type on retry attempt {attempt + 1}")
+                        # Continue to next attempt anyway (maybe UI recovered)
 
-                time.sleep(0.5)
-
-                # Press Enter to search
-                send_keys('{ENTER}')
-                print(f"{log_prefix} ✓ Pressed Enter to search")
-
-            except Exception as e:
-                print(f"{log_prefix} ❌ Failed to type: {e}")
+            # Check final result
+            if run_button is None or not run_button.exists():
+                logger.error(f"{log_prefix} ❌ Profile not found after {max_retries} attempts - invalid profile ID or search failed")
                 return {
-                    'success': False,
-                    'profile_id': profile_id,
-                    'error': f'Failed to type: {e}'
+                    'success': False, 
+                    'profile_id': profile_id, 
+                    'error': f"Profile not found after {max_retries} typing attempts"
                 }
 
-            # ========== STEP 4.5: WAIT FOR RUN BUTTON (SMART TIMEOUT) ==========
-            print(f"{log_prefix} Waiting for profile to appear (max 10s)...")
+            logger.info(f"{log_prefix} Profile found, proceeding to click Run button")
 
-            run_button = None
-            timeout = 10  # Max wait time in seconds
-            check_interval = 0.5  # Check every 0.5 seconds
-            elapsed = 0
-
-            try:
-                while elapsed < timeout:
-                    try:
-                        # Try to find Run button
-                        run_button = gologin_window.child_window(title="Run", control_type="Button")
-        
-                        if run_button.exists():
-                            print(f"{log_prefix} ✓ Profile found after {elapsed:.1f}s")
-                            break  # Exit immediately when found!
-    
-                    except:
-                        pass  # Button not found yet, continue waiting
-    
-                    time.sleep(check_interval)
-                    elapsed += check_interval
-
-                if run_button is None or not run_button.exists():
-                    print(f"{log_prefix} ❌ Profile not found after {timeout}s timeout")
-                    return {
-                        'success': False,
-                        'profile_id': profile_id,
-                        'error': f'Profile not found after {timeout}s (invalid profile ID or search failed)'
-                    }
-
-            except Exception as e:
-                print(f"{log_prefix} ⚠️ Error while waiting: {e}")
-                # Continue anyway, try to click
 
             # ========== STEP 5: CLICK RUN BUTTON ==========
-            print(f"{log_prefix} Clicking Run button...")
-
             try:
                 if run_button and run_button.exists():
-                    run_button.click_input()
-                    print(f"{log_prefix} ✓ Clicked Run button")
-    
-                    time.sleep(3)  # Wait for profile to open
-    
-                    print(f"{log_prefix} ✓ Profile opened successfully")
-                    print(f"{log_prefix} ℹ️  Browser running in MANUAL mode (no Selenium)")
+                    run_button.click_input()    
+                    time.sleep(0.5)  # Wait for profile to open
     
                     return {
                         'success': True,
@@ -360,7 +343,7 @@ class GoLoginAutoAction(BaseAction):
                         'error': None
                     }
                 else:
-                    print(f"{log_prefix} ❌ Run button not accessible")
+                    logger.error(f"{log_prefix} ❌ Run button not accessible")
                     return {
                         'success': False,
                         'profile_id': profile_id,
@@ -368,7 +351,7 @@ class GoLoginAutoAction(BaseAction):
                     }
     
             except Exception as e:
-                print(f"{log_prefix} ❌ Failed to click Run button: {e}")
+                logger.error(f"{log_prefix} ❌ Failed to click Run button: {e}")
                 return {
                     'success': False,
                     'profile_id': profile_id,
@@ -377,8 +360,8 @@ class GoLoginAutoAction(BaseAction):
 
 
         except Exception as e:
-            print(f"{log_prefix} ❌ Exception in _open_profile")
-            print(f"{log_prefix} Error: {e}")
+            logger.error(f"{log_prefix} ❌ Exception in _open_profile")
+            logger.error(f"{log_prefix} Error: {e}")
             import traceback
             traceback.print_exc()
     
@@ -548,7 +531,7 @@ class GoLoginAutoAction(BaseAction):
             print(f"[BATCH {batch_num}] PHASE 2: Creating flow iterators for opened profiles...")
     
             flow_iterators = {}  # profile_id → flow_iterator
-    
+           
             for profile_id in opened_profiles:              
         
                 try:
@@ -556,14 +539,14 @@ class GoLoginAutoAction(BaseAction):
                         if browse_youtube:
                             flow_iterator = YouTubeFlowAuto.create_flow_iterator(
                                 profile_id=profile_id,
-                                parameters=self.params,
+                                parameters={**self.params, 'opened_profiles': opened_profiles, 'max_workers' : max_parallel_profiles},
                                 log_prefix=f"[BATCH {batch_num}][{profile_id}]",
                                 flow_type="browse"
                             )
                         else:
                             flow_iterator = YouTubeFlowAuto.create_flow_iterator(
                                 profile_id=profile_id,
-                                parameters=self.params,
+                                parameters={**self.params, 'opened_profiles': opened_profiles, 'max_workers' : max_parallel_profiles},
                                 log_prefix=f"[BATCH {batch_num}][{profile_id}]"
                             )
                       
@@ -775,7 +758,7 @@ class GoLoginAutoAction(BaseAction):
             if not result['success']:
                 print(f"[{profile_id}] ❌ Failed to open profile: {result['error']}")
                 return False
-
+            
             print(f"[{profile_id}] ✓ Profile opened successfully (MANUAL mode)")
 
         except ProxyAssignmentFailed:
@@ -809,14 +792,14 @@ class GoLoginAutoAction(BaseAction):
                 if browse_youtube:
                     flow_iterator = YouTubeFlowAuto.create_flow_iterator(
                         profile_id=profile_id,
-                        parameters=self.params,
+                        parameters={**self.params, 'opened_profiles': [profile_id], 'max_workers' : 1},
                         log_prefix=f"[AUTO][{profile_id}]",
                         flow_type="browse"
                     )
                 else:
                     flow_iterator = YouTubeFlowAuto.create_flow_iterator(
                         profile_id=profile_id,
-                        parameters=self.params,
+                        parameters={**self.params, 'opened_profiles': [profile_id], 'max_workers' : 1},
                         log_prefix=f"[AUTO][{profile_id}]"
                     )
             elif action_type == "Google":
