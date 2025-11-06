@@ -13,6 +13,8 @@ import win32gui
 import os
 import itertools
 
+from exceptions.gologin_exceptions import ProxyAssignmentFailed
+
 from controllers.actions.flow_auto.youtube_flow_factory import YouTubeFlowAuto
 from helpers.app_helpers import check_and_focus_window_by_title
 # Import helpers
@@ -63,14 +65,7 @@ class GoLoginAutoAction(BaseAction):
         
             # New: Proxy settings (check file existence, set require - default True for YouTube critical)
             proxy_file = self.params.get('proxy_file', '').strip()
-            require_proxy = self.params.get('require_proxy', True)  # Stop action if proxy fail
-            has_proxy_file = bool(proxy_file and os.path.exists(proxy_file))
-            if not has_proxy_file:
-                print("[GOLOGIN START] No proxy file provided or not found - proceeding without proxy assignment")
-                print("[GOLOGIN START] Disabling require_proxy to avoid stop (local IP risk for YouTube views)")
-                require_proxy = False  # Skip strict check/stop if no file (as per requirement)
-        
-            print(f"[GOLOGIN START] Proxy config: file={has_proxy_file}, require={require_proxy}")
+           
         
             # ========== CHECK MULTI-THREADING ==========
             enable_threading = self.params.get("enable_threading", False)
@@ -78,7 +73,7 @@ class GoLoginAutoAction(BaseAction):
             if enable_threading and len(profile_list) > 1:
                 # PARALLEL MODE (original, but pass proxy args)
                 print("[GOLOGIN START] ========== PARALLEL MODE ==========")
-                self._start_parallel(profile_list, require_proxy, has_proxy_file)
+                self._start_parallel(profile_list)
                 self.set_variable(True)  # Assume success if no raise
             else:
                 # SEQUENTIAL MODE - Select 1 profile and start (original, but pass proxy args)
@@ -88,7 +83,7 @@ class GoLoginAutoAction(BaseAction):
                 print(f"[GOLOGIN START] Selected profile ID: {profile_id}")              
             
                 # Start single profile (updated call)
-                single_success = self._start_single_profile(profile_id, require_proxy, has_proxy_file)
+                single_success = self._start_single_profile(profile_id)
                 self.set_variable(single_success)
             
         except ProxyAssignmentFailed as e:
@@ -105,195 +100,9 @@ class GoLoginAutoAction(BaseAction):
             import traceback
             traceback.print_exc()
             self.set_variable(False)
-
-    
-    def _assign_proxy_to_profile(self, profile_id, proxy_file):
-        """
-        Assign proxy to single profile from file - round-robin distribution with global session state.
-        Start from next unused line (cycle), fallback to other lines if fail, mark used if success.
-    
-        Args:
-            profile_id: Single profile to assign
-            proxy_file: Path to proxy TXT file
-    
-        Returns:
-            tuple: (bool success, str message) - success if assigned; message for log/error
-        """
-        log_prefix = f"[PROXY ASSIGN][{profile_id}]"
-        print(f"{log_prefix} Starting proxy assignment with round-robin distribution")
-    
-        if not os.path.exists(proxy_file):
-            return False, "Proxy file not found"
-    
-        # Load all configs (same as before)
-        proxy_configs = []
-        with open(proxy_file, 'r', encoding='utf-8') as f:
-            for line_num, line in enumerate(f, 1):
-                line = line.strip()
-                if not line or line.startswith('#'):
-                    continue
-                parts = line.split(';')
-                if len(parts) != 3:
-                    print(f"{log_prefix} Warning - Invalid format line {line_num}: {line}")
-                    continue
-                provider, proxy_type, api_key = [part.strip() for part in parts]
-                if not provider or not proxy_type or not api_key:
-                    print(f"{log_prefix} Warning - Empty values line {line_num}: {line}")
-                    continue
-                if proxy_type not in ['socks5', 'http', 'https']:
-                    print(f"{log_prefix} Warning - Invalid type '{proxy_type}' line {line_num}")
-                    continue
-                proxy_configs.append({
-                    'provider': provider.lower(),
-                    'type': proxy_type,
-                    'api_key': api_key,
-                    'line_num': line_num
-                })
-    
-        if not proxy_configs:
-            return False, "No valid proxies in file"
-    
-        # Load global session state (per-run, non-persistent)
-        current_index = GlobalVariables().get('session_proxy_index', 0)
-        used_lines = GlobalVariables().get('session_used_lines', set())
-    
-        # Reset if all used (allow cycle for profiles > num_lines)
-        if len(used_lines) >= len(proxy_configs):
-            print(f"{log_prefix} All {len(proxy_configs)} lines used in session - resetting for new cycle")
-            used_lines.clear()
-            current_index = 0
-            GlobalVariables().set('session_used_lines', set())
-            GlobalVariables().set('session_proxy_index', 0)
-    
-        print(f"{log_prefix} Session state: index={current_index}, used={sorted(used_lines)}, available={len(proxy_configs) - len(used_lines)}")
-    
-        # Try unused lines first (start from current_index, cycle through unused)
-        attempts = 0
-        max_attempts = len(proxy_configs)  # Try all if needed (fallback to used if no unused work)
-        tried_lines = set()
-    
-        while attempts < max_attempts:
-            # Find next unused line (cycle from current_index)
-            found_unused = False
-            for offset in range(len(proxy_configs)):
-                check_index = (current_index + offset) % len(proxy_configs)
-                check_line_num = proxy_configs[check_index]['line_num']
-                if check_line_num not in used_lines and check_index not in tried_lines:
-                    config = proxy_configs[check_index]
-                    found_unused = True
-                    break
-        
-            if not found_unused:
-                # All unused exhausted (or all tried this profile) - try used lines as fallback
-                print(f"{log_prefix} No unused lines available - trying used lines as fallback")
-                for offset in range(len(proxy_configs)):
-                    check_index = (current_index + offset) % len(proxy_configs)
-                    if check_index not in tried_lines:
-                        config = proxy_configs[check_index]
-                        found_unused = True  # Reuse var
-                        break
-        
-            if not found_unused:
-                break  # All lines tried this profile
-        
-            attempts += 1
-            tried_lines.add(check_index)
-            proxy_info = f"{config['provider']}:{config['type']}:...{config['api_key'][-8:]} (line {config['line_num']})"
-            line_status = "used" if config['line_num'] in used_lines else "unused"
-            print(f"{log_prefix} Attempt {attempts}/{max_attempts}: {proxy_info} [{line_status}]")
-        
-            try:
-                # Get full proxy
-                full_proxy = self._get_full_proxy_config(config)
-                if not full_proxy:
-                    print(f"{log_prefix} Failed to get details for {proxy_info} - continue to next")
-                    time.sleep(1)
-                    continue
-            
-                # Update GoLogin
-                update_success, message = self.gologin_api.update_proxy_for_profiles([profile_id], full_proxy)
-                if update_success:
-                    # Success - mark this line as used, update index for next profile
-                    used_line_num = config['line_num']
-                    used_lines.add(used_line_num)
-                    next_index = (check_index + 1) % len(proxy_configs)
-                    GlobalVariables().set('session_used_lines', used_lines.copy())
-                    GlobalVariables().set('session_proxy_index', next_index)
-                    print(f"{log_prefix} ✓ Assigned {proxy_info} - marked used, next index={next_index}")
-                    return True, f"Assigned {proxy_info}"
-                else:
-                    print(f"{log_prefix} API update failed for {proxy_info}: {message} - continue to next")
-                    time.sleep(1)
-                    continue
-        
-            except Exception as e:
-                print(f"{log_prefix} Exception with {proxy_info}: {e} - continue to next")
-                time.sleep(1)
-                continue
-    
-        # All failed
-        error_msg = f"All {attempts} attempts failed - no valid proxy assignable"
-        print(f"{log_prefix} ❌ {error_msg}")
-        return False, error_msg
-
-
-            
-
-    def _get_next_unused_proxy_index(self, proxy_configs, current_index, used_proxies_set):
-        """
-        Get next unused proxy config index, cycling from current_index.
-        Skip used ones, return index or None if all used.
-        """
-        start_index = current_index
-        checked = 0
-        total = len(proxy_configs)
-    
-        while checked < total:
-            candidate_index = (current_index + checked) % total
-            candidate_line_num = proxy_configs[candidate_index]['line_num']
-        
-            if candidate_line_num not in used_proxies_set:
-                print(f"GOLOGIN START: Selected unused proxy at index {candidate_index} (line {candidate_line_num})")
-                return candidate_index
-        
-            checked += 1
-    
-        # All used
-        print("GOLOGIN START: All proxies used, will reset on next success")
-        return None  # Trigger reset
-    
-
-    def _get_full_proxy_config(self, proxy_config):
-        """Helper to get full proxy details (host, port, user, pass) based on provider"""
-        provider = proxy_config['provider']
-        proxy_type = proxy_config['type']
-        api_key = proxy_config['api_key']
-    
-        if provider == 'tmproxy':
-            # Call static method in TMProxyAPI
-            try:
-                proxy_details = TMProxyAPI.get_proxy_static(api_key, proxy_type)  # Returns full: {'mode': , 'host': , 'port': , 'username': , 'password': }
-
-                if proxy_details:
-                    return proxy_details  
-            except Exception as e:
-                print(f"GOLOGIN START: TMProxy API error: {e}")
-                return None
-    
-        # For other providers like 'proxyrack' - implement similar static call if needed
-        elif provider == 'proxyrack':
-            # Placeholder: Implement ProxyRackAPI.get_proxy_static(api_key, proxy_type) if exists
-            print(f"GOLOGIN START: ProxyRack not implemented yet for {api_key}")
-            return None
-    
-        else:
-            print(f"GOLOGIN START: Unknown provider '{provider}', skipping")
-            return None
-
-
             
     
-    def _open_profile(self, profile_id, batch_num=None, require_proxy=False, has_proxy_file=False):
+    def _open_profile(self, profile_id, batch_num=None):
         """
         Open profile via pywinauto (Automate GoLogin App UI) - Updated with per-profile proxy assignment before UI.
 
@@ -308,8 +117,6 @@ class GoLoginAutoAction(BaseAction):
         Args:
             profile_id: Profile ID to open
             batch_num: Batch number for logging (optional)
-            require_proxy: If True, stop/raise if proxy assign fails (default False from params)
-            has_proxy_file: If True, attempt proxy assignment (default False from params)
 
         Returns:
             dict: {'success': bool, 'profile_id': str, 'error': str or None} - success for UI open; proxy fail raises if required
@@ -317,22 +124,33 @@ class GoLoginAutoAction(BaseAction):
         log_prefix = f"[BATCH {batch_num}][{profile_id}]" if batch_num else f"[GOLOGIN AUTO][{profile_id}]"
         proxy_file = self.params.get('proxy_file', '').strip()
         remove_proxy = self.params.get('remove_proxy', False)
-        
+    
+        # Phase 1: Remove proxy if enabled
         if remove_proxy:
-            self.gologin_api.remove_proxy_for_profiles(profile_id)
+            try:
+                self.gologin_api.remove_proxy_for_profiles(profile_id)
+                print(f"{log_prefix} ✓ Proxy removed")
+            except Exception as e:
+                print(f"{log_prefix} ⚠ Remove proxy error: {e}")
 
-        # New proxy assignment phase (per-profile, before UI - only if has file)
-        if has_proxy_file:
+        # Phase 2: Assign proxy from file using helper
+        if proxy_file and os.path.exists(proxy_file):
             print(f"{log_prefix} Assigning proxy from file: {proxy_file}")
-            assign_success, _ = self._assign_proxy_to_profile(profile_id, proxy_file)
-            if not assign_success:
-                print(f"{log_prefix} Proxy assignment failed for all lines - checking require")
-                if require_proxy:
-                    raise ProxyAssignmentFailed(f"Cannot assign valid proxy for {profile_id} - all lines failed, IP duplication risk for YouTube views")
-                else:
-                    print(f"{log_prefix} Proceeding without proxy (not required)")
-            else:
-                print(f"{log_prefix} Proxy assigned successfully")
+            try:
+                success, message = GoLoginProfileHelper.assign_proxy_to_profile(
+                    profile_id,
+                    proxy_file,
+                    self.gologin_api,
+                    False,
+                    log_prefix
+                )
+                print(f"{log_prefix} ✓ {message}")
+    
+            except ProxyAssignmentFailed as e:
+                # Catch exception nếu MUỐN continue (không stop action)
+                print(f"{log_prefix} ⚠ {e}")
+                print(f"{log_prefix} Proceeding without proxy (using local IP)")
+                raise
         else:
             print(f"{log_prefix} No proxy file - skipping assignment (using local IP)")
 
@@ -573,7 +391,7 @@ class GoLoginAutoAction(BaseAction):
 
 
         
-    def _start_parallel(self, profile_list, require_proxy=False, has_proxy_file=False):
+    def _start_parallel(self, profile_list):
         """
         Execute parallel mode with BATCH PROCESSING - Updated to pass proxy args to open, stop if proxy fail + required.
 
@@ -587,8 +405,6 @@ class GoLoginAutoAction(BaseAction):
 
         Args:
             profile_list: List of profile IDs to execute
-            require_proxy: If True, stop entire action if any proxy assign fails (default False)
-            has_proxy_file: If True, attempt proxy assignment in open (default False)
         """
         import threading
         from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -602,7 +418,6 @@ class GoLoginAutoAction(BaseAction):
         print(f"[PARALLEL MODE] BATCH PROCESSING (batch size: {max_parallel_profiles})")
         print(f"[PARALLEL MODE] Total profiles: {len(profile_list)}")
         print(f"[PARALLEL MODE] Action type: {action_type}")
-        print(f"[PARALLEL MODE] Proxy config: require={require_proxy}, has_file={has_proxy_file}")
         print("=" * 80)
 
         # Divide profiles into batches
@@ -637,7 +452,7 @@ class GoLoginAutoAction(BaseAction):
                         print(f"[BATCH {batch_num}][{profile_id}] Opening profile...")
             
                         # ========== CALL _open_profile() METHOD (UPDATED: PASS PROXY ARGS) ==========
-                        result = self._open_profile(profile_id, batch_num, require_proxy, has_proxy_file)
+                        result = self._open_profile(profile_id, batch_num)
             
                     with open_lock:
                         if result['success']:
@@ -928,7 +743,7 @@ class GoLoginAutoAction(BaseAction):
 
 
 
-    def _start_single_profile(self, profile_id, require_proxy=False, has_proxy_file=False):
+    def _start_single_profile(self, profile_id):
         """
         Execute single mode (1 profile only) - Updated to pass proxy args to open, stop if proxy fail + required.
 
@@ -936,8 +751,6 @@ class GoLoginAutoAction(BaseAction):
 
         Args:
             profile_id: Single profile ID to execute (STRING, not list)
-            require_proxy: If True, stop entire action if proxy assign fails (default False)
-            has_proxy_file: If True, attempt proxy assignment in open (default False)
 
         Returns:
             bool: Success status (UI/flow OK; proxy fail raises if required)
@@ -949,7 +762,6 @@ class GoLoginAutoAction(BaseAction):
         print("=" * 80)
         print(f"[SINGLE MODE] Profile ID: {profile_id}")
         print(f"[SINGLE MODE] Action type: {action_type}")
-        print(f"[SINGLE MODE] Proxy config: require={require_proxy}, has_file={has_proxy_file}")
         print("=" * 80)
         print()
 
@@ -958,7 +770,7 @@ class GoLoginAutoAction(BaseAction):
 
         try:
             # ========== CALL _open_profile() METHOD (UPDATED: PASS PROXY ARGS) ==========
-            result = self._open_profile(profile_id, None, require_proxy, has_proxy_file)  # batch_num=None for single
+            result = self._open_profile(profile_id, None)  # batch_num=None for single
 
             if not result['success']:
                 print(f"[{profile_id}] ❌ Failed to open profile: {result['error']}")
@@ -1107,7 +919,3 @@ class GoLoginAutoAction(BaseAction):
         variable = self.params.get("variable", "")
         if variable:
             GlobalVariables().set(variable, "true" if success else "false")
-
-class ProxyAssignmentFailed(Exception):
-    """Custom exception to stop action if no proxy can be assigned for a profile."""
-    pass

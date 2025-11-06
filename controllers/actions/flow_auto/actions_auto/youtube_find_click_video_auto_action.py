@@ -1,7 +1,9 @@
 ﻿# controllers/actions/flow_auto/actions_auto/youtube_find_click_video_auto_action.py
 
+from pydoc import pager
 import time
 import random
+from cv2.gapi import video
 import pyautogui
 import os
 from models.global_variables import GlobalVariables
@@ -75,6 +77,12 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
     
     def _execute_internal(self):
         """Execute find logo → calculate video position → click video"""
+        ###################################################################
+        # Logic fake view Youtube:
+        # - 1/ 35% search video home page
+        # - 2/ If 1 True -> Do not need search video
+        # - 3/ If 1 False -> Search video area = search
+
         try:
             # If find logo channel when view a video , just try once
             if self.area == "channel":
@@ -183,6 +191,11 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
                     time.sleep(wait_time)
                 
                     self.log("✓ Video clicked successfully")
+                    
+                    #If click video in home page youtube
+                    if self.area == "main":                        
+                        GlobalVariables().set('found_video_home', True)
+                        
                     return True
             
                 # Not found: Scroll and retry

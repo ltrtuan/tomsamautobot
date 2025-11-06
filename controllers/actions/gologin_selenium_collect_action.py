@@ -6,6 +6,7 @@ from models.gologin_api import get_gologin_api
 import random
 import os
 import time
+from exceptions.gologin_exceptions import ProxyAssignmentFailed
 
 # Import helpers
 from helpers.gologin_profile_helper import GoLoginProfileHelper
@@ -45,9 +46,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
             
             profile_list = result
             print(f"[GOLOGIN WARMUP] Total profiles to warm up: {len(profile_list)}")
-            
-            # ========== CHECK AND UPDATE PROXY IF PROVIDED ==========
-            self._update_proxy_if_provided(profile_list, api_token)
+          
             
             # ========== CHECK MULTI-THREADING ==========
             enable_threading = self.params.get("enable_threading", False)
@@ -66,6 +65,13 @@ class GoLoginSeleniumCollectAction(BaseAction):
                 # Warm up single profile
                 success = self._warmup_single_profile(profile_id, api_token)
                 self.set_variable(success)
+                
+        except ProxyAssignmentFailed as e:
+            # Stop entire action if proxy critical
+            print(f"[GOLOGIN WARMUP] ❌ Proxy assignment failed: {e}")
+            print("[GOLOGIN WARMUP] Stopping action - no proxy means IP duplication risk")
+            self.set_variable(False)
+            return
         
         except Exception as e:
             print(f"[GOLOGIN WARMUP] Error: {e}")
@@ -73,63 +79,8 @@ class GoLoginSeleniumCollectAction(BaseAction):
             traceback.print_exc()
             self.set_variable(False)
     
-    def _update_proxy_if_provided(self, profile_list, api_token):
-        """Update proxy for profiles if configuration provided"""
-        try:
-            # Get proxy variable names
-            proxy_mode_var = self.params.get("proxy_mode_variable", "").strip()
-            proxy_host_var = self.params.get("proxy_host_variable", "").strip()
-            proxy_port_var = self.params.get("proxy_port_variable", "").strip()
-            proxy_username_var = self.params.get("proxy_username_variable", "").strip()
-            proxy_password_var = self.params.get("proxy_password_variable", "").strip()
-            
-            # Check if all 5 variable names are provided
-            if not (proxy_mode_var and proxy_host_var and proxy_port_var and 
-                    proxy_username_var and proxy_password_var):
-                print("[GOLOGIN WARMUP] No proxy configuration provided, skipping proxy update")
-                return
-            
-            print("[GOLOGIN WARMUP] ========== PROXY UPDATE ==========")
-            print("[GOLOGIN WARMUP] Proxy configuration detected, retrieving values...")
-            
-            # Get actual values from GlobalVariables
-            proxy_mode = GlobalVariables().get(proxy_mode_var, "")
-            proxy_host = GlobalVariables().get(proxy_host_var, "")
-            proxy_port = GlobalVariables().get(proxy_port_var, "")
-            proxy_username = GlobalVariables().get(proxy_username_var, "")
-            proxy_password = GlobalVariables().get(proxy_password_var, "")
-            
-            # Check if all values are non-empty
-            if not (proxy_mode and proxy_host and proxy_port and proxy_username and proxy_password):
-                print("[GOLOGIN WARMUP] ⚠ Some proxy variables are empty, skipping proxy update")
-                return
-            
-            proxy_config = {
-                "mode": proxy_mode,
-                "host": proxy_host,
-                "port": proxy_port,
-                "username": proxy_username,
-                "password": proxy_password
-            }
-            
-            print(f"[GOLOGIN WARMUP] Proxy: {proxy_mode}://{proxy_host}:{proxy_port}")
-            
-            # Get GoLogin API instance
-            gologin_api = get_gologin_api(api_token)
-            
-            # Call GoLoginAPI method to update proxy
-            proxy_success, proxy_message = gologin_api.update_proxy_for_profiles(
-                profile_list, proxy_config
-            )
-            
-            if proxy_success:
-                print(f"[GOLOGIN WARMUP] ✓ {proxy_message}")
-            else:
-                print(f"[GOLOGIN WARMUP] ⚠ Warning: {proxy_message}")
-            
-            print("[GOLOGIN WARMUP] ===================================")
-        except Exception as e:
-            print(f"[GOLOGIN WARMUP] ⚠ Proxy update error: {e}")
+    
+
     
     def _warmup_single_profile(self, profile_id, api_token):
         """Warm up a single profile - can be called from thread"""
@@ -148,12 +99,49 @@ class GoLoginSeleniumCollectAction(BaseAction):
             print(f"[GOLOGIN WARMUP] [{profile_id}] Cleaning up zombie processes...")
             # Get GoLogin API instance
             gologin = get_gologin_api(api_token)
-            
-            try:
-                gologin.stop_profile(profile_id)  # This will force kill + cleanup
-                print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Zombie cleanup completed")
-            except Exception as zombie_err:
-                print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Zombie cleanup warning: {zombie_err}")
+                
+                
+            # ========== ADD PROXY LOGIC HERE (PER-PROFILE) ==========
+            proxy_file = self.params.get('proxy_file', '').strip()
+            remove_proxy = self.params.get('remove_proxy', False)
+        
+        
+            # Phase 1: Remove proxy if enabled
+            if remove_proxy:
+                try:
+                    print(f"[GOLOGIN WARMUP] [{profile_id}] Removing proxy...")
+                    gologin.remove_proxy_for_profiles(profile_id)
+                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Proxy removed")
+                except Exception as e:
+                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Remove proxy error: {e}")
+        
+            # Phase 2: Assign proxy from file
+            if proxy_file and os.path.exists(proxy_file):
+                try:
+                    print(f"[GOLOGIN WARMUP] [{profile_id}] Assigning proxy from file...")
+                    from helpers.gologin_profile_helper import GoLoginProfileHelper
+                
+                    assign_success, message = GoLoginProfileHelper.assign_proxy_to_profile(
+                        profile_id,
+                        proxy_file,
+                        gologin,
+                        True,
+                        log_prefix=f"[WARMUP PROXY][{profile_id}]"
+                    )
+                
+                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Proxy assigned: {message}")
+                    
+                except ProxyAssignmentFailed as e:
+                    # Stop warmup for this profile if proxy required
+                    print(f"[GOLOGIN WARMUP] [{profile_id}] ❌ Proxy assignment failed: {e}")
+                    print(f"[GOLOGIN WARMUP] [{profile_id}] Stopping warmup - proxy required but failed")
+                    raise
+                except Exception as e:
+                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Proxy assignment error: {e}")
+            elif proxy_file:
+                print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Proxy file not found: {proxy_file}")
+        
+            # ========== END PROXY LOGIC ==========
         
             # Get options
             refresh_fingerprint = self.params.get("refresh_fingerprint", False)
@@ -424,6 +412,22 @@ class GoLoginSeleniumCollectAction(BaseAction):
                 
                     results.append(False)
                     completed_profiles.append(profile_id)
+                    
+                except ProxyAssignmentFailed as e:
+                    # Stop toàn bộ parallel execution
+                    print(f"[GOLOGIN WARMUP] ❌ CRITICAL: Proxy failed - {e}")
+                    print("[GOLOGIN WARMUP] Cancelling all remaining profiles...")
+        
+                    # Cancel pending futures
+                    for pending_future in future_to_profile:
+                        if not pending_future.done():
+                            pending_future.cancel()
+        
+                    # Shutdown executor
+                    executor.shutdown(wait=False)
+        
+                    # Re-raise để stop action
+                    raise ProxyAssignmentFailed(f"Proxy assignment critical failure - stopping action")
     
         except Exception as e:
             print(f"[GOLOGIN WARMUP] ⚠ Parallel execution error: {e}")
