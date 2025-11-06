@@ -78,6 +78,7 @@
     <Compile Include="controllers\action_controller.py" />
     <Compile Include="controllers\__init__.py" />
     <Compile Include="core\interfaces.py" />
+    <Compile Include="exceptions\gologin_exceptions.py" />
     <Compile Include="exceptions\loop_exceptions.py" />
     <Compile Include="exceptions\__init__.py" />
     <Compile Include="helpers\actions\base_flow_action.py" />

@@ -1,7 +1,6 @@
 ﻿# controllers/actions/gologin_create_action.py
 from controllers.actions.base_action import BaseAction
 from models.global_variables import GlobalVariables
-from models.gologin_api import GoLoginAPI
 import random
 import string
 import re
