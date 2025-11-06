@@ -473,6 +473,17 @@ class GoLoginSeleniumStartAction(BaseAction):
                 """Thread function to open 1 profile"""
                 try:
                     print(f"[BATCH {batch_num}][{profile_id}] Opening profile...")
+                    # ========== CHECK REFRESH FINGERPRINT OPTION (NEW) ==========
+                    refresh_fingerprint = self.params.get("refresh_fingerprint", False)
+        
+                    if refresh_fingerprint:
+                        print(f"[BATCH {batch_num}][{profile_id}] Refreshing fingerprint...")
+                        success = self.gologin_api.refresh_fingerprint(profile_id)
+            
+                        if success:
+                            print(f"[BATCH {batch_num}][{profile_id}] ✓ Fingerprint refreshed")
+                        else:
+                            print(f"[BATCH {batch_num}][{profile_id}] ⚠️ Failed to refresh fingerprint")
                 
                     # Start profile via GoLogin API
                     success, result = self.gologin_api.start_profile(profile_id)
@@ -683,6 +694,7 @@ class GoLoginSeleniumStartAction(BaseAction):
                     if not flow.has_next_chain():
                         print(f"[BATCH {batch_num}][ROUND {round_num}][{profile_id}] ✓ All chains completed")
                         profiles_to_remove.append(profile_id)
+                        driver.quit()
                         continue
 
                 
@@ -775,6 +787,18 @@ class GoLoginSeleniumStartAction(BaseAction):
         driver = None
         try:
             # ========== START PROFILE USING GOLOGIN API ==========
+            # ========== CHECK REFRESH FINGERPRINT OPTION (NEW) ==========
+            refresh_fingerprint = self.params.get("refresh_fingerprint", False)
+        
+            if refresh_fingerprint:
+                print(f"[GOLOGIN START][{profile_id}] Refreshing fingerprint...")
+                success = self.gologin_api.refresh_fingerprint(profile_id)
+            
+                if success:
+                    print(f"[GOLOGIN START][{profile_id}] ✓ Fingerprint refreshed")
+                else:
+                    print(f"[GOLOGIN START][{profile_id}] ⚠️ Failed to refresh fingerprint")
+                    
             print(f"[GOLOGIN START] [{profile_id}] Starting profile...")
             success, result = self.gologin_api.start_profile(profile_id)
         

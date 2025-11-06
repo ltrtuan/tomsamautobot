@@ -240,7 +240,7 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         refresh_cb.pack(anchor=tk.W, pady=2)
         
 
-         # ========== THÊM HEADLESS CHECKBOX ==========
+        # ========== THÊM HEADLESS CHECKBOX ==========
         self.headless_var = tk.BooleanVar()
         if self.parameters:
             self.headless_var.set(self.parameters.get("headless", False))

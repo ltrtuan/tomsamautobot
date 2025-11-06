@@ -290,6 +290,8 @@ class ActionItemFrame(tk.Frame):
             return "📁"  # Hoặc "[CPY]"
         elif action_type == ActionType.RUN_CMD:
             return "⚡"  # Hoặc "[CMD]"
+        elif action_type == ActionType.GOLOGIN_AUTO:
+            return "🤖"  # Plus icon cho Create
         elif action_type == ActionType.GOLOGIN_CREATE_PROFILE:
             return "➕"  # Plus icon cho Create
 
@@ -447,6 +449,7 @@ class ActionItemFrame(tk.Frame):
             'IMAGE_SEARCH_LIVE',
             'COPY_FOLDER',
             'RUN_CMD',
+            'GOLOGIN_AUTO',
             'GOLOGIN_CREATE_PROFILE',
             'GOLOGIN_CLONE_PROFILE',
             'GOLOGIN_START_PROFILE',
@@ -853,6 +856,12 @@ class ActionItemFrame(tk.Frame):
             cmd = action.parameters.get("cmd_command", "")[:50]
             cmd = cmd.replace('\n', ' ')
             return f"{indent}CMD: {cmd}"
+        
+        elif action_type_display == ActionType.GOLOGIN_AUTO:
+            profile_ids = action.parameters.get("profile_ids", "")
+            ids_preview = profile_ids[:50] + "..." if len(profile_ids) > 50 else profile_ids
+            how_to_get = action.parameters.get("how_to_get", "Random")
+            return f"{indent}IDs: {ids_preview} | Get: {how_to_get}"
         
         elif action_type_display == ActionType.GOLOGIN_CREATE_PROFILE:
             profile_names = action.parameters.get("profile_names", "")
