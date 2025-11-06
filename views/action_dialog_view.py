@@ -34,6 +34,7 @@ from views.action_params.get_new_proxy_params import GetNewProxyParams
 from views.action_params.gologin_selenium_start_params import GoLoginSeleniumStartParams
 from views.action_params.gologin_selenium_stop_params import GoLoginSeleniumStopParams
 from views.action_params.gologin_clone_params import GoLoginCloneParams
+from views.action_params.gologin_auto_params import GoLoginAutoParams
 
 class ActionDialogView(tk.Toplevel):
     def __init__(self, parent, action=None):
@@ -245,6 +246,7 @@ class ActionDialogView(tk.Toplevel):
             ActionType.GOLOGIN_SELENIUM_START: GoLoginSeleniumStartParams,
             ActionType.GOLOGIN_SELENIUM_STOP: GoLoginSeleniumStopParams,
             ActionType.GOLOGIN_CLONE_PROFILE: GoLoginCloneParams,
+            ActionType.GOLOGIN_AUTO: GoLoginAutoParams,
             # Thêm các action khác trong tương lai
         }
         

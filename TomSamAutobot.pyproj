@@ -33,11 +33,27 @@
     <Compile Include="controllers\actions\else_if_condition_action.py" />
     <Compile Include="controllers\actions\end_for_action.py" />
     <Compile Include="controllers\actions\end_if_condition_action.py" />
+    <Compile Include="controllers\actions\flow_auto\actions_auto\base_flow_auto_action.py" />
+    <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_find_click_video_auto_action.py" />
+    <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_fullscreen_auto_action.py" />
+    <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_mouse_move_auto_action.py" />
+    <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_navigate_auto_action.py" />
+    <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_pause_resume_auto_action.py" />
+    <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_prev_next_auto_action.py" />
+    <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_random_move_scroll_auto_action.py" />
+    <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_find_search_box_auto_action.py" />
+    <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_skip_ads_auto_action.py" />
+    <Compile Include="controllers\actions\flow_auto\base_youtube_flow_auto.py" />
+    <Compile Include="controllers\actions\flow_auto\flow_youtube_auto.py" />
+    <Compile Include="controllers\actions\flow_auto\flow_youtube_browse_auto.py" />
+    <Compile Include="controllers\actions\flow_auto\youtube_flow_factory.py" />
     <Compile Include="controllers\actions\for_action.py" />
     <Compile Include="controllers\actions\get_new_proxy_action.py" />
+    <Compile Include="controllers\actions\gologin_auto_action.py" />
     <Compile Include="controllers\actions\gologin_clone_action.py" />
     <Compile Include="controllers\actions\gologin_create_action.py" />
     <Compile Include="controllers\actions\gologin_get_cookies_action.py" />
+    <Compile Include="controllers\actions\gologin_selenium_collect_action-28-10-2025-10PM.py" />
     <Compile Include="controllers\actions\gologin_selenium_collect_action.py" />
     <Compile Include="controllers\actions\gologin_selenium_start_action.py" />
     <Compile Include="controllers\actions\gologin_selenium_stop_action.py" />
@@ -78,6 +94,7 @@
     <Compile Include="helpers\actions\youtube_seek_video_action.py" />
     <Compile Include="helpers\actions\youtube_skip_ads_action.py" />
     <Compile Include="helpers\action_chain_manager.py" />
+    <Compile Include="helpers\app_helpers.py" />
     <Compile Include="helpers\flow_google.py" />
     <Compile Include="helpers\flow_youtube.py" />
     <Compile Include="helpers\gologin_profile_helper.py" />
@@ -106,6 +123,7 @@
     <Compile Include="views\action_params\end_if_condition_params.py" />
     <Compile Include="views\action_params\for_params.py" />
     <Compile Include="views\action_params\get_new_proxy_params.py" />
+    <Compile Include="views\action_params\gologin_auto_params.py" />
     <Compile Include="views\action_params\gologin_clone_params.py" />
     <Compile Include="views\action_params\gologin_create_params.py" />
     <Compile Include="views\action_params\gologin_get_cookies_params.py" />
@@ -138,6 +156,8 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="controllers\actions\" />
+    <Folder Include="controllers\actions\flow_auto\" />
+    <Folder Include="controllers\actions\flow_auto\actions_auto\" />
     <Folder Include="helpers\actions\" />
     <Folder Include="models\" />
     <Folder Include="controllers\" />
@@ -149,6 +169,10 @@
   </ItemGroup>
   <ItemGroup>
     <InterpreterReference Include="Global|PythonCore|3.12" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="controllers\actions\gologin_auto_action.py-bak-3-11-2025" />
+    <Content Include="views\action_params\gologin_auto_params.py-bak-3-11-2025" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in

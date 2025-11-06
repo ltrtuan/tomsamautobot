@@ -330,7 +330,7 @@ class GoLoginProfileHelper:
             print(f"{log_prefix} Batch cleanup: {len(profiles_to_cleanup)} profile(s)")
     
         # ========== CLEANUP EACH PROFILE ==========
-        for profile_id, data in profiles_to_cleanup.items():
+        for profile_id, data in profiles_to_cleanup.items():            
             # Skip profiles that didn't open successfully
             if data.get('status') not in ['opened', None]:  # None for single profile
                 print(f"{log_prefix}[{profile_id}] Skipping (status: {data.get('status')})")
@@ -445,13 +445,14 @@ class GoLoginProfileHelper:
                     # Call GoLogin stop (now protected by lock)
                     # Returns: (success: bool, message: str)
                     result = gologin_api.stop_profile(profile_id)
-        
+                    cleanup_results[profile_id] = False
                     # Handle tuple return
                     if result:
                         if isinstance(result, tuple):
                             success, message = result
                             if success:
                                 print(f"{log_prefix}[{profile_id}] ✓ Profile stopped via SDK")
+                                cleanup_results[profile_id] = True
                             else:
                                 print(f"{log_prefix}[{profile_id}] ⚠ Stop warning: {message}")
                         else:
@@ -719,10 +720,10 @@ class GoLoginProfileHelper:
     def bring_profile_to_front(profile_id, driver=None, log_prefix="[GOLOGIN]"):
         """
         Bring GoLogin profile window to front AND maximize it - THREAD SAFE
-        ENHANCED: Check BOTH foreground AND maximized state before calling SW_MAXIMIZE
+        Find by --user-data-dir containing profile ID
         """
         with _window_focus_lock:
-            print(f"{log_prefix} [{profile_id}] Checking window state...")
+            print(f"{log_prefix} [{profile_id}] Bringing window to front...")
         
             try:
                 import psutil
@@ -737,139 +738,165 @@ class GoLoginProfileHelper:
                 import win32process
                 import time
             
-                # ========== FIND CHROME WINDOW FOR THIS PROFILE ==========
-                hwnd = None
+                # ========== STEP 1: FIND CHROME PROCESS BY --user-data-dir ==========
+                target_pid = None
+            
+                print(f"{log_prefix} [{profile_id}] Searching Chrome processes with profile ID in user-data-dir...")
+            
                 for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
                     try:
+                        if proc.info['name'] != 'chrome.exe':
+                            continue
+                    
                         cmdline = proc.info.get('cmdline', [])
                         if not cmdline:
                             continue
                     
-                        cmdline_str = ' '.join(cmdline).lower()
+                        cmdline_str = ' '.join(cmdline)
                     
-                        # Check if this is the main browser process for this profile
-                        if profile_id.lower() in cmdline_str and '--type=renderer' not in cmdline_str:
-                            pid = proc.info['pid']
-                        
-                            def enum_windows_callback(window_hwnd, pid_list):
-                                if win32gui.IsWindowVisible(window_hwnd):
-                                    _, found_pid = win32process.GetWindowThreadProcessId(window_hwnd)
-                                    if found_pid == pid:
-                                        pid_list.append(window_hwnd)
-                                return True
-                        
-                            windows = []
-                            win32gui.EnumWindows(enum_windows_callback, windows)
-                        
-                            if windows:
-                                hwnd = windows[0]
-                                break
+                        # Check if this is MAIN browser process (not renderer/GPU)
+                        if '--type=' in cmdline_str:
+                            continue  # Skip renderer, GPU, utility processes
+                    
+                        # Check if --user-data-dir contains profile ID
+                        if '--user-data-dir' in cmdline_str and profile_id in cmdline_str:
+                            target_pid = proc.info['pid']
+                            print(f"{log_prefix} [{profile_id}] ✓ Found Chrome process PID: {target_pid}")
+                            break
                 
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
                         continue
             
-                if not hwnd:
-                    print(f"{log_prefix} [{profile_id}] ⚠ Could not find browser window")
+                if not target_pid:
+                    print(f"{log_prefix} [{profile_id}] ⚠ Could not find Chrome process for this profile")
                     return False
             
-                # ========== CHECK CURRENT STATE ==========
+                # ========== DEBUG: List ALL Chrome windows ==========
+                print(f"{log_prefix} [{profile_id}] DEBUG: Listing all visible Chrome windows...")
+            
+                def debug_callback(window_hwnd, _):
+                    try:
+                        if not win32gui.IsWindowVisible(window_hwnd):
+                            return True
+                    
+                        class_name = win32gui.GetClassName(window_hwnd)
+                        if class_name == "Chrome_WidgetWin_1":
+                            title = win32gui.GetWindowText(window_hwnd)
+                            _, pid = win32process.GetWindowThreadProcessId(window_hwnd)
+                            print(f"{log_prefix} [{profile_id}] DEBUG: Chrome window - PID={pid}, title='{title}'")
+                    except:
+                        pass
+                    return True
+            
+                win32gui.EnumWindows(debug_callback, None)
+                print(f"{log_prefix} [{profile_id}] DEBUG: End of Chrome windows list")
+            
+                # ========== STEP 2: FIND WINDOW HANDLE FROM PID ==========
+                hwnd = None
+                window_title = ""
+            
+                def find_window_callback(window_hwnd, result_list):
+                    """Callback to find window by PID"""
+                    if not win32gui.IsWindowVisible(window_hwnd):
+                        return True
+                
+                    try:
+                        _, found_pid = win32process.GetWindowThreadProcessId(window_hwnd)
+                    
+                        if found_pid == target_pid:
+                            # Check if this is the main Chrome window
+                            class_name = win32gui.GetClassName(window_hwnd)
+                            title = win32gui.GetWindowText(window_hwnd)
+                        
+                            # Chrome main window has class "Chrome_WidgetWin_1" and has a title
+                            if class_name == "Chrome_WidgetWin_1" and title:
+                                result_list.append((window_hwnd, title))
+                                print(f"{log_prefix} [{profile_id}] Found window candidate: hwnd={window_hwnd}, title='{title}'")
+                    except:
+                        pass
+                
+                    return True
+            
+                # Find all windows for this PID
+                windows = []
+                win32gui.EnumWindows(find_window_callback, windows)
+            
+                if windows:
+                    # Use first window (usually the main one)
+                    hwnd, window_title = windows[0]
+                    print(f"{log_prefix} [{profile_id}] ✓ Found window: '{window_title}'")
+                
+                    if len(windows) > 1:
+                        print(f"{log_prefix} [{profile_id}] Note: Found {len(windows)} windows for this PID, using first")
+            
+                if not hwnd:
+                    print(f"{log_prefix} [{profile_id}] ⚠ Could not find window handle for PID {target_pid}")
+                    return False
+            
+                # ========== STEP 3: CHECK CURRENT STATE ==========
                 foreground_hwnd = win32gui.GetForegroundWindow()
                 is_foreground = (foreground_hwnd == hwnd)
             
-                # Check if window is maximized
                 placement = win32gui.GetWindowPlacement(hwnd)
                 is_maximized = (placement[1] == win32con.SW_SHOWMAXIMIZED)
             
+                print(f"{log_prefix} [{profile_id}] Checking window state...")
                 print(f"{log_prefix} [{profile_id}] State: Foreground={is_foreground}, Maximized={is_maximized}")
             
-                # ========== STRATEGY: ONLY USE SELENIUM, AVOID SW_MAXIMIZE ==========
-                if driver:
-                    # If already foreground and maximized, skip
-                    if is_foreground and is_maximized:
-                        print(f"{log_prefix} [{profile_id}] ✓ Already perfect state, skip")
-                        time.sleep(0.3)
-                        return True
-                
-                    # Use Selenium to maximize (SAFE - doesn't affect child windows)
-                    try:
-                        driver.maximize_window()
-                        print(f"{log_prefix} [{profile_id}] ✓ Maximized via Selenium (no child window side effects)")
-                        time.sleep(0.5)
-                    except Exception as e:
-                        print(f"{log_prefix} [{profile_id}] ⚠ Selenium maximize failed: {e}")
-                
-                    # ONLY force foreground if NOT foreground (NO SW_MAXIMIZE!)
-                    if not is_foreground:
-                        try:
-                            foreground_thread = win32process.GetWindowThreadProcessId(foreground_hwnd)[0]
-                            target_thread = win32process.GetWindowThreadProcessId(hwnd)[0]
-                        
-                            if foreground_thread != target_thread:
-                                win32process.AttachThreadInput(foreground_thread, target_thread, True)
-                        
-                            # ONLY call SetForegroundWindow, NO SW_MAXIMIZE!
-                            win32gui.SetForegroundWindow(hwnd)
-                        
-                            if foreground_thread != target_thread:
-                                win32process.AttachThreadInput(foreground_thread, target_thread, False)
-                        
-                            print(f"{log_prefix} [{profile_id}] ✓ Brought to foreground (no maximize)")
-                        except Exception as force_err:
-                            print(f"{log_prefix} [{profile_id}] ⚠ Force foreground error: {force_err}")
-                    
-                        time.sleep(0.5)
-                
-                    return True
+                # ========== STEP 4: BRING TO FRONT ==========
             
-                # ========== MODE 2: NO DRIVER - USE WIN32GUI (AVOID SW_MAXIMIZE IF POSSIBLE) ==========
-                # Skip if already perfect
-                if is_foreground and is_maximized:
-                    print(f"{log_prefix} [{profile_id}] ✓ Already perfect state, skip")
-                    time.sleep(0.5)
-                    return True
-            
-                # Restore if minimized (but don't maximize yet to avoid popup issue)
+                # Restore if minimized
                 if placement[1] == win32con.SW_SHOWMINIMIZED:
+                    print(f"{log_prefix} [{profile_id}] Restoring from minimized...")
                     win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
                     time.sleep(0.3)
             
-                # Force foreground
-                if not is_foreground:
-                    try:
-                        foreground_thread = win32process.GetWindowThreadProcessId(foreground_hwnd)[0]
-                        target_thread = win32process.GetWindowThreadProcessId(hwnd)[0]
-                    
-                        if foreground_thread != target_thread:
-                            win32process.AttachThreadInput(foreground_thread, target_thread, True)
-                    
-                        win32gui.SetForegroundWindow(hwnd)
-                    
-                        if foreground_thread != target_thread:
-                            win32process.AttachThreadInput(foreground_thread, target_thread, False)
-                    
-                        print(f"{log_prefix} [{profile_id}] ✓ Brought to foreground")
-                    except Exception as force_err:
-                        print(f"{log_prefix} [{profile_id}] ⚠ Force foreground error: {force_err}")
-                
-                    time.sleep(0.5)
-            
-                # ONLY maximize if not already maximized
+                # Maximize if needed
                 if not is_maximized:
+                    print(f"{log_prefix} [{profile_id}] Maximizing...")
                     win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
-                    print(f"{log_prefix} [{profile_id}] ✓ Maximized (was not maximized before)")
-                    time.sleep(0.5)
+                    time.sleep(0.3)
             
+                # Bring to foreground
+                if not is_foreground:
+                    print(f"{log_prefix} [{profile_id}] Bringing to foreground...")
+                
+                    try:
+                        # Use BringWindowToTop + SetForegroundWindow combo
+                        win32gui.BringWindowToTop(hwnd)
+                        time.sleep(0.1)
+                        win32gui.SetForegroundWindow(hwnd)
+                        time.sleep(0.5)
+                    
+                        # Verify
+                        new_foreground = win32gui.GetForegroundWindow()
+                    
+                        if new_foreground == hwnd:
+                            print(f"{log_prefix} [{profile_id}] ✓ Brought to foreground")
+                        else:
+                            print(f"{log_prefix} [{profile_id}] ⚠ SetForegroundWindow returned but verification failed")
+                            # Try one more time with ShowWindow
+                            win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
+                            win32gui.SetForegroundWindow(hwnd)
+                            time.sleep(0.3)
+                
+                    except Exception as fg_err:
+                        print(f"{log_prefix} [{profile_id}] ⚠ Error bringing to foreground: {fg_err}")
+                else:
+                    print(f"{log_prefix} [{profile_id}] Already in foreground")
+            
+                print(f"{log_prefix} [{profile_id}] Window brought to front")
                 return True
-        
-            except ImportError as ie:
-                print(f"{log_prefix} [{profile_id}] ⚠ Missing dependencies: {ie}")
-                return False
         
             except Exception as e:
                 print(f"{log_prefix} [{profile_id}] ⚠ Error: {e}")
                 import traceback
                 traceback.print_exc()
                 return False
+
+
+
+
 
 
     # @staticmethod

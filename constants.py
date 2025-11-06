@@ -24,6 +24,7 @@ class ActionType(str, Enum):
     CHECK_FULLSCREEN = "Check Fullscreen"
     COPY_FOLDER = "Copy File/Folder"
     RUN_CMD = "Run CMD"
+    GOLOGIN_AUTO = "GoLogin AUTO"
     GOLOGIN_CREATE_PROFILE = "GoLogin Create Profile"
     GOLOGIN_CLONE_PROFILE = "GoLogin Clone Profile"
     GOLOGIN_START_PROFILE = "GoLogin Start Profile"
