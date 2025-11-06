@@ -32,8 +32,8 @@ class YouTubeNavigateAutoAction(BaseFlowAutoAction):
             pyperclip.copy('youtube.com')
 
             # Paste using Ctrl+V
-            pyautogui.hotkey('ctrl', 'v')
-            
+            pyautogui.hotkey('ctrl', 'v')            
+            time.sleep(random.uniform(0.5, 1))
             pyautogui.press('enter')
             
             # Wait for page load

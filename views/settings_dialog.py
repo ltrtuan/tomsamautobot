@@ -8,7 +8,7 @@ class SettingsDialog:
         self.parent = parent
         self.dialog = tk.Toplevel(parent)
         self.dialog.title("Cài đặt")
-        self.dialog.geometry("450x200")
+        self.dialog.geometry("450x260")
         self.dialog.resizable(False, False)
         self.dialog.transient(parent)
         self.dialog.grab_set()
@@ -59,11 +59,39 @@ class SettingsDialog:
         # Label hiển thị đường dẫn đã chọn
         self.path_display = ttk.Label(path_browse_frame, textvariable=self.file_path_var, 
                                       width=25, background="#f0f0f0", relief="sunken")
-        self.path_display.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        self.path_display.pack(side="left", fill="x", expand=True, padx=(0, 5))        
+       
         
         # Nút browse
         browse_button = ttk.Button(path_browse_frame, text="Browse", command=self.browse_folder)
         browse_button.pack(side="left")
+        
+                 
+        # Số ngày giữ logs
+        log_days_frame = ttk.Frame(self.dialog)
+        log_days_frame.pack(fill="x", padx=20, pady=10)
+        
+        log_days_label = ttk.Label(log_days_frame, text="Số ngày giữ logs:")
+        log_days_label.grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        
+        # Frame cho spinbox và label
+        spinbox_frame = ttk.Frame(log_days_frame)
+        spinbox_frame.grid(row=0, column=1, sticky="w", padx=5, pady=5)
+        
+        # Spinbox cho số ngày (từ 1 đến 365)
+        self.log_days_var = tk.IntVar(value=config.LOG_RETENTION_DAYS)
+        self.log_days_spinbox = ttk.Spinbox(
+            spinbox_frame,
+            from_=1,
+            to=365,
+            textvariable=self.log_days_var,
+            width=10,
+            font=("Segoe UI", 10)
+        )
+        self.log_days_spinbox.pack(side=tk.LEFT)
+        
+        ttk.Label(spinbox_frame, text="ngày", font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(5, 0))
+
         
         # Button frame
         button_frame = ttk.Frame(self.dialog)
@@ -84,9 +112,13 @@ class SettingsDialog:
     def save_settings(self):
         # Lưu biến toàn cục
         config.FILE_PATH = self.file_path_var.get()
-        
+        config.LOG_RETENTION_DAYS = self.log_days_var.get()
+
         # Lưu cấu hình
         config.save_config()
+        # THÊM: Reload logger
+        from helpers.logger import reset_logger
+        reset_logger()  # Remove old handlers, re-setup với path mới
         
         # Đóng dialog
         self.dialog.destroy()

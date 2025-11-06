@@ -119,7 +119,7 @@ def check_auth_from_env():
 
 # Biến toàn cục
 FILE_PATH = ""
-
+LOG_RETENTION_DAYS = 7
 # Ensure the config directory exists
 def ensure_config_directory():
     if not os.path.exists(CONFIG_DIR):
@@ -137,7 +137,8 @@ def save_config():
         return
 
     config_data = {
-        "FILE_PATH": FILE_PATH
+        "FILE_PATH": FILE_PATH,
+        "LOG_RETENTION_DAYS": LOG_RETENTION_DAYS
     }
 
     try:
@@ -149,7 +150,7 @@ def save_config():
 
 # Hàm tải cấu hình
 def load_config():
-    global FILE_PATH
+    global FILE_PATH,LOG_RETENTION_DAYS
     
     # Ensure the config directory exists
     ensure_config_directory()
@@ -160,6 +161,8 @@ def load_config():
             with open(CONFIG_PATH, "r") as f:
                 config_data = json.load(f)
             FILE_PATH = config_data.get("FILE_PATH", "")
+            LOG_RETENTION_DAYS = config_data.get("LOG_RETENTION_DAYS", 7)
+
             print(f"Configuration loaded from {CONFIG_PATH}")
         except Exception as e:
             print(f"Error loading configuration: {e}")

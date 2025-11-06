@@ -34,10 +34,21 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         self._build_search_and_start_video_chain()
         
         # ========== CHAIN 2-N: VIDEO INTERACTIONS (RANDOM) ==========
-        self._build_video_interaction_chains() 
-        self._build_video_interaction_chains() 
         
-        self.log(f"Built {len(self.chain_queue)} chains")
+        opened_profiles = self.parameters.get('opened_profiles', [])
+        max_workers = self.parameters.get('max_workers', [])
+        #
+        # This code to guarantee the profile run enough time to get new proxy (min 6 minutes). 3+ profiles run in minimum 6+ minutes for 2 chain actions
+        #
+        repeat_count = 2
+       
+        if int(max_workers) - len(opened_profiles) == 1:
+            repeat_count = 6
+        elif int(max_workers) - len(opened_profiles) == 2:
+            repeat_count = 14
+        
+        for i in range(repeat_count):
+            self._build_video_interaction_chains() 
     
     def _build_search_and_start_video_chain(self):
         """
@@ -59,9 +70,7 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         # Action 1: Navigate to YouTube
         chain1_actions.append(
             ("navigate_youtube", YouTubeNavigateAutoAction(self.profile_id, self.log_prefix))
-        )
-        
-        
+        )        
 
         GlobalVariables().set('found_video_home', False)
         
@@ -238,7 +247,7 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         
         for j in range(num_actions):
             chain_actions.append(
-                ("delay", random.randint(2,5))  # ← DELAY TUPLE: ("delay", seconds)
+                ("delay", random.randint(2,10))  # ← DELAY TUPLE: ("delay", seconds)
             )
             action_type = random.choice(action_types)
           

@@ -50,7 +50,7 @@ def check_and_focus_window_by_title(window_title_filter):
             else:
                 print(f"[APP HELPER] Not maximized, maximizing...")
                 win32gui.ShowWindow(current_hwnd, win32con.SW_MAXIMIZE)
-                time.sleep(0.2)
+                time.sleep(0.5)
                 print(f"[APP HELPER] ✓ Maximized")
                 return True
     
@@ -143,11 +143,12 @@ def check_and_focus_window_by_title(window_title_filter):
         if not is_maximized:
             print(f"[APP HELPER] Not maximized, maximizing...")
             win32gui.ShowWindow(target_hwnd, win32con.SW_MAXIMIZE)
-            time.sleep(0.2)
+            time.sleep(0.5)
         else:
             print(f"[APP HELPER] Already maximized")
         
         print(f"[APP HELPER] ✓ Window ready: '{target_title}'")
+        time.sleep(0.5)
         return True
     
     except Exception as e:
