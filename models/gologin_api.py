@@ -219,50 +219,40 @@ class GoLoginAPI:
         stop_result = {"success": False, "message": "Unknown error", "completed": False}
         
         def _stop_internal():
-            """Internal stop logic with timeout protection"""
-            max_retries = 3
-            retry_delay = 5  # seconds between retries
-            for attempt in range(1, max_retries + 1):
-                try:                                 
-                    print(f"[GOLOGIN] Attempt {attempt}/{max_retries}: Closing browser and syncing data to cloud...")
-                    gl.stop()
-                    stop_result["success"] = True
-                    stop_result["message"] = "Profile stopped successfully"
-                    print(f"[GOLOGIN] ✓ gl.stop() {profile_id} completed successfully on attempt {attempt}")
+            """Internal stop logic with timeout protection"""           
+            try:                                 
+                print(f"[GOLOGIN] Closing browser and syncing data to cloud...")
+                gl.stop()
+                stop_result["success"] = True
+                stop_result["message"] = "Profile stopped successfully"
+                print(f"[GOLOGIN] ✓ gl.stop() {profile_id} completed successfully")
                     
-                    # ========== NEW: FORCE KILL CHROME IMMEDIATELY ==========
-                    # CRITICAL: gl.stop() may not kill Chrome subprocesses!
-                    # Kill immediately to release DB locks for other profiles
-                    # print(f"[GOLOGIN] Force killing Chrome to release file locks...")
-                    # time.sleep(2)  # Let SDK finish file operations
-                    # self._force_kill_browser_processes(profile_id)
-                    # print(f"[GOLOGIN] ✓ Chrome killed, DB locks released")
-                    
-                    break  # Success - exit retry loop
-                except Exception as stop_err:
-                    # ========== LAST ATTEMPT FAILED ==========
-                    if attempt >= max_retries:
-                        # All retries exhausted
-                        stop_result["success"] = False
-                        stop_result["message"] = f"Failed after {max_retries} attempts: {stop_err}"
-                        print(f"[GOLOGIN] ✗ All {max_retries} attempts failed")
-                        break  # ← Exit loop after last attempt
-                    time.sleep(retry_delay)
-                finally:
-                    # ========== ALWAYS SET COMPLETED (CRITICAL!) ==========
-                    stop_result["completed"] = True  # ← MOVED TO FINALLY!
+                # ========== NEW: FORCE KILL CHROME IMMEDIATELY ==========
+                # CRITICAL: gl.stop() may not kill Chrome subprocesses!
+                # Kill immediately to release DB locks for other profiles
+                # print(f"[GOLOGIN] Force killing Chrome to release file locks...")
+                # time.sleep(2)  # Let SDK finish file operations
+                # self._force_kill_browser_processes(profile_id)
+                # print(f"[GOLOGIN] ✓ Chrome killed, DB locks released")
+                
+            except Exception as stop_err:               
+                stop_result["success"] = False
+                stop_result["message"] = f"Failed STOP PROFILEEEEEEEEE: {stop_err}"
+            finally:
+                # ========== ALWAYS SET COMPLETED (CRITICAL!) ==========
+                stop_result["completed"] = True  # ← MOVED TO FINALLY!
 
     
         # Run gl.stop() in separate thread with 60s timeout
         stop_thread = threading.Thread(target=_stop_internal, daemon=False)
         stop_thread.start()
-        print(f"[GOLOGIN] Waiting for gl.stop() to complete (max 60s)...")
-        stop_thread.join(timeout=60)
+        print(f"[GOLOGIN] Waiting for gl.stop() to complete (max 180s)...")
+        stop_thread.join(timeout=180)
     
         # Check if thread completed
         if not stop_result["completed"]:
             # TIMEOUT - Force kill immediately
-            print(f"[GOLOGIN] ⚠ gl.stop() TIMEOUT after 60s")
+            print(f"[GOLOGIN] ⚠ gl.stop() TIMEOUT after 180s")
             print(f"[GOLOGIN] Force killing browser processes due to timeout...")
         
             try:

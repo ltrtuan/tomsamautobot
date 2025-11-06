@@ -393,9 +393,9 @@ class SeleniumHumanActions:
                     if size['width'] > 0 and size['height'] > 0 and \
                        location['x'] >= 0 and location['y'] >= 0:
                     
-                        # Additional check: element must have href
-                        href = link.get_attribute('href')
-                        if href and href not in ['#', 'javascript:void(0)', 'javascript:;'] and not href.startswith('mailto:') and not href.startswith('tel:') and not href.startswith('sms:'):
+                       # Additional check: element must have href
+                       href = link.get_attribute('href')
+                       if href and href not in ['#', 'javascript:void(0)', 'javascript:;'] and not href.startswith('mailto:') and not href.startswith('tel:') and not href.startswith('sms:'):
                             clickable_links.append(link)
                         
                 except Exception as filter_err:

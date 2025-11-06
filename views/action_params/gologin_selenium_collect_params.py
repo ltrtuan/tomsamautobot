@@ -320,81 +320,63 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         
         
         # ========== PROXY CONFIGURATION SECTION ==========
-        separator2 = ttk.Separator(options_frame, orient='horizontal')
-        separator2.pack(fill=tk.X, pady=10)
+        separator_proxy = ttk.Separator(options_frame, orient='horizontal')
+        separator_proxy.pack(fill=tk.X, pady=10)
 
-        proxy_label = tk.Label(
+        self.remove_proxy_var = tk.BooleanVar()
+        if self.parameters:
+            self.remove_proxy_var.set(self.parameters.get("remove_proxy", False))
+        else:
+            self.remove_proxy_var.set(False)
+
+        remove_proxy_cb = tk.Checkbutton(
             options_frame,
-            text="Proxy Configuration (Optional - from Variables):",
+            text="Remove proxy of profile before warming up",
+            variable=self.remove_proxy_var,
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10)
+        )
+        remove_proxy_cb.pack(anchor=tk.W, pady=2)
+
+        proxy_file_label = tk.Label(
+            options_frame,
+            text="Proxy File (Optional - TXT format type://host:port:user:pass per line):",
             bg=cfg.LIGHT_BG_COLOR,
             font=("Segoe UI", 10, "bold")
         )
-        proxy_label.pack(anchor=tk.W, pady=(5, 5))
+        proxy_file_label.pack(anchor=tk.W, pady=(5, 2))
 
-        # Row 1: Mode Variable, Host Variable, Port Variable
-        row1 = tk.Frame(options_frame, bg=cfg.LIGHT_BG_COLOR)
-        row1.pack(fill=tk.X, pady=3)
+        proxy_browse_frame = tk.Frame(options_frame, bg=cfg.LIGHT_BG_COLOR)
+        proxy_browse_frame.pack(fill=tk.X, pady=(0, 10))
 
-        tk.Label(row1, text="Mode Var:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0,5))
-        self.proxy_mode_var = tk.StringVar()
+        self.proxy_file_var = tk.StringVar()
         if self.parameters:
-            self.proxy_mode_var.set(self.parameters.get("proxy_mode_variable", ""))
-        else:
-            self.proxy_mode_var.set("")
-        mode_entry = ttk.Entry(row1, textvariable=self.proxy_mode_var, width=15)
-        mode_entry.pack(side=tk.LEFT, padx=5)
+            self.proxy_file_var.set(self.parameters.get("proxy_file", ""))
 
-        tk.Label(row1, text="Host Var:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(15,5))
-        self.proxy_host_var = tk.StringVar()
-        if self.parameters:
-            self.proxy_host_var.set(self.parameters.get("proxy_host_variable", ""))
-        else:
-            self.proxy_host_var.set("")
-        host_entry = ttk.Entry(row1, textvariable=self.proxy_host_var, width=15)
-        host_entry.pack(side=tk.LEFT, padx=5)
+        proxy_entry = tk.Entry(proxy_browse_frame, textvariable=self.proxy_file_var, font=("Segoe UI", 10))
+        proxy_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
 
-        tk.Label(row1, text="Port Var:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(15,5))
-        self.proxy_port_var = tk.StringVar()
-        if self.parameters:
-            self.proxy_port_var.set(self.parameters.get("proxy_port_variable", ""))
-        else:
-            self.proxy_port_var.set("")
-        port_entry = ttk.Entry(row1, textvariable=self.proxy_port_var, width=15)
-        port_entry.pack(side=tk.LEFT, padx=5)
+        def browse_proxy_file():
+            filename = filedialog.askopenfilename(
+                title="Select Proxy TXT File",
+                filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+            )
+            if filename:
+                self.proxy_file_var.set(filename)
 
-        # Row 2: Username Variable, Password Variable
-        row2 = tk.Frame(options_frame, bg=cfg.LIGHT_BG_COLOR)
-        row2.pack(fill=tk.X, pady=3)
+        browse_proxy_button = ttk.Button(proxy_browse_frame, text="Browse...", command=browse_proxy_file)
+        browse_proxy_button.pack(side=tk.LEFT)
 
-        tk.Label(row2, text="User Var:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0,5))
-        self.proxy_username_var = tk.StringVar()
-        if self.parameters:
-            self.proxy_username_var.set(self.parameters.get("proxy_username_variable", ""))
-        else:
-            self.proxy_username_var.set("")
-        user_entry = ttk.Entry(row2, textvariable=self.proxy_username_var, width=20)
-        user_entry.pack(side=tk.LEFT, padx=5)
-
-        tk.Label(row2, text="Pass Var:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(15,5))
-        self.proxy_password_var = tk.StringVar()
-        if self.parameters:
-            self.proxy_password_var.set(self.parameters.get("proxy_password_variable", ""))
-        else:
-            self.proxy_password_var.set("")
-        pass_entry = ttk.Entry(row2, textvariable=self.proxy_password_var, width=20)
-        pass_entry.pack(side=tk.LEFT, padx=5)
-
-        # Hint
-        proxy_hint = tk.Label(
+        proxy_file_hint = tk.Label(
             options_frame,
-            text="💡 Enter variable NAMES (e.g., proxy_mode, proxy_host). Fill all 5 to update proxy for ALL profiles before starting.",
+            text="File format example:\nhttp://1.2.3.4:8080:user:pass\nsocks5://5.6.7.8:1080:youruser:yourpass\nProxies will be assigned to profiles sequentially or randomly.",
             bg=cfg.LIGHT_BG_COLOR,
             font=("Segoe UI", 8),
             fg="#666666",
             wraplength=500,
             justify=tk.LEFT
         )
-        proxy_hint.pack(anchor=tk.W, pady=(2,0))
+        proxy_file_hint.pack(anchor=tk.W)
 
     
     def create_websites_section(self):
@@ -661,11 +643,8 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         params["keywords_file"] = self.keywords_file_var.get().strip()
         params["keywords_variable"] = self.keywords_variable_var.get().strip()
         
-        # Proxy params - THÊM 5 DÒNG NÀY
-        params["proxy_mode_variable"] = self.proxy_mode_var.get().strip()
-        params["proxy_host_variable"] = self.proxy_host_var.get().strip()
-        params["proxy_port_variable"] = self.proxy_port_var.get().strip()
-        params["proxy_username_variable"] = self.proxy_username_var.get().strip()
-        params["proxy_password_variable"] = self.proxy_password_var.get().strip()
+        # Proxy file
+        params["proxy_file"] = self.proxy_file_var.get().strip()
+        params["remove_proxy"] = self.remove_proxy_var.get()
         
         return params

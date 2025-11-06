@@ -5,6 +5,11 @@ from models.gologin_api import get_gologin_api
 import random
 import threading
 import time
+from exceptions.gologin_exceptions import ProxyAssignmentFailed
+
+
+
+
 _chromedriver_lock = threading.Lock()
 _window_focus_lock = threading.Lock()
 _cleanup_lock = threading.Lock()
@@ -1322,3 +1327,192 @@ class GoLoginProfileHelper:
             import traceback
             traceback.print_exc()
             return True  # Continue anyway
+
+
+    @staticmethod
+    def load_proxies_from_file(proxy_file, log_prefix="[PROXY]"):
+        """
+        Load proxies from TXT file with format: provider;proxy_type;api_key
+    
+        Args:
+            proxy_file: Path to proxy TXT file
+            log_prefix: Prefix for log messages
+    
+        Returns:
+            list: List of proxy config dicts or empty list if error
+        """
+        import os
+    
+        if not os.path.exists(proxy_file):
+            print(f"{log_prefix} Proxy file not found: {proxy_file}")
+            return []
+    
+        proxy_configs = []
+        with open(proxy_file, 'r', encoding='utf-8') as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                parts = line.split(';')
+                if len(parts) != 3:
+                    print(f"{log_prefix} Warning - Invalid format line {line_num}: {line}")
+                    continue
+                provider, proxy_type, api_key = [part.strip() for part in parts]
+                if not provider or not proxy_type or not api_key:
+                    print(f"{log_prefix} Warning - Empty values line {line_num}: {line}")
+                    continue
+                if proxy_type not in ['socks5', 'http', 'https']:
+                    print(f"{log_prefix} Warning - Invalid type '{proxy_type}' line {line_num}")
+                    continue
+                proxy_configs.append({
+                    'provider': provider.lower(),
+                    'type': proxy_type,
+                    'api_key': api_key,
+                    'line_num': line_num
+                })
+    
+        print(f"{log_prefix} Loaded {len(proxy_configs)} valid proxy configs")
+        return proxy_configs
+
+
+    @staticmethod
+    def assign_proxy_to_profile(profile_id, proxy_file, gologin_api, ignore_exception = False, log_prefix="[PROXY]"):
+        """
+        Assign proxy to profile with round-robin distribution using global session state.
+        Uses TMProxyAPI or ProxyRackAPI to get full proxy details.
+    
+        Args:
+            profile_id: Profile ID to assign proxy
+            proxy_file: Path to proxy TXT file
+            gologin_api: GoLoginAPI instance for update_proxy_for_profiles call
+            ignore_exception : True
+            log_prefix: Prefix for log messages
+    
+        Returns:
+            tuple: (bool success, str message)
+        """
+        from models.global_variables import GlobalVariables
+        from models.tmproxy_api import TMProxyAPI
+        import time
+        import threading
+        
+        gv = GlobalVariables()
+         # ← THÊM: Lock để tránh race condition
+        if not hasattr(gv, '_proxy_lock'):
+            gv._proxy_lock = threading.Lock()
+        log_prefix = f"{log_prefix}[{profile_id}]"
+        print(f"{log_prefix} Starting proxy assignment with round-robin")
+    
+        # Load proxy configs
+        proxy_configs = GoLoginProfileHelper.load_proxies_from_file(proxy_file, log_prefix)
+        if not proxy_configs:
+            return False, "No valid proxies in file"
+    
+        with gv._proxy_lock:
+            # Get global session state
+            current_index = gv.get("session_proxy_index", 0)
+            used_lines = gv.get("session_used_lines", set())
+    
+            # Reset if all used
+            if len(used_lines) >= len(proxy_configs):
+                print(f"{log_prefix} All {len(proxy_configs)} lines used - resetting for new cycle")
+                used_lines.clear()
+                current_index = 0
+                gv.set("session_used_lines", set())
+                gv.set("session_proxy_index", 0)
+    
+            print(f"{log_prefix} Session state: index={current_index}, used={sorted(used_lines)}, available={len(proxy_configs) - len(used_lines)}")
+    
+        # Try all lines (unused first, then used as fallback)
+        attempts = 0
+        len_config = len(proxy_configs)
+        tried_lines = set()
+        
+        # If ignore_exception is True, just loop once
+        if ignore_exception:
+            max_attempts = len_config
+        else:
+            max_attempts = len_config * 2
+            
+        while attempts < max_attempts:
+            # Find next unused line
+            found_unused = False
+            for offset in range(len(proxy_configs)):
+                check_index = (current_index + offset) % len(proxy_configs)
+                check_line_num = proxy_configs[check_index]['line_num']
+            
+                if check_line_num not in used_lines and check_index not in tried_lines:
+                    config = proxy_configs[check_index]
+                    found_unused = True
+                    break
+        
+            # Fallback to used lines
+            if not found_unused:
+                print(f"{log_prefix} No unused lines - trying used lines as fallback")
+                for offset in range(len(proxy_configs)):
+                    check_index = (current_index + offset) % len(proxy_configs)
+                    if check_index not in tried_lines:
+                        config = proxy_configs[check_index]
+                        found_unused = True
+                        break
+        
+            if not found_unused:
+                break
+        
+            attempts += 1
+            tried_lines.add(check_index)
+        
+            proxy_info = f"{config['provider']}:{config['type']}:{config['api_key'][-8:]}"
+            line_status = "used" if config['line_num'] in used_lines else "unused"
+            print(f"{log_prefix} Attempt {attempts}/{max_attempts}: {proxy_info} line {config['line_num']} ({line_status})")
+        
+            try:
+                # Get full proxy details from provider API
+                full_proxy = None
+                if config['provider'] == 'tmproxy':
+                    proxy_details = TMProxyAPI.get_proxy_static(config['api_key'], config['type'])
+                    if proxy_details:
+                        full_proxy = proxy_details
+                elif config['provider'] == 'proxyrack':
+                    # Implement ProxyRackAPI.get_proxy_static if needed
+                    print(f"{log_prefix} ProxyRack not implemented yet")
+                    continue
+                else:
+                    print(f"{log_prefix} Unknown provider: {config['provider']}")
+                    continue
+            
+                if not full_proxy:
+                    print(f"{log_prefix} Failed to get proxy details - continue")
+                    time.sleep(1)
+                    continue
+            
+                # Update profile proxy via GoLogin API
+                update_success, message = gologin_api.update_proxy_for_profiles(profile_id, full_proxy)
+                if update_success:
+                    with gv._proxy_lock:
+                        # Mark as used, update index
+                        used_line_num = config['line_num']
+                        used_lines.add(used_line_num)
+                        next_index = (check_index + 1) % len(proxy_configs)
+                        gv.set("session_used_lines", used_lines.copy())
+                        gv.set("session_proxy_index", next_index)
+                        print(f"{log_prefix} ✓ Assigned {proxy_info} - marked used, next index={next_index}")
+                        return True, f"Assigned {proxy_info}"
+                else:
+                    print(f"{log_prefix} API update failed: {message} - continue")
+                    time.sleep(1)
+                    continue
+                
+            except Exception as e:
+                print(f"{log_prefix} Exception: {e} - continue")
+                time.sleep(1)
+            continue 
+    
+        error_msg = f"All {attempts} attempts failed - no valid proxy assignable"
+        print(f"{log_prefix} {error_msg}")
+        if ignore_exception:
+            return False, f"{error_msg}"
+        else:
+            raise ProxyAssignmentFailed(
+                f"Cannot assign valid proxy for {profile_id} - all lines failed, IP duplication risk"
+            )
