@@ -12,6 +12,8 @@ from controllers.actions.flow_auto.actions_auto.base_flow_auto_action import Bas
 from controllers.actions.flow_auto.actions_auto.youtube_random_move_scroll_auto_action import YouTubeRandomMoveScrollAutoAction
 from controllers.actions.flow_auto.actions_auto.youtube_mouse_move_auto_action import YouTubeMouseMoveAutoAction
 
+from helpers.app_helpers import is_hand_cursor
+
 class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
     """
     Find video by channel logo (retry with scroll) + Click video
@@ -253,7 +255,7 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
         time.sleep(0.2)  # Wait for cursor to update
         
         # Check if cursor = hand
-        is_hand = self._is_hand_cursor()
+        is_hand = is_hand_cursor()
         
         if is_hand:
             self.log("✓ Cursor = HAND (ads clickable)")
@@ -348,7 +350,7 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
                 time.sleep(0.3)
             
                 # Check if cursor is hand (clickable)
-                if self._is_hand_cursor():
+                if is_hand_cursor():
                     self.log(f"✓ Found clickable element at ({random_x}, {random_y})")
                 
                     # Click using MouseMoveAction for consistency
@@ -414,7 +416,7 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
                 time.sleep(0.3)
             
                 # Check if cursor is hand (clickable)
-                if self._is_hand_cursor():
+                if is_hand_cursor():
                     self.log(f"✓ Found clickable element at ({random_x}, {random_y})")
                 
                     # Click using MouseMoveAction for consistency

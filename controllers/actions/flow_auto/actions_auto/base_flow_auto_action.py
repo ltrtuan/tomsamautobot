@@ -128,7 +128,7 @@ class BaseFlowAutoAction:
         """
         try:
             import win32gui
-            time.sleep(0.1)
+            time.sleep(0.5)
             
             cursor_info = win32gui.GetCursorInfo()
             hand_cursor_handles = [32649, 65567, 65563, 65561, 60171, 60169, 32513]

@@ -17,13 +17,14 @@ logger = logging.getLogger('TomSamAutobot')
 
 from exceptions.gologin_exceptions import ProxyAssignmentFailed
 
-from controllers.actions.flow_auto.youtube_flow_factory import YouTubeFlowAuto
+from controllers.actions.flow_auto.youtube_flow_factory import YouTubeFlowAutoFactory
 from helpers.app_helpers import check_and_focus_window_by_title
 # Import helpers
 from helpers.gologin_profile_helper import GoLoginProfileHelper
 from helpers.selenium_registry import register_selenium_driver, unregister_selenium_driver
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from models.tmproxy_api import TMProxyAPI
+
+from helpers.website_manager import get_random_warmup_url
 
 class GoLoginAutoAction(BaseAction):
     """Handler for GoLogin Selenium Start Profile action"""
@@ -535,18 +536,19 @@ class GoLoginAutoAction(BaseAction):
             for profile_id in opened_profiles:              
         
                 try:
+                    mixed_keyword, keyword_type = self._get_mixed_keyword_google()
                     if action_type == "Youtube":
                         if browse_youtube:
-                            flow_iterator = YouTubeFlowAuto.create_flow_iterator(
+                            flow_iterator = YouTubeFlowAutoFactory.create_flow_iterator(
                                 profile_id=profile_id,
-                                parameters={**self.params, 'opened_profiles': opened_profiles, 'max_workers' : max_parallel_profiles},
+                                parameters={**self.params, 'opened_profiles': opened_profiles, 'max_workers' : max_parallel_profiles, 'list_warmup_url' : mixed_keyword, 'keyword_type' : keyword_type},
                                 log_prefix=f"[BATCH {batch_num}][{profile_id}]",
                                 flow_type="browse"
                             )
                         else:
-                            flow_iterator = YouTubeFlowAuto.create_flow_iterator(
+                            flow_iterator = YouTubeFlowAutoFactory.create_flow_iterator(
                                 profile_id=profile_id,
-                                parameters={**self.params, 'opened_profiles': opened_profiles, 'max_workers' : max_parallel_profiles},
+                                parameters={**self.params, 'opened_profiles': opened_profiles, 'max_workers' : max_parallel_profiles, 'list_warmup_url' : mixed_keyword, 'keyword_type' : keyword_type},
                                 log_prefix=f"[BATCH {batch_num}][{profile_id}]"
                             )
                       
@@ -655,12 +657,12 @@ class GoLoginAutoAction(BaseAction):
                         driver=profile_data[profile_id]['driver'],
                         log_prefix=log_prefix
                     )
-                    time.sleep(1)
+                    time.sleep(random.randint(2,10))
     
                     # Send Alt+F4
                     print(f"{log_prefix} Sending Alt+F4...")
                     pyautogui.hotkey('alt', 'f4')
-                    time.sleep(2)
+                    time.sleep(1)
     
                     print(f"{log_prefix} ✓ Browser closed")
                     closed_count += 1
@@ -723,6 +725,94 @@ class GoLoginAutoAction(BaseAction):
                 traceback.print_exc()
 
         print(f"[EMERGENCY CLEANUP] Closed {closed_count}/{len(profiles)} profiles")
+
+
+    def _get_mixed_keyword_google(self):
+        """
+        Get keywords by RANDOMLY choosing ONE source:
+        - Option 1: ALL keywords from keywords_google_file
+        - Option 2: ALL URLs from warmup_websites_file
+    
+        Random choice 50/50 between the 2 files (NOT mixing both)
+    
+        Returns:
+            tuple: (keywords_list: list, type: str)
+                - keywords_list: List of keywords OR URLs
+                - type: "google" if from keywords file, "warmup" if from warmup file
+                Returns ([], None) if both files not found
+    
+        Example:
+            >>> keywords_list, keyword_type = self._get_mixed_keyword_google()
+            >>> # Case 1: keywords_list = ["Python", "JS"], keyword_type = "google"
+            >>> # Case 2: keywords_list = ["reddit.com", "github.com"], keyword_type = "warmup"
+        """
+        import random
+    
+        keywords_google_file = self.params.get("keywords_google_file", "").strip()
+        warmup_websites_file = self.params.get("warmup_websites_file", "").strip()
+    
+        # ========== BUILD AVAILABLE SOURCES ==========
+        sources = []
+    
+        if keywords_google_file and os.path.exists(keywords_google_file):
+            sources.append("keywords_google")
+    
+        if warmup_websites_file and os.path.exists(warmup_websites_file):
+            sources.append("warmup_websites")
+    
+        # No sources available
+        if not sources:
+            logger.warning("[MIXED KEYWORDS] No keywords or warmup files found")
+            return [], None
+    
+        # ========== RANDOM CHOICE: SELECT 1 SOURCE ==========
+        chosen_source = random.choice(sources)
+        logger.info(f"[MIXED KEYWORDS] Randomly selected source: {chosen_source}")
+    
+        # ========== READ FROM CHOSEN SOURCE ONLY ==========
+        result_list = []
+        keyword_type = None
+    
+        if chosen_source == "keywords_google":
+            # Read keywords file
+            try:
+                with open(keywords_google_file, 'r', encoding='utf-8') as f:
+                    keywords = [line.strip() for line in f if line.strip()]
+            
+                if keywords:
+                    result_list = keywords
+                    keyword_type = "google"
+                    logger.info(f"[MIXED KEYWORDS] Loaded {len(keywords)} keywords from Google file")
+                else:
+                    logger.warning("[MIXED KEYWORDS] Keywords file is empty")
+        
+            except Exception as e:
+                logger.error(f"[MIXED KEYWORDS] Failed to read keywords Google file: {e}")
+    
+        elif chosen_source == "warmup_websites":
+            # Read warmup file
+            try:
+                with open(warmup_websites_file, 'r', encoding='utf-8') as f:
+                    urls = [line.strip() for line in f if line.strip()]
+            
+                if urls:
+                    result_list = urls
+                    keyword_type = "warmup"
+                    logger.info(f"[MIXED KEYWORDS] Loaded {len(urls)} URLs from warmup file")
+                else:
+                    logger.warning("[MIXED KEYWORDS] Warmup file is empty")
+        
+            except Exception as e:
+                logger.error(f"[MIXED KEYWORDS] Failed to read warmup file: {e}")
+    
+        # ========== SHUFFLE FOR RANDOMNESS ==========
+        if result_list:
+            random.shuffle(result_list)
+            logger.info(f"[MIXED KEYWORDS] Type: {keyword_type}, Total items: {len(result_list)} (shuffled)")
+    
+        return result_list, keyword_type
+
+
 
 
 
@@ -788,18 +878,20 @@ class GoLoginAutoAction(BaseAction):
         debugger_address = None  # ← Will be None for manual mode
 
         try:
+            # ========== GET MIXED KEYWORD (NEW) ==========
+            mixed_keyword, keyword_type = self._get_mixed_keyword_google()
             if action_type == "Youtube":
                 if browse_youtube:
-                    flow_iterator = YouTubeFlowAuto.create_flow_iterator(
+                    flow_iterator = YouTubeFlowAutoFactory.create_flow_iterator(
                         profile_id=profile_id,
-                        parameters={**self.params, 'opened_profiles': [profile_id], 'max_workers' : 1},
+                        parameters={**self.params, 'opened_profiles': [profile_id], 'max_workers' : 1, 'list_warmup_url' : mixed_keyword, 'keyword_type' : keyword_type},
                         log_prefix=f"[AUTO][{profile_id}]",
                         flow_type="browse"
                     )
                 else:
-                    flow_iterator = YouTubeFlowAuto.create_flow_iterator(
+                    flow_iterator = YouTubeFlowAutoFactory.create_flow_iterator(
                         profile_id=profile_id,
-                        parameters={**self.params, 'opened_profiles': [profile_id], 'max_workers' : 1},
+                        parameters={**self.params, 'opened_profiles': [profile_id], 'max_workers' : 1, 'list_warmup_url' : mixed_keyword, 'keyword_type' : keyword_type},
                         log_prefix=f"[AUTO][{profile_id}]"
                     )
             elif action_type == "Google":
@@ -874,21 +966,25 @@ class GoLoginAutoAction(BaseAction):
         try:
             # Bring profile to front
             print(f"[{profile_id}] Bringing window to front...")
-            GoLoginProfileHelper.bring_profile_to_front(
+            result_bring = GoLoginProfileHelper.bring_profile_to_front(
                 profile_id,
                 driver=profile_data[profile_id]['driver'],
                 log_prefix=f"[{profile_id}]"
             )
-            time.sleep(random.uniform(3, 8))
+            
+            if result_bring:
+                time.sleep(random.uniform(3, 8))
 
-            # Send Alt+F4
-            print(f"[{profile_id}] Sending Alt+F4...")
-            pyautogui.hotkey('alt', 'f4')
-            time.sleep(random.uniform(2, 5))  # Fixed: Added time.sleep for the random delay (original missed)
+                # Send Alt+F4
+                print(f"[{profile_id}] Sending Alt+F4...")
+                pyautogui.hotkey('alt', 'f4')
+                time.sleep(random.uniform(2, 5))  # Fixed: Added time.sleep for the random delay (original missed)
 
-            print(f"[{profile_id}] ✓ Browser closed successfully")
-            return True
-
+                print(f"[{profile_id}] ✓ Browser closed successfully")
+                return True
+            
+            print(f"[{profile_id}] ❌ Failed to close browser")
+            return False
         except Exception as e:
             print(f"[{profile_id}] ❌ Failed to close browser: {e}")
             import traceback

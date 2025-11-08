@@ -6,14 +6,15 @@ import pyautogui
 import os
 from controllers.actions.mouse_move_action import MouseMoveAction
 from controllers.actions.flow_auto.actions_auto.base_flow_auto_action import BaseFlowAutoAction
-
+import logging
+logger = logging.getLogger('TomSamAutobot')
 
 class YouTubeFindSearchBoxAutoAction(BaseFlowAutoAction):
     """
     Find search box (retry 3 times) → Click random position → Type keyword with mistakes → Enter
     """
     
-    def __init__(self, profile_id, parameters, log_prefix="[YOUTUBE AUTO]"):
+    def __init__(self, profile_id, parameters, log_prefix="[YOUTUBE AUTO]", search_type="channel"):
         """
         Initialize find search box action
     
@@ -29,6 +30,7 @@ class YouTubeFindSearchBoxAutoAction(BaseFlowAutoAction):
         """
         super().__init__(profile_id, log_prefix)
         self.parameters = parameters
+        self.search_type = search_type
 
     
     def _execute_internal(self):
@@ -36,12 +38,26 @@ class YouTubeFindSearchBoxAutoAction(BaseFlowAutoAction):
         try:
             # ========== STEP 1: GENERATE KEYWORD ==========
             # Build minimal dict for _generate_keyword()
-            keywords_dict = {
-                'keywords_youtube': self.parameters.get('keywords_youtube', []),
-                'suffix_prefix': self.parameters.get('suffix_prefix', '')
-            }
+            keyword = ""
+            if self.search_type == "channel":
+                keywords_dict = {
+                    'keywords_youtube': self.parameters.get('keywords_youtube', []),
+                    'suffix_prefix': self.parameters.get('suffix_prefix', '')
+                }
         
-            keyword = self._generate_keyword(keywords_dict)
+                keyword = self._generate_keyword(keywords_dict)
+            else:
+                keywords_google_file = self.parameters.get("keywords_google_file", "").strip()
+                if keywords_google_file and os.path.exists(keywords_google_file):                    
+                    try:                    
+                        with open(keywords_google_file, 'r', encoding='utf-8') as f:
+                            keywords = [line.strip() for line in f if line.strip()]
+                    except Exception as e:
+                        logger.error(f"[MIXED KEYWORDS] Failed to read keywords Google file: {e}")
+                     
+                    if keywords:
+                        keyword = random.choice(keywords)
+            
             if not keyword:
                 self.log("No keywords available", "ERROR")
                 return False

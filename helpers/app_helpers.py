@@ -156,3 +156,121 @@ def check_and_focus_window_by_title(window_title_filter):
         import traceback
         traceback.print_exc()
         return False
+
+
+def perform_random_movements_with_click_detection(max_attempts=5, type_action=None):
+    """
+    Move mouse randomly in center 3/4 of screen and click if cursor becomes hand
+    
+    Area constraints:
+    - Horizontal: Center 3/4 (12.5% margin on each side)
+    - Vertical: 300px from top, 100px from bottom
+    
+    Args:
+        max_attempts (int): Number of random movement attempts (default: 5)
+        type_action: None/Google => Google will find link 30% left screen
+    
+    Returns:
+        tuple: (clicked: bool, click_position: tuple or None)
+            - clicked: True if clicked a clickable element, False otherwise
+            - click_position: (x, y) tuple if clicked, None otherwise
+    
+    Example:
+        >>> from helpers.app_helpers import perform_random_movements_with_click_detection
+        >>> 
+        >>> def my_log(msg):
+        ...     print(f"[LOG] {msg}")
+        >>> 
+        >>> clicked, position = perform_random_movements_with_click_detection(
+        ...     max_attempts=5,
+        ...     log_callback=my_log
+        ... )
+        >>> 
+        >>> if clicked:
+        ...     print(f"Clicked at {position}")
+    """
+    import pyautogui
+    import random
+    import time
+    from controllers.actions.mouse_move_action import MouseMoveAction
+    
+    try:
+        # Get screen size
+        screen_width, screen_height = pyautogui.size()
+        
+        # ========== DEFINE MOVEMENT AREA ==========
+        # Horizontal: Center 3/4 (12.5% margin left/right)
+        if type_action == "google":
+            min_x = 200 
+            max_x = int(screen_width * 0.3)   # 30% from left
+        else:
+            min_x = int(screen_width * 0.125)   # 12.5% from left
+            max_x = int(screen_width * 0.875)   # 12.5% from right (87.5% from left)
+        # Vertical: 300px from top, 100px from bottom
+        min_y = 300
+        max_y = screen_height - 100
+     
+       
+        # ========== RETRY ATTEMPTS ==========
+        for attempt in range(1, max_attempts + 1):
+            # Random position within defined area
+            random_x = random.randint(min_x, max_x)
+            random_y = random.randint(min_y, max_y)
+          
+            safe_x = screen_width - 18  # 10px từ mép phải
+            safe_y = random.randint(100, screen_height - 100)  # Random từ 100px đến (height-100)px
+            # Move mouse (no click yet)
+            MouseMoveAction.move_and_click_static(
+                random_x, random_y,
+                click_type=None,  # Just move, don't click
+                fast=False
+            )           
+            
+            # ========== CHECK IF CURSOR IS HAND ==========
+            if is_hand_cursor():             
+                
+                # Click using pyautogui (cursor is already at position)
+                pyautogui.click()
+                
+                # Wait for potential page navigation
+                click_wait = random.uniform(2, 3)
+                time.sleep(click_wait)
+                
+                return True, (random_x, random_y)  # Successfully clicked
+          
+            
+            # Wait 1-2s before next attempt (if not last attempt)
+            MouseMoveAction.move_and_click_static(safe_x, safe_y, "single_click", fast=False)
+            time.sleep(0.3)
+            scroll_amount = random.randint(-400, -200)  # Scroll down                    
+            pyautogui.scroll(scroll_amount)
+            if attempt < max_attempts:
+                retry_wait = random.uniform(1, 2)
+                time.sleep(retry_wait)
+        
+        # No clickable element found after max_attempts
+        return False, None
+    
+    except Exception as e:     
+        import traceback
+        traceback.print_exc()
+        return False, None
+
+
+def is_hand_cursor():
+    """
+    Check if cursor is hand pointer (clickable element)
+        
+    Returns:
+        bool: True if hand cursor
+    """
+    try:
+        import win32gui
+        time.sleep(0.5)
+            
+        cursor_info = win32gui.GetCursorInfo()
+        hand_cursor_handles = [32649, 65567, 65563, 65561, 60171, 60169, 32513]
+            
+        return cursor_info[1] in hand_cursor_handles
+    except Exception as e:       
+        return False

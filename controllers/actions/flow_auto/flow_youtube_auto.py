@@ -14,6 +14,8 @@ from controllers.actions.flow_auto.actions_auto.youtube_mouse_move_auto_action i
 from controllers.actions.flow_auto.actions_auto.youtube_pause_resume_auto_action import YouTubePauseResumeAutoAction
 from controllers.actions.flow_auto.actions_auto.youtube_fullscreen_auto_action import YouTubeFullscreenAutoAction
 from controllers.actions.flow_auto.actions_auto.youtube_prev_next_auto_action import YouTubePrevNextAutoAction
+from controllers.actions.flow_auto.actions_auto.browse_website_auto_action import BrowseWebsiteAutoAction
+
 from controllers.actions.flow_auto.base_youtube_flow_auto import BaseYouTubeFlowAutoIterator
 
 class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
@@ -30,6 +32,9 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         Chain 1: Search and start video (BẮT BUỘC - TẤT CẢ PROFILE ĐỀU CHẠY)
         Chain 2-N: Random video interactions (RANDOM SỐ LƯỢNG VÀ LOẠI)
         """
+        # ========== CHAIN 0: WARM UP BEFORE VIEW VIDEO (BẮT BUỘC) ==========
+        self._warm_up_chain()
+        
         # ========== CHAIN 1: SEARCH AND START VIDEO (BẮT BUỘC) ==========
         self._build_search_and_start_video_chain()
         
@@ -40,16 +45,58 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         #
         # This code to guarantee the profile run enough time to get new proxy (min 6 minutes). 3+ profiles run in minimum 6+ minutes for 2 chain actions
         #
-        repeat_count = 2
+        repeat_count = 3
        
-        if int(max_workers) - len(opened_profiles) == 1:
-            repeat_count = 6
-        elif int(max_workers) - len(opened_profiles) == 2:
-            repeat_count = 14
+        if len(opened_profiles) == 2:
+            repeat_count = 10
+        elif len(opened_profiles) == 1:
+            repeat_count = 25
         
         for i in range(repeat_count):
             self._build_video_interaction_chains() 
+            
     
+    def _warm_up_chain(self):
+        """
+        Build Warmup Chain: 
+        RANDOM 1 or 2
+        Flow 1:
+        1. Random enter keyword google or warm up link url to address bar -> Enter
+        2. Random click link on 3/4 center screen
+       
+        Flow 2:
+        1. Check current url is youtube or not -> navigate to youtube
+        RANDOM A or B
+            A:
+                1. Find search box -> enter google keyword -> Enter
+                2. Click random link video same 2-Flow 1
+            B:
+                1. Navigate to Youtube.com
+                2. Click random link video same 2-Flow 1 on Home
+        """
+        chain_warm_up_actions = []
+        
+        chain_warm_up_actions.append(
+            ("move_mouse", BrowseWebsiteAutoAction(
+                profile_id=self.profile_id,
+                parameters = self.parameters,
+                log_prefix=self.log_prefix,
+            ))
+        )
+        
+        chain_warm_up_actions.append(
+            ("move_mouse", YouTubeMouseMoveAutoAction(
+                profile_id=self.profile_id,
+                click=False,
+                log_prefix=self.log_prefix,
+            ))
+        )
+        self.chain_queue.append({
+            'name': 'warm_up_before_view_video',
+            'actions': chain_warm_up_actions
+        })
+        
+
     def _build_search_and_start_video_chain(self):
         """
         Build Chain 1: Search and start video
@@ -74,7 +121,7 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
 
         GlobalVariables().set('found_video_home', False)
         
-        if random.random() < 0.35:
+        if random.random() < 0.5:
             chain1_actions.append(
                 ("move_mouse", YouTubeMouseMoveAutoAction(
                     profile_id=self.profile_id,

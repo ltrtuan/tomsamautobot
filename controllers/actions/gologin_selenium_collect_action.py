@@ -12,6 +12,12 @@ from exceptions.gologin_exceptions import ProxyAssignmentFailed
 from helpers.gologin_profile_helper import GoLoginProfileHelper
 from helpers.selenium_registry import register_selenium_driver, unregister_selenium_driver
 
+# ========== IMPORT WEBSITE MANAGER ==========
+from helpers.website_manager import (
+    save_collected_url,
+    get_random_warmup_url
+)
+
 class GoLoginSeleniumCollectAction(BaseAction):
     """Handler for GoLogin Selenium Collect (Warm Up) action"""
     
@@ -46,6 +52,20 @@ class GoLoginSeleniumCollectAction(BaseAction):
             
             profile_list = result
             print(f"[GOLOGIN WARMUP] Total profiles to warm up: {len(profile_list)}")
+            
+             # ========== INITIALIZE WARMUP CACHE (ONCE PER ACTION) ==========
+            warmup_file = self.params.get("warmup_websites_file", "").strip()
+            if warmup_file:
+                print(f"[GOLOGIN WARMUP] Initializing warmup websites cache from: {warmup_file}")
+                # This call loads URLs into cache (thread-safe, happens once)
+                test_url = get_random_warmup_url(warmup_file)
+                if test_url:
+                    print(f"[GOLOGIN WARMUP] ✓ Warmup cache initialized (sample URL: {test_url[:50]}...)")
+                else:
+                    print(f"[GOLOGIN WARMUP] ⚠ Warmup cache empty (no URLs loaded)")
+            else:
+                print(f"[GOLOGIN WARMUP] No warmup file specified, will use keywords/default websites")
+            # ==================================================================
           
             
             # ========== CHECK MULTI-THREADING ==========
@@ -119,7 +139,6 @@ class GoLoginSeleniumCollectAction(BaseAction):
             if proxy_file and os.path.exists(proxy_file):
                 try:
                     print(f"[GOLOGIN WARMUP] [{profile_id}] Assigning proxy from file...")
-                    from helpers.gologin_profile_helper import GoLoginProfileHelper
                 
                     assign_success, message = GoLoginProfileHelper.assign_proxy_to_profile(
                         profile_id,
@@ -161,7 +180,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
             print(f"[GOLOGIN WARMUP] [{profile_id}] Starting profile...")
             if headless:
                 extra_params = [
-                    "--headless=new",
+                    "--headless=new",                   
                     "--mute-audio",
                     "--disable-background-networking",                   
                     "--enable-features=NetworkService",                 
@@ -228,14 +247,41 @@ class GoLoginSeleniumCollectAction(BaseAction):
             print(f"[GOLOGIN WARMUP] [{profile_id}] Checking browser tabs...")
             GoLoginProfileHelper.cleanup_browser_tabs(driver, "[GOLOGIN WARMUP]")
         
-            # Load websites list
-            websites = GoLoginProfileHelper.load_websites(self.params, "[GOLOGIN WARMUP]")
+            # ========== LOAD WEBSITES - RANDOM CHOICE BETWEEN KEYWORDS OR WARMUP ==========
+            warmup_file = self.params.get("warmup_websites_file", "").strip()
+
+            # Random choice: use keywords OR warmup (not mix)
+            if warmup_file and random.choice([True, False]):  # 50% chance to use warmup
+                # Option 1: Use warmup cache
+                print(f"[GOLOGIN WARMUP] [{profile_id}] 🎲 Randomly selected: WARMUP CACHE")
+                websites = []
+    
+                for _ in range(20):  # Get 20 URLs from cache
+                    url = get_random_warmup_url()
+                    if url:
+                        websites.append(url)
+    
+                if not websites:
+                    print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Warmup cache empty, falling back to keywords...")
+                    websites = GoLoginProfileHelper.load_websites(self.params, "[GOLOGIN WARMUP]")
+                else:
+                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Loaded {len(websites)} URLs from warmup cache")
+
+            else:
+                # Option 2: Use keywords/default websites
+                print(f"[GOLOGIN WARMUP] [{profile_id}] 🎲 Randomly selected: KEYWORDS/DEFAULT")
+                websites = GoLoginProfileHelper.load_websites(self.params, "[GOLOGIN WARMUP]")
+
             if not websites:
                 print(f"[GOLOGIN WARMUP] [{profile_id}] ✗ No websites to browse")
                 driver.quit()
                 time.sleep(5)
                 gologin.stop_profile(profile_id)
                 return False
+
+            print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Total websites for browsing: {len(websites)}")
+            # =========================================================================
+
         
             # Load keywords for search (optional)
             keywords = GoLoginProfileHelper.load_keywords(self.params, "[GOLOGIN WARMUP]")
@@ -553,113 +599,152 @@ class GoLoginSeleniumCollectAction(BaseAction):
         except Exception as e:
             print(f"[GOLOGIN WARMUP] Error searching: {e}")
             return False
+
+
         
     def _browse_websites(self, driver, websites, total_seconds, keywords=None, profile_id=""):
-        """Browse websites with human-like actions - IMPROVED VERSION"""
+        """
+        Browse websites with human-like actions - IMPROVED VERSION
+        - Detect bot challenges (Cloudflare, reCAPTCHA, etc.)
+        - Detect HTTP errors (404, 500, 403, etc.)
+        - Skip to next website on error
+        """
         try:
             from helpers.selenium_actions import SeleniumHumanActions
             from selenium.common.exceptions import TimeoutException
         
-            print(f"[GOLOGIN WARMUP] [{profile_id}] Starting browsing for {total_seconds}s...")
+            print(f"[GOLOGIN WARMUP {profile_id}] Starting browsing for {total_seconds}s...")
         
             human = SeleniumHumanActions(driver)
-            how_to_get_websites = self.params.get("how_to_get_websites", "Random")          
+            how_to_get_websites = self.params.get('how_to_get_websites', 'Random')
         
             start_time = time.time()
             visit_count = 0
             action_count = 0
             current_index = 0
             ssl_error_sites = set()
+            blocked_sites = set()  # ← NEW: Track blocked/error sites
         
             while True:
-                # Check driver validity
+                # ========== CHECK TIME LIMIT ==========
+                elapsed = time.time() - start_time
+                if elapsed > total_seconds:
+                    print(f"[GOLOGIN WARMUP {profile_id}] Browsing completed after {int(elapsed)}s")
+                    break
+            
+                # ========== CHECK DRIVER VALIDITY ==========
                 try:
                     driver.current_url
                 except Exception as session_err:
                     error_msg = str(session_err).lower()
                     if "invalid session" in error_msg or "session deleted" in error_msg:
-                        print(f"[GOLOGIN WARMUP] [{profile_id}] ✗ Driver session invalid, stopping browse")
+                        print(f"[GOLOGIN WARMUP {profile_id}] Driver session invalid, stopping browse")
                         break
             
-                # Check time limit
-                elapsed = time.time() - start_time
-                if elapsed >= total_seconds:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Browsing completed after {int(elapsed)}s")
-                    break
-            
-                # Select URL
-                if how_to_get_websites == "Sequential by loop":
+                # ========== SELECT NEXT WEBSITE ==========
+                if how_to_get_websites == "Sequential (by loop)":
                     url = websites[current_index % len(websites)]
                     current_index += 1
                 else:
                     url = random.choice(websites)
             
-                # Skip sites with previous SSL errors
-                if url in ssl_error_sites:
+                # ========== SKIP BLOCKED/ERROR SITES ==========
+                if url in ssl_error_sites or url in blocked_sites:
+                    print(f"[GOLOGIN WARMUP {profile_id}] Skipping previously failed site: {url}")
                     continue
             
                 # ========== NAVIGATE TO URL ==========
                 page_loaded_successfully = False
+            
                 try:
-                    print(f"[GOLOGIN WARMUP] [{profile_id}] [{visit_count+1}] Navigating to: {url}")
+                    print(f"[GOLOGIN WARMUP {profile_id}] ({visit_count+1}) Navigating to {url}")
                     driver.set_page_load_timeout(15)
                 
                     try:
                         driver.get(url)
                         time.sleep(1)
                     
-                        # Check for error page
+                        # ========== CHECK FOR CONNECTION ERRORS ==========
                         page_source = driver.page_source.lower()
                         current_url = driver.current_url
                     
-                        if "err_connection_timed_out" in page_source or \
-                           "this site can't be reached" in page_source or \
-                           "took too long to respond" in page_source or \
-                           "chrome-error://" in current_url:
-                            print(f"[GOLOGIN WARMUP] [{profile_id}] ✗ ERR_CONNECTION_TIMED_OUT: {url}")
+                        if ("err_connection_timed_out" in page_source or
+                            "this site can't be reached" in page_source or
+                            "took too long to respond" in page_source or
+                            "chrome-error" in current_url):
+                        
+                            print(f"[GOLOGIN WARMUP {profile_id}] ERR_CONNECTION_TIMED_OUT: {url}")
                             ssl_error_sites.add(url)
                             continue
                     
-                        print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Page loaded: {url}")
+                        print(f"[GOLOGIN WARMUP {profile_id}] Page loaded: {url}")
                         page_loaded_successfully = True
-                    
+                
                     except TimeoutException:
-                        print(f"[GOLOGIN WARMUP] [{profile_id}] ⚠ Page load timeout: {url}")
+                        print(f"[GOLOGIN WARMUP {profile_id}] Page load timeout: {url}")
+                    
+                        # Try to stop loading and check page
                         try:
-                            driver.execute_script("window.stop();")
+                            driver.execute_script("window.stop()")
                             time.sleep(0.5)
+                        
                             page_source = driver.page_source.lower()
                             current_url = driver.current_url
                         
-                            if "err_connection_timed_out" in page_source or \
-                               "this site can't be reached" in page_source or \
-                               "chrome-error://" in current_url:
-                                print(f"[GOLOGIN WARMUP] [{profile_id}] ✗ Connection error after timeout: {url}")
+                            if ("err_connection_timed_out" in page_source or
+                                "this site can't be reached" in page_source or
+                                "chrome-error" in current_url):
+                            
+                                print(f"[GOLOGIN WARMUP {profile_id}] Connection error after timeout: {url}")
                                 ssl_error_sites.add(url)
                                 continue
                         
-                            if current_url and current_url not in ["data:,", "about:blank"]:
-                                print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Page partially loaded, continuing...")
+                            if current_url and current_url not in ("data:,", "about:blank"):
+                                print(f"[GOLOGIN WARMUP {profile_id}] Page partially loaded, continuing...")
+                            
+                                # Scroll to trigger content load
+                                try:
+                                    driver.execute_script("window.scrollBy(0, 200)")
+                                    time.sleep(0.5)
+                                except:
+                                    pass
+                            
                                 page_loaded_successfully = True
+                            else:
+                                continue
+                    
                         except Exception as stop_err:
                             pass
-                    
-                        if not page_loaded_successfully:
-                            ssl_error_sites.add(url)
-                            print(f"[GOLOGIN WARMUP] [{profile_id}] → Skipping to next website...")
-                            time.sleep(1)
-                            continue
-                        
+            
                 except Exception as nav_err:
                     error_msg = str(nav_err).lower()
-                    if any(kw in error_msg for kw in ['ssl', 'certificate', 'connection', 'net::err_']):
-                        print(f"[GOLOGIN WARMUP] [{profile_id}] ✗ Connection error: {url}")
+                
+                    # SSL/Connection errors
+                    if any(kw in error_msg for kw in ["ssl", "certificate", "connection", "net::err"]):
+                        print(f"[GOLOGIN WARMUP {profile_id}] Connection error: {url}")
                         ssl_error_sites.add(url)
-                        print(f"[GOLOGIN WARMUP] [{profile_id}] → Skipping to next website...")
+                        print(f"[GOLOGIN WARMUP {profile_id}] Skipping to next website...")
                         time.sleep(1)
                         continue
             
-                # Page loaded successfully
+                # ========== SKIP IF PAGE FAILED TO LOAD ==========
+                if not page_loaded_successfully:
+                    ssl_error_sites.add(url)
+                    print(f"[GOLOGIN WARMUP {profile_id}] Skipping to next website...")
+                    time.sleep(1)
+                    continue
+            
+                # ========== DETECT BOT CHALLENGES & HTTP ERRORS ==========
+                is_blocked, block_reason = self._detect_page_issues(driver, url, profile_id)
+            
+                if is_blocked:
+                    print(f"[GOLOGIN WARMUP {profile_id}] ⚠️ Site blocked/error: {block_reason}")
+                    blocked_sites.add(url)
+                    print(f"[GOLOGIN WARMUP {profile_id}] Skipping to next website...")
+                    time.sleep(2)
+                    continue
+            
+                # ========== PAGE IS OK - PROCEED WITH NORMAL BROWSING ==========
                 visit_count += 1
                 time.sleep(random.uniform(3, 5))
             
@@ -689,7 +774,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
                         human.click_random_element()
                     except:
                         pass
-            
+                    
                 # Random human-like actions
                 actions_on_page = random.randint(1, 3)
                 for _ in range(actions_on_page):
@@ -714,14 +799,200 @@ class GoLoginSeleniumCollectAction(BaseAction):
             
                 if time.time() - start_time >= total_seconds:
                     break
+
         
-            print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Visited {visit_count} pages, performed {action_count} actions")
-            print(f"[GOLOGIN WARMUP] [{profile_id}] SSL error sites: {len(ssl_error_sites)}")
-        
+            print(f"[GOLOGIN WARMUP {profile_id}] Visited {visit_count} pages, performed {action_count} actions")
+            print(f"[GOLOGIN WARMUP {profile_id}] SSL error sites: {len(ssl_error_sites)}")
+            print(f"[GOLOGIN WARMUP {profile_id}] Blocked sites: {len(blocked_sites)}")
+    
         except Exception as e:
-            print(f"[GOLOGIN WARMUP] [{profile_id}] Error during browsing: {e}")
+            print(f"[GOLOGIN WARMUP {profile_id}] Error during browsing: {e}")
             import traceback
             traceback.print_exc()
+            
+    def _capture_page_screenshot(self, driver, url, collect_file_path, profile_id=""):
+        """
+        Capture screenshot of current page (600x400) before page validation
+    
+        Features:
+            - Saves to same directory as collect_file
+            - Max 50 screenshots
+            - Filename format: screenshot_001.png, screenshot_002.png, etc.
+            - Works in headless mode
+            - Resizes window to 600x400 for consistent size
+    
+        Args:
+            driver: Selenium WebDriver instance
+            url (str): Current URL being visited
+            collect_file_path (str): Path to collect file (for determining save directory)
+            profile_id (str): Profile ID for logging
+    
+        Returns:
+            bool: True if screenshot saved, False otherwise
+        """
+        try:
+            # Validate collect file path
+            if not collect_file_path or not collect_file_path.strip():
+                return False
+        
+            from pathlib import Path
+        
+            # Get directory of collect file
+            collect_file = Path(collect_file_path)
+            screenshots_dir = collect_file.parent / "screenshots"
+        
+            # Create screenshots directory (with parent dirs if needed)
+            screenshots_dir.mkdir(parents=True, exist_ok=True)
+        
+            # ========== CHECK SCREENSHOT COUNT ==========
+            existing_screenshots = list(screenshots_dir.glob("screenshot_*.png"))
+            screenshot_count = len(existing_screenshots)
+        
+            if screenshot_count >= 100:
+                # Already have 50 screenshots, don't save more
+                return False
+        
+            # ========== GENERATE FILENAME ==========
+            # Find next available number
+            next_number = screenshot_count + 1
+            screenshot_filename = f"screenshot_{next_number:03d}.png"
+            screenshot_path = screenshots_dir / screenshot_filename
+        
+            # ========== RESIZE WINDOW TO 600x400 ==========
+            original_size = driver.get_window_size()  # Save original size
+            driver.set_window_size(600, 400)
+            time.sleep(0.5)  # Wait for resize to complete
+        
+            # ========== CAPTURE SCREENSHOT ==========
+            driver.save_screenshot(str(screenshot_path))
+        
+            # ========== RESTORE ORIGINAL WINDOW SIZE ==========
+            driver.set_window_size(original_size['width'], original_size['height'])
+        
+            print(f"[GOLOGIN WARMUP {profile_id}] 📸 Screenshot saved ({next_number}/50): {screenshot_filename}")
+        
+            return True
+    
+        except Exception as e:
+            print(f"[GOLOGIN WARMUP {profile_id}] ⚠ Failed to capture screenshot: {e}")
+        
+            # Try to restore window size on error
+            try:
+                if 'original_size' in locals():
+                    driver.set_window_size(original_size['width'], original_size['height'])
+            except:
+                pass
+        
+            return False
+
+
+
+    def _detect_page_issues(self, driver, url, profile_id=""):
+        """
+        Detect bot challenges, HTTP errors, and blocked pages
+        Uses STRICT context-based detection to avoid false positives
+    
+        Returns:
+            tuple: (is_blocked: bool, reason: str)
+        """
+        try:
+            page_source = driver.page_source.lower()
+            page_title = driver.title.lower()
+            current_url = driver.current_url.lower()          
+            # ========== HTTP ERRORS (ALWAYS STRICT) ==========
+            # These are reliable - based on page title
+        
+            # HTTP 404
+            if "404" in page_title and ("not found" in page_title or "error" in page_title):
+                print(f"[GOLOGIN WARMUP {profile_id}] ❌ 404 Not Found: {url}")
+                return True, "HTTP 404 Not Found"
+        
+            # HTTP 500
+            if "500" in page_title and "error" in page_title:
+                print(f"[GOLOGIN WARMUP {profile_id}] ❌ 500 Server Error: {url}")
+                return True, "HTTP 500 Internal Server Error"
+        
+            # HTTP 503
+            if "503" in page_title and "unavailable" in page_title:
+                print(f"[GOLOGIN WARMUP {profile_id}] ❌ 503 Service Unavailable: {url}")
+                return True, "HTTP 503 Service Unavailable"
+        
+            # Empty page
+            if len(page_source.strip()) < 100:
+                print(f"[GOLOGIN WARMUP {profile_id}] ⚪ Empty Page: {url}")
+                return True, "Empty Page"
+            
+            # ========== SSL/CERTIFICATE ERROR ==========
+            # "Your connection is not private" error page
+            ssl_error_indicators = [
+                # Chrome error page
+                ("your connection is not private" in page_source),
+                ("your connection is not secure" in page_source),
+                # SSL error codes
+                ("net::err_cert_" in page_source),  # Chrome SSL errors
+                ("ssl_error_" in page_source),      # Firefox SSL errors
+                # Certificate error phrases
+                ("this site can't provide a secure connection" in page_source),
+                ("certificate error" in page_source and "continue" in page_source),
+                # Check title + URL pattern
+                ("privacy error" in page_title and "chrome-error:" not in current_url),
+            ]
+        
+            if any(ssl_error_indicators):
+                print(f"[GOLOGIN WARMUP {profile_id}] 🔒 SSL Certificate Error: {url}")
+                return True, "SSL Certificate Error"
+        
+        
+            # ========== CLOUDFLARE DETECTION (STRICTER) ==========
+            # Must have MULTIPLE indicators, not just "cloudflare" keyword
+        
+            cloudflare_strict_indicators = [
+                ("checking your browser" in page_source and "cloudflare" in page_source),
+                ("just a moment" in page_title and "cloudflare" in page_source),
+                ("ray id" in page_source and "performance & security by cloudflare" in page_source),
+                ("<title>just a moment...</title>" in page_source),
+            ]
+        
+            if any(cloudflare_strict_indicators):
+                print(f"[GOLOGIN WARMUP {profile_id}] 🛡️ Cloudflare challenge detected: {url}")
+                return True, "Cloudflare Challenge"
+        
+            # ========== ACCESS DENIED (STRICTER) ==========
+            # Must have clear denial message, not just keyword
+        
+            access_denied_strict = [
+                ("access denied" in page_title or "403 forbidden" in page_title),
+                ("your ip has been blocked" in page_source and len(page_source) < 5000),  # Short page = block page
+                ("you have been blocked" in page_source and "cloudflare" in page_source),
+            ]
+        
+            if any(access_denied_strict):
+                print(f"[GOLOGIN WARMUP {profile_id}] 🚫 Access Denied/IP Blocked: {url}")
+                return True, "Access Denied / IP Blocked"
+        
+            # ========== RATE LIMITING (STRICTER) ==========
+            rate_limit_strict = [
+                ("429" in page_title and "too many requests" in page_source),
+                ("rate limit exceeded" in page_source and len(page_source) < 3000),
+            ]
+        
+            if any(rate_limit_strict):
+                print(f"[GOLOGIN WARMUP {profile_id}] ⏱️ Rate Limited: {url}")
+                return True, "Rate Limited"        
+           
+        
+            # ========== REDIRECT TO ERROR PAGE ==========
+            if any(err in current_url for err in ["/error", "/404", "/blocked", "/denied"]):
+                print(f"[GOLOGIN WARMUP {profile_id}] 🔄 Redirected to error page: {current_url}")
+                return True, "Redirected to Error Page"
+        
+            # ========== NO ISSUES ==========
+            return False, ""
+    
+        except Exception as e:
+            print(f"[GOLOGIN WARMUP {profile_id}] Error detecting page issues: {e}")
+            return False, ""
+
             
 
     def _perform_deeper_clicks(self, driver, human, start_time, total_seconds, profile_id=""):
@@ -767,6 +1038,8 @@ class GoLoginSeleniumCollectAction(BaseAction):
                             print(f"[GOLOGIN WARMUP] [{profile_id}] ✓ Deeper click {click_index+1}/{num_deeper_clicks} successful (retry {retry+1}/{max_retries})")
                             successful_clicks += 1
                             time.sleep(random.uniform(2, 4))
+                            
+                            
                         
                             # Check if new tab opened
                             tabs_after = len(driver.window_handles)
@@ -775,6 +1048,30 @@ class GoLoginSeleniumCollectAction(BaseAction):
                                 driver.switch_to.window(new_tab)
                                 print(f"[GOLOGIN WARMUP] [{profile_id}] → Switched to new tab")
                                 time.sleep(random.uniform(3.0, 5.0))
+                                
+                                # ========== VALIDATE & SAVE DEEPER URL (NEW TAB) ==========
+                                collect_file = self.params.get("collect_websites_file", "").strip()
+                                if collect_file:
+                                    try:
+                                        deeper_url = driver.current_url
+            
+                                        # Basic URL validation
+                                        if not deeper_url or deeper_url in ("data:,", "about:blank") or "chrome-error://" in deeper_url:
+                                            print(f"[GOLOGIN WARMUP {profile_id}] ⚠ Skipped invalid URL: {deeper_url[:60] if deeper_url else 'None'}")
+                                        else:                                          
+                                            # =========================================================
+                                            # Check if page loaded successfully (no bot challenges/errors)
+                                            is_blocked, block_reason = self._detect_page_issues(driver, deeper_url, profile_id)
+                
+                                            if is_blocked:
+                                                print(f"[GOLOGIN WARMUP {profile_id}] ⚠ Page has issues ({block_reason}), not saving")
+                                            else:
+                                                # Page is OK - save URL
+                                                save_collected_url(deeper_url, collect_file)
+                                                print(f"[GOLOGIN WARMUP {profile_id}] ✓ Saved deeper URL (new tab): {deeper_url[:70]}...")
+                                    except Exception as save_err:
+                                        print(f"[GOLOGIN WARMUP {profile_id}] ⚠ Failed to save deeper URL: {save_err}")
+                                # =========================================================
                             
                                 # Actions on new page
                                 deeper_actions = random.randint(1, 3)
@@ -804,7 +1101,30 @@ class GoLoginSeleniumCollectAction(BaseAction):
                                         pass
                             else:
                                 print(f"[GOLOGIN WARMUP] [{profile_id}] Link opened in same tab (no new tab)")
-                        
+                                # ========== VALIDATE & SAVE DEEPER URL (SAME TAB) ==========
+                                collect_file = self.params.get("collect_websites_file", "").strip()
+                                if collect_file:
+                                    try:
+                                        deeper_url = driver.current_url
+            
+                                        # Basic URL validation
+                                        if not deeper_url or deeper_url in ("data:,", "about:blank") or "chrome-error://" in deeper_url:
+                                            print(f"[GOLOGIN WARMUP {profile_id}] ⚠ Skipped invalid URL: {deeper_url[:60] if deeper_url else 'None'}")
+                                        else:                                           
+                                            # =========================================================
+                                            # Check if page loaded successfully
+                                            is_blocked, block_reason = self._detect_page_issues(driver, deeper_url, profile_id)
+                
+                                            if is_blocked:
+                                                print(f"[GOLOGIN WARMUP {profile_id}] ⚠ Page has issues ({block_reason}), not saving")
+                                            else:
+                                                # Page is OK - save URL
+                                                save_collected_url(deeper_url, collect_file)
+                                                print(f"[GOLOGIN WARMUP {profile_id}] ✓ Saved deeper URL (same tab): {deeper_url[:70]}...")
+                                    except Exception as save_err:
+                                        print(f"[GOLOGIN WARMUP {profile_id}] ⚠ Failed to save deeper URL: {save_err}")
+                                # =========================================================
+                            clicked = True
                             break  # Success, exit retry loop
                         else:
                             print(f"[GOLOGIN WARMUP] [{profile_id}] ✗ Click failed on retry {retry+1}/{max_retries}")

@@ -201,34 +201,37 @@ class BaseYouTubeFlowAutoIterator:
     
         try:
             # Bring profile to front before executing chain
-            GoLoginProfileHelper.bring_profile_to_front(self.profile_id, driver=None)
-            time.sleep(1)
+            result_bring = GoLoginProfileHelper.bring_profile_to_front(self.profile_id, driver=None)
+            if result_bring:
+                time.sleep(1)
         
-            # ========== EXECUTE ALL ACTIONS IN CHAIN ==========
-            for action_name, action_obj in chain_actions:
-                # Check if this is a delay tuple
-                if action_name == "delay":
-                    delay_seconds = action_obj  # action_obj is actually the delay value
-                    self.log(f" → Delay: {delay_seconds:.1f} seconds")
-                    time.sleep(delay_seconds)
-                    continue  # Skip to next action
+                # ========== EXECUTE ALL ACTIONS IN CHAIN ==========
+                for action_name, action_obj in chain_actions:
+                    # Check if this is a delay tuple
+                    if action_name == "delay":
+                        delay_seconds = action_obj  # action_obj is actually the delay value
+                        self.log(f" → Delay: {delay_seconds:.1f} seconds")
+                        time.sleep(delay_seconds)
+                        continue  # Skip to next action
     
-                # Normal action execution
-                self.log(f" → Action: {action_name}")
-                if action_obj:
-                    success = action_obj.execute()
-                    if not success:
-                        self.log(f" ✗ Action '{action_name}' failed", "WARNING")
-                    else:
-                        self.log(f" ✓ Action '{action_name}' completed")
+                    # Normal action execution
+                    self.log(f" → Action: {action_name}")
+                    if action_obj:
+                        success = action_obj.execute()
+                        if not success:
+                            self.log(f" ✗ Action '{action_name}' failed", "WARNING")
+                        else:
+                            self.log(f" ✓ Action '{action_name}' completed")
 
         
-            self.log(f"✓ Chain '{chain_name}' completed")
+                self.log(f"✓ Chain '{chain_name}' completed")
         
-            # Move to next chain
-            self.current_chain_index += 1
+                # Move to next chain
+                self.current_chain_index += 1
         
-            return True
+                return True
+            
+            return False
         
         except Exception as e:
             self.log(f"✗ Exception in chain '{chain_name}': {e}", "ERROR")

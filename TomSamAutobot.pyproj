@@ -34,6 +34,7 @@
     <Compile Include="controllers\actions\end_for_action.py" />
     <Compile Include="controllers\actions\end_if_condition_action.py" />
     <Compile Include="controllers\actions\flow_auto\actions_auto\base_flow_auto_action.py" />
+    <Compile Include="controllers\actions\flow_auto\actions_auto\google_navigate_auto_action.py" />
     <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_find_click_video_auto_action.py" />
     <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_fullscreen_auto_action.py" />
     <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_mouse_move_auto_action.py" />
@@ -83,6 +84,7 @@
     <Compile Include="exceptions\__init__.py" />
     <Compile Include="helpers\actions\base_flow_action.py" />
     <Compile Include="helpers\actions\base_youtube_action.py" />
+    <Compile Include="controllers\actions\flow_auto\actions_auto\browse_website_auto_action.py" />
     <Compile Include="helpers\actions\google_navigate_action.py" />
     <Compile Include="helpers\actions\youtube_click_ad_action.py" />
     <Compile Include="helpers\actions\youtube_click_video_action.py" />
@@ -105,6 +107,7 @@
     <Compile Include="helpers\profile_health_monitor.py" />
     <Compile Include="helpers\selenium_actions.py" />
     <Compile Include="helpers\selenium_registry.py" />
+    <Compile Include="helpers\website_manager.py" />
     <Compile Include="login_window.py" />
     <Compile Include="main.py" />
     <Compile Include="models\action_model.py" />

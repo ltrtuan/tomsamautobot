@@ -8,6 +8,7 @@ from controllers.actions.flow_auto.actions_auto.youtube_mouse_move_auto_action i
 from controllers.actions.flow_auto.actions_auto.youtube_random_move_scroll_auto_action import YouTubeRandomMoveScrollAutoAction
 from controllers.actions.flow_auto.actions_auto.base_flow_auto_action import BaseFlowAutoAction
 from controllers.actions.mouse_move_action import MouseMoveAction
+from helpers.app_helpers import is_hand_cursor
 
 class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
     """
@@ -112,7 +113,7 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
         time.sleep(0.2)  # Wait for cursor to update
         
         # Check if cursor = hand
-        is_hand = self._is_hand_cursor()
+        is_hand = is_hand_cursor()
         
         if is_hand:
             self.log("✓ Cursor = HAND (ads clickable)")
@@ -187,7 +188,7 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
             
             time.sleep(0.2)
                 
-            if self._is_hand_cursor():
+            if is_hand_cursor():
                 click_delay = random.uniform(0.5, 1)
                 time.sleep(click_delay)
                 pyautogui.click()

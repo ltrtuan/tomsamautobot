@@ -7,7 +7,7 @@ from helpers.gologin_profile_helper import GoLoginProfileHelper
 from controllers.actions.flow_auto.actions_auto.base_flow_auto_action import BaseFlowAutoAction
 import pyperclip
 
-class YouTubeNavigateAutoAction(BaseFlowAutoAction):
+class GoogleNavigateAutoAction(BaseFlowAutoAction):
     """Navigate to YouTube using Ctrl+L keyboard shortcut"""
     
     def __init__(self, profile_id, log_prefix="[YOUTUBE AUTO]"):
@@ -17,7 +17,7 @@ class YouTubeNavigateAutoAction(BaseFlowAutoAction):
     def _execute_internal(self):
         """Execute navigate action"""
         try:
-            self.log("Navigating to YouTube")
+            self.log("Navigating to Google")
             
             # Bring to front
             result_bring = GoLoginProfileHelper.bring_profile_to_front(self.profile_id, driver=None)
