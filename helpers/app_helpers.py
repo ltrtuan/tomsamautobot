@@ -134,12 +134,12 @@ def check_and_focus_window_by_title(window_title_filter):
         # Bring to foreground
         print(f"[APP HELPER] Bringing to front...")
         win32gui.SetForegroundWindow(target_hwnd)
-        time.sleep(0.2)
+        time.sleep(0.5)
         
         # Check if maximized
         placement = win32gui.GetWindowPlacement(target_hwnd)
         is_maximized = (placement[1] == win32con.SW_SHOWMAXIMIZED)
-        
+        time.sleep(0.5)
         if not is_maximized:
             print(f"[APP HELPER] Not maximized, maximizing...")
             win32gui.ShowWindow(target_hwnd, win32con.SW_MAXIMIZE)
@@ -208,7 +208,7 @@ def perform_random_movements_with_click_detection(max_attempts=5, type_action=No
             max_x = int(screen_width * 0.875)   # 12.5% from right (87.5% from left)
         # Vertical: 300px from top, 100px from bottom
         min_y = 300
-        max_y = screen_height - 100
+        max_y = screen_height - 200
      
        
         # ========== RETRY ATTEMPTS ==========

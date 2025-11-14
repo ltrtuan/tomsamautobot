@@ -26,9 +26,9 @@ class YouTubeRandomMoveScrollAutoAction(BaseFlowAutoAction):
                 # Move to right edge, random Y (avoid top/bottom 100px)
                 safe_x = screen_width - 18  # 10px từ mép phải
                 safe_y = random.randint(100, screen_height - 100)  # Random từ 100px đến (height-100)px
-
-                MouseMoveAction.move_and_click_static(safe_x, safe_y, "single_click", fast=False)
-                self.log(f"Moved mouse to safe area ({safe_x}, {safe_y}) before scroll", "INFO")
+                if i == 1:
+                    MouseMoveAction.move_and_click_static(safe_x, safe_y, "single_click", fast=False)
+                    self.log(f"Moved mouse to safe area ({safe_x}, {safe_y}) before scroll", "INFO")
                 time.sleep(0.3)  # Let UI settle
                 if self.area == "main":
                     scroll_amount = random.randint(-1100, -800)  # Scroll down

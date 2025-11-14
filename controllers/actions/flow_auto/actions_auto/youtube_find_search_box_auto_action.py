@@ -35,6 +35,7 @@ class YouTubeFindSearchBoxAutoAction(BaseFlowAutoAction):
     
     def _execute_internal(self):
         """Execute find search box → click → type keyword → enter"""
+        self._close_extra_tabs_keep_first()
         try:
             # ========== STEP 1: GENERATE KEYWORD ==========
             # Build minimal dict for _generate_keyword()
@@ -51,7 +52,7 @@ class YouTubeFindSearchBoxAutoAction(BaseFlowAutoAction):
                 if keywords_google_file and os.path.exists(keywords_google_file):                    
                     try:                    
                         with open(keywords_google_file, 'r', encoding='utf-8') as f:
-                            keywords = [line.strip() for line in f if line.strip()]
+                            keywords = [line.strip() for line in f if line.strip() and not line.startswith('#')]
                     except Exception as e:
                         logger.error(f"[MIXED KEYWORDS] Failed to read keywords Google file: {e}")
                      
@@ -135,13 +136,17 @@ class YouTubeFindSearchBoxAutoAction(BaseFlowAutoAction):
             # Click search box
             MouseMoveAction.move_and_click_static(click_x, click_y, click_type="single_click", fast=False)
             self._random_short_pause()
-        
+            # Ctrl+L to focus address bar
+            pyautogui.hotkey('ctrl', 'a')
+            time.sleep(0.3)
+            if random.random() < 0.5:
+                pyautogui.press('backspace')
             # ========== STEP 4: TYPE KEYWORD WITH MISTAKES ==========
             self.log(f"Typing keyword: '{keyword}'")
         
             # 40% chance to make mistakes while typing (more realistic)
-            if random.random() < 0.4:
-                self._type_with_mistakes(keyword, mistake_rate=0.05)
+            if random.random() < 0.35:
+                self._type_with_mistakes(keyword, mistake_rate=0.1)
             else:
                 self._type_human_like(keyword)
         

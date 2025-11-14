@@ -38,8 +38,6 @@ class YouTubeFlowAutoBrowseIterator(BaseYouTubeFlowAutoIterator):
         self._interaction_website_chains()
         self._warm_up_chain()
         self._interaction_website_chains()
-        self._warm_up_chain()
-        self._interaction_website_chains()
         # ========== CHAIN 1: SEARCH AND START VIDEO (BẮT BUỘC) ==========
         # self._build_search_and_start_video_chain()
         

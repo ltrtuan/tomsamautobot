@@ -71,7 +71,8 @@ class GoLoginAutoAction(BaseAction):
         
             if enable_threading and len(profile_list) > 1:
                 # PARALLEL MODE (original, but pass proxy args)
-                logger.info("[GOLOGIN START] ========== PARALLEL MODE ==========")
+                logger.info("[GOLOGIN START] ========== PARALLEL MODE ==========")               
+            
                 self._start_parallel(profile_list)
                 self.set_variable(True)  # Assume success if no raise
             else:
@@ -404,6 +405,16 @@ class GoLoginAutoAction(BaseAction):
         print(f"[PARALLEL MODE] Action type: {action_type}")
         print("=" * 80)
 
+        # ========== RANDOMIZE PROFILE LIST IF NEEDED ==========
+        how_to_get = self.params.get("how_to_get", "Random")
+    
+        if how_to_get == "Random":
+            print(f"[GOLOGIN WARMUP] how_to_get = Random → Creating randomized list")
+            profile_list = GoLoginProfileHelper.create_randomized_profile_list(
+                original_profile_list=profile_list,
+                max_workers=max_parallel_profiles,
+                log_prefix="[GOLOGIN WARMUP]"
+            )
         # Divide profiles into batches
         batches = []
         for i in range(0, len(profile_list), max_parallel_profiles):
@@ -754,8 +765,9 @@ class GoLoginAutoAction(BaseAction):
         # ========== BUILD AVAILABLE SOURCES ==========
         sources = []
     
-        if keywords_google_file and os.path.exists(keywords_google_file):
-            sources.append("keywords_google")
+        # TEMPORARY DISABLEDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDĐ
+        # if keywords_google_file and os.path.exists(keywords_google_file):
+        #     sources.append("keywords_google")
     
         if warmup_websites_file and os.path.exists(warmup_websites_file):
             sources.append("warmup_websites")
@@ -777,7 +789,7 @@ class GoLoginAutoAction(BaseAction):
             # Read keywords file
             try:
                 with open(keywords_google_file, 'r', encoding='utf-8') as f:
-                    keywords = [line.strip() for line in f if line.strip()]
+                    keywords = [line.strip() for line in f if line.strip() and not line.startswith('#')]
             
                 if keywords:
                     result_list = keywords
@@ -793,7 +805,7 @@ class GoLoginAutoAction(BaseAction):
             # Read warmup file
             try:
                 with open(warmup_websites_file, 'r', encoding='utf-8') as f:
-                    urls = [line.strip() for line in f if line.strip()]
+                    urls = [line.strip() for line in f if line.strip() and not line.startswith('#')]
             
                 if urls:
                     result_list = urls

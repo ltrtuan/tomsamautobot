@@ -106,11 +106,11 @@ class BrowseWebsiteAutoAction(BaseFlowAutoAction):
             time.sleep(page_load_wait)
         
             # ========== STEP 5: RANDOM MOUSE MOVEMENTS WITH CLICK DETECTION ==========
-            self.log("Starting random mouse movements (5 attempts)")
+            self.log("Starting random mouse movements (3 attempts)")
         
             # Use helper function from app_helpers
             clicked, position = perform_random_movements_with_click_detection(
-                max_attempts=5,
+                max_attempts=2,
                 type_action=self.parameters.get('keyword_type')
             )
         
@@ -143,7 +143,7 @@ class BrowseWebsiteAutoAction(BaseFlowAutoAction):
         # ========== STEP 1: BRING BROWSER TO FRONT ==========
         result_bring = GoLoginProfileHelper.bring_profile_to_front(self.profile_id, driver=None)
         if result_bring:
-            time.sleep(0.5)
+            time.sleep(1)
     
             # ========== STEP 2: GET CURRENT URL ==========
             current_url = self._get_current_url()

@@ -119,6 +119,69 @@ class GoLoginProfileHelper:
         return profile_list
     
     @staticmethod
+    def create_randomized_profile_list(original_profile_list, max_workers, log_prefix="[GOLOGIN]"):
+        """
+        Create randomized profile list with no duplicates within max_workers * 2 window
+    
+        Args:
+            original_profile_list: List of profile IDs (length N)
+            max_workers: Number of parallel workers
+            log_prefix: Prefix for log messages
+    
+        Returns:
+            list: New randomized profile list (same length as original)
+        
+        Example:
+            original_profile_list = [1,2,3,...,50] (length=50)
+            max_workers = 3
+            window_size = 3 * 2 = 6
+        
+            Result: [3, 15, 42, 8, 29, 11, 7, ...]
+            - Index 0: profile_id = 3
+            - Index 1-5 (window): Cannot contain profile_id = 3
+            - Index 6+: Can contain profile_id = 3 again
+        """
+        import random
+    
+        list_length = len(original_profile_list)
+        window_size = max_workers * 2
+    
+        print(f"{log_prefix} Creating randomized profile list...")
+        print(f"{log_prefix} - Original list length: {list_length}")
+        print(f"{log_prefix} - Window size (max_workers * 2): {window_size}")
+    
+        new_profile_list = []
+    
+        for i in range(list_length):
+            # Get list of recently used profile IDs (within window)
+            start_window = max(0, i - window_size + 1)  # Window start index
+            recent_profiles = set(new_profile_list[start_window:i])  # Profile IDs in window
+        
+            # Get available profiles (not in recent window)
+            available_profiles = [p for p in original_profile_list if p not in recent_profiles]
+        
+            # If no available profiles (rare case when window > unique profiles)
+            # Fall back to full list
+            if not available_profiles:
+                print(f"{log_prefix} Warning: No available profiles at index {i}, using full list")
+                available_profiles = original_profile_list
+        
+            # Random choice from available profiles
+            selected_profile = random.choice(available_profiles)
+            new_profile_list.append(selected_profile)
+    
+        # Log statistics
+        unique_count = len(set(new_profile_list))
+        print(f"{log_prefix} ✓ Randomized list created:")
+        print(f"{log_prefix}   - Total items: {len(new_profile_list)}")
+        print(f"{log_prefix}   - Unique profiles used: {unique_count}")
+        print(f"{log_prefix}   - Duplicates: {len(new_profile_list) - unique_count}")
+    
+        return new_profile_list
+
+
+    
+    @staticmethod
     def select_profile(profile_list, how_to_get):
         """Select profile based on method"""
         if how_to_get == "Sequential by loop":

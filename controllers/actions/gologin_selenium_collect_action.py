@@ -367,8 +367,22 @@ class GoLoginSeleniumCollectAction(BaseAction):
             max_workers = int(max_workers_str)
         except:
             max_workers = 2
-    
         max_workers = min(max_workers, len(profile_list))
+
+        # ========== RANDOMIZE PROFILE LIST IF NEEDED ==========
+        how_to_get = self.params.get("how_to_get", "Random")
+    
+        if how_to_get == "Random":
+            print(f"[GOLOGIN WARMUP] how_to_get = Random → Creating randomized list")
+            profile_list = GoLoginProfileHelper.create_randomized_profile_list(
+                original_profile_list=profile_list,
+                max_workers=max_workers,
+                log_prefix="[GOLOGIN WARMUP]"
+            )
+        else:
+            print(f"[GOLOGIN WARMUP] how_to_get = {how_to_get} → Using original list order")    
+    
+       
         print(f"[GOLOGIN WARMUP] Warming up {len(profile_list)} profiles with {max_workers} parallel threads")
     
         # Calculate timeout per profile
@@ -530,75 +544,49 @@ class GoLoginSeleniumCollectAction(BaseAction):
     
     
     
-    def _search_on_site(self, driver, url, keywords):
+    def _search_on_site(self, driver, keywords):
         """Perform search if on Google or YouTube"""
         try:
-            from selenium.webdriver.common.by import By
+            from selenium.webdriver.common.action_chains import ActionChains
             from selenium.webdriver.common.keys import Keys
-            from urllib.parse import urlparse
-            
+            import platform
+    
             if not keywords:
-                return False
-            
-            parsed = urlparse(url)
-            domain = parsed.netloc.lower()
-            
-            # Check if Google or YouTube
-            is_google = 'google.com' in domain or 'google' in domain
-            is_youtube = 'youtube.com' in domain or 'youtu.be' in domain
-            
-            if not (is_google or is_youtube):
-                return False
-            
+                return False           
+    
             # Random pick keyword
             keyword = random.choice(keywords)
             print(f"[GOLOGIN WARMUP] Searching for: '{keyword}'")
-            
-            # Find search box
-            search_box = None
-            if is_google:
-                selectors = ['textarea[name="q"]', 'input[name="q"]', 'input[title="Search"]']
-                for selector in selectors:
-                    try:
-                        search_box = driver.find_element(By.CSS_SELECTOR, selector)
-                        if search_box:
-                            break
-                    except:
-                        continue
-            elif is_youtube:
-                selectors = ['input#search', 'input[name="search_query"]', 'input[placeholder*="Search"]']
-                for selector in selectors:
-                    try:
-                        search_box = driver.find_element(By.CSS_SELECTOR, selector)
-                        if search_box:
-                            break
-                    except:
-                        continue
-            
-            if not search_box:
-                print(f"[GOLOGIN WARMUP] ⚠ Search box not found")
-                return False
-            
-            # Clear and type keyword
-            search_box.clear()
-            time.sleep(random.uniform(0.5, 1))
-            
-            # Type with human-like delay
-            for char in keyword:
-                search_box.send_keys(char)
-                time.sleep(random.uniform(0.05, 0.15))
-            
-            time.sleep(random.uniform(0.5, 1))
-            search_box.send_keys(Keys.RETURN)
-            print(f"[GOLOGIN WARMUP] ✓ Search submitted")
-            
-            # Wait for results
-            time.sleep(random.uniform(2, 4))
+    
+            # Detect OS for correct modifier key (Ctrl for Windows/Linux, Command for Mac)
+            cmd_ctrl = Keys.COMMAND if platform.system() == 'Darwin' else Keys.CONTROL
+    
+            # Use Selenium Actions to interact directly with the browser
+            actions = ActionChains(driver)
+    
+            # Focus address bar (Ctrl+L or Cmd+L)
+            actions.key_down(cmd_ctrl).send_keys('l').key_up(cmd_ctrl).perform()
+            time.sleep(0.3)
+    
+            # Type keyword directly using Selenium (no clipboard needed)
+            actions.send_keys(keyword).perform()
+    
+            # Wait before Enter
+            wait_before_enter = random.uniform(1, 2)
+            time.sleep(wait_before_enter)
+    
+            # Press Enter
+            actions.send_keys(Keys.ENTER).perform()
+    
+            # Wait for page load
+            page_load_wait = random.uniform(3, 5)          
+            time.sleep(page_load_wait)
             return True
-        
+
         except Exception as e:
             print(f"[GOLOGIN WARMUP] Error searching: {e}")
             return False
+
 
 
         
@@ -617,7 +605,8 @@ class GoLoginSeleniumCollectAction(BaseAction):
         
             human = SeleniumHumanActions(driver)
             how_to_get_websites = self.params.get('how_to_get_websites', 'Random')
-        
+            search_gg_yt = self.params.get('search_gg_yt', False)
+            
             start_time = time.time()
             visit_count = 0
             action_count = 0
@@ -646,8 +635,9 @@ class GoLoginSeleniumCollectAction(BaseAction):
                     url = websites[current_index % len(websites)]
                     current_index += 1
                 else:
-                    url = random.choice(websites)
-            
+                    url = random.choice(websites)              
+                
+                 
                 # ========== SKIP BLOCKED/ERROR SITES ==========
                 if url in ssl_error_sites or url in blocked_sites:
                     print(f"[GOLOGIN WARMUP {profile_id}] Skipping previously failed site: {url}")
@@ -663,7 +653,8 @@ class GoLoginSeleniumCollectAction(BaseAction):
                     try:
                         driver.get(url)
                         time.sleep(1)
-                    
+                        collect_file = self.params.get("collect_websites_file", "").strip()
+                        # self._capture_page_screenshot(driver, collect_file, profile_id)
                         # ========== CHECK FOR CONNECTION ERRORS ==========
                         page_source = driver.page_source.lower()
                         current_url = driver.current_url
@@ -764,16 +755,12 @@ class GoLoginSeleniumCollectAction(BaseAction):
                 except:
                     pass
             
-                # Perform search if Google/YouTube
-                search_performed = self._search_on_site(driver, url, keywords)
-                if search_performed:
-                    time.sleep(random.uniform(2, 3))
-                    try:
-                        human.scroll_random()
-                        time.sleep(random.uniform(1, 2))
-                        human.click_random_element()
-                    except:
-                        pass
+                
+                rand_gg = random.random()
+                if rand_gg < 0.35:
+                    # Perform search if Google/YouTube - Input keyword to address bar
+                    self._search_on_site(driver, keywords)
+                    self._perform_deeper_clicks(driver, human, start_time, total_seconds, profile_id)
                     
                 # Random human-like actions
                 actions_on_page = random.randint(1, 3)
@@ -788,12 +775,19 @@ class GoLoginSeleniumCollectAction(BaseAction):
                         break
             
                 # ========== IMPROVED DEEPER CLICK LOGIC ==========
-                if time.time() - start_time < total_seconds:
-                    self._perform_deeper_clicks(driver, human, start_time, total_seconds, profile_id)
+                time.sleep(random.uniform(2.0, 5.0))
+
+                remaining_seconds = time.time() - start_time
+                if remaining_seconds < total_seconds:
+                    next_action = random.choice([1,2])
+                    if next_action == 1:
+                        self._perform_deeper_clicks(driver, human, start_time, total_seconds, profile_id)
+                    else:
+                        self._browse_websites(driver, websites, remaining_seconds, keywords, profile_id)
                 # ==============================================
             
                 # Stay on page
-                stay_time = random.uniform(5.0, 10.0)
+                stay_time = random.uniform(2.0, 5.0)
                 print(f"[GOLOGIN WARMUP] [{profile_id}] Staying on page for {stay_time:.1f}s...")
                 time.sleep(stay_time)
             
@@ -810,7 +804,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
             import traceback
             traceback.print_exc()
             
-    def _capture_page_screenshot(self, driver, url, collect_file_path, profile_id=""):
+    def _capture_page_screenshot(self, driver, collect_file_path, profile_id=""):
         """
         Capture screenshot of current page (600x400) before page validation
     

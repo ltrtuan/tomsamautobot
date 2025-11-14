@@ -211,6 +211,21 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
             width=20
         )
         combo.pack(side=tk.LEFT, padx=5)
+        
+        self.search_gg_yt_var = tk.BooleanVar()
+        if self.parameters:
+            self.search_gg_yt_var.set(self.parameters.get("search_gg_yt", False))
+        else:
+            self.search_gg_yt_var.set(False)
+        
+        search_gg_yt_cb = tk.Checkbutton(
+            get_frame,
+            text="Search Google/Youtube to warming up",
+            variable=self.search_gg_yt_var,
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10)
+        )
+        search_gg_yt_cb.pack(anchor=tk.W, pady=2)    
     
     def create_options_section(self):
         """Options checkboxes and cookies import"""
@@ -768,7 +783,7 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         # Proxy file
         params["proxy_file"] = self.proxy_file_var.get().strip()
         params["remove_proxy"] = self.remove_proxy_var.get()
+        params["search_gg_yt"] = self.search_gg_yt_var.get()
         
-
         
         return params

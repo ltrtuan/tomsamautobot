@@ -2,9 +2,8 @@
 
 import time
 import random
-import os
 from helpers.gologin_profile_helper import GoLoginProfileHelper
-
+from models.global_variables import GlobalVariables
 
 class BaseYouTubeFlowAutoIterator:
     """
@@ -204,17 +203,50 @@ class BaseYouTubeFlowAutoIterator:
             result_bring = GoLoginProfileHelper.bring_profile_to_front(self.profile_id, driver=None)
             if result_bring:
                 time.sleep(1)
-        
+                list_special_action = ["not_found_video_home_", "not_found_clicked_video_", "not_clicked_second_video_"]
                 # ========== EXECUTE ALL ACTIONS IN CHAIN ==========
                 for action_name, action_obj in chain_actions:
-                    # Check if this is a delay tuple
+                    # Handle delay action first
                     if action_name == "delay":
-                        delay_seconds = action_obj  # action_obj is actually the delay value
+                        delay_seconds = action_obj
                         self.log(f" → Delay: {delay_seconds:.1f} seconds")
                         time.sleep(delay_seconds)
-                        continue  # Skip to next action
+                        continue
+                    
+                    # ========== SPECIAL ACTIONS: Check conditions to skip ==========
+                    if any(action_name.startswith(prefix) for prefix in list_special_action):
+                    
+                        should_skip = False  # Flag to track if action should be skipped
+        
+                        # Check 1: found_video_home                       
+                        found_video_home = GlobalVariables().get(f'found_video_home_{self.profile_id}', False)
+                        if found_video_home and "not_found_video_home_" in action_name:
+                            should_skip = True
+        
+                        # Check 2: found_clicked_video
+                        if not should_skip:  # Only check if not already skipped
+                            found_clicked_video = GlobalVariables().get(f'found_clicked_video_{self.profile_id}', False)
+                            if found_clicked_video and "not_found_clicked_video_" in action_name:
+                                should_skip = True
+        
+                        # Check 3: clicked_second_video
+                        if not should_skip:  # Only check if not already skipped
+                            clicked_second_video = GlobalVariables().get(f'clicked_second_video_{self.profile_id}', False)
+                            if clicked_second_video and "not_clicked_second_video_" in action_name:
+                                should_skip = True
+                                
+                        if not should_skip:
+                            if "_delay" in action_name:
+                                delay_seconds = action_obj
+                                self.log(f" → Delay {action_name}: {delay_seconds:.1f} seconds")
+                                time.sleep(delay_seconds)
+                                continue
+        
+                        # If should skip, go to next action
+                        if should_skip:
+                            continue
     
-                    # Normal action execution
+                    # ========== EXECUTE ACTION (both special and normal) ==========
                     self.log(f" → Action: {action_name}")
                     if action_obj:
                         success = action_obj.execute()
@@ -222,6 +254,7 @@ class BaseYouTubeFlowAutoIterator:
                             self.log(f" ✗ Action '{action_name}' failed", "WARNING")
                         else:
                             self.log(f" ✓ Action '{action_name}' completed")
+
 
         
                 self.log(f"✓ Chain '{chain_name}' completed")

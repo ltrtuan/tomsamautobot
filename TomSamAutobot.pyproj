@@ -35,6 +35,7 @@
     <Compile Include="controllers\actions\end_if_condition_action.py" />
     <Compile Include="controllers\actions\flow_auto\actions_auto\base_flow_auto_action.py" />
     <Compile Include="controllers\actions\flow_auto\actions_auto\google_navigate_auto_action.py" />
+    <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_click_random_video_sidebar_auto_action.py" />
     <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_find_click_video_auto_action.py" />
     <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_fullscreen_auto_action.py" />
     <Compile Include="controllers\actions\flow_auto\actions_auto\youtube_mouse_move_auto_action.py" />
