@@ -99,76 +99,150 @@ def send_email(title, content, content_type="html", throttle_seconds=300):
             content="<h3>Profile abc123 failed</h3>"
         )
     """
+    
     # Check if email enabled
     if not config.SMTP_ENABLED:
         logger.debug("Email disabled in config - skipping send")
+        print("[EMAIL] Email disabled in config")
         return False
     
     # Validate config
     if not all([config.SMTP_HOST, config.SMTP_USERNAME, config.SMTP_PASSWORD, config.SMTP_TO_EMAIL]):
         logger.warning("SMTP config incomplete - cannot send email")
+        print("[EMAIL ERROR] SMTP config incomplete")
         return False
     
-    # Throttling check (prevent spam)
+    # ========== FIX: IMPROVED THROTTLING WITH LOGGING ==========
     if throttle_seconds > 0:
         email_hash = hash(f"{title}:{content[:100]}")
         
         with _email_lock:
             last_time = _last_sent_time.get(email_hash, 0)
             current_time = datetime.now().timestamp()
+            time_since_last = current_time - last_time
             
-            if current_time - last_time < throttle_seconds:
-                logger.debug(f"Email throttled: '{title}' (sent recently)")
+            if time_since_last < throttle_seconds:
+                remaining = throttle_seconds - time_since_last
+                print("=" * 80)
+                print(f"[EMAIL THROTTLE] ⚠️ Email blocked by throttle")
+                print(f"[EMAIL THROTTLE] Title: {title[:60]}...")
+                print(f"[EMAIL THROTTLE] Last sent: {int(time_since_last)}s ago")
+                print(f"[EMAIL THROTTLE] Throttle period: {throttle_seconds}s")
+                print(f"[EMAIL THROTTLE] Remaining cooldown: {int(remaining)}s")
+                print("=" * 80)
+                logger.debug(f"Email throttled: '{title}' (sent {int(time_since_last)}s ago, need {throttle_seconds}s)")
                 return False
             
+            # Update last sent time
             _last_sent_time[email_hash] = current_time
+            print(f"[EMAIL DEBUG] Throttle check passed (last sent: {int(time_since_last)}s ago)")
+    else:
+        print(f"[EMAIL DEBUG] Throttle disabled (throttle_seconds={throttle_seconds})")
+    # ===========================================================
     
+    # ========== KEEP ORIGINAL BACKGROUND THREAD LOGIC ==========
     # Send email in background thread (non-blocking)
+    print(f"[EMAIL] Starting background thread to send: '{title}'")
     thread = threading.Thread(
         target=_send_email_sync,
         args=(title, content, content_type),
-        daemon=True,
+        daemon=False,
         name="EmailSenderThread"
     )
     thread.start()
+    # ===========================================================
     
     return True
 
 
+
 def _send_email_sync(title, content, content_type):
     """Internal: Synchronous email sending (called in background thread)"""
+    
+    print("=" * 80)
+    print(f"[EMAIL WORKER] 🚀 Thread started")
+    print(f"[EMAIL WORKER] Title: '{title}'")
+    print(f"[EMAIL WORKER] Content length: {len(content)} chars")
+    print("=" * 80)
+    
     try:
         # Create message
+        print(f"[EMAIL WORKER] Creating MIME message...")
         msg = MIMEMultipart('alternative')
-        msg['Subject'] = f"[TomSamAutobot] {title}"       
-        from_email = config.SMTP_FROM_EMAIL if config.SMTP_FROM_EMAIL else config.SMTP_USERNAME
+        msg['Subject'] = f"[TomSamAutobot] {title}"
+        
+        from_email = config.SMTP_FROM_EMAIL if hasattr(config, 'SMTP_FROM_EMAIL') and config.SMTP_FROM_EMAIL else config.SMTP_USERNAME
         msg['From'] = from_email
         msg['To'] = config.SMTP_TO_EMAIL
+        
+        print(f"[EMAIL WORKER] From: {from_email}")
+        print(f"[EMAIL WORKER] To: {config.SMTP_TO_EMAIL}")
         
         # Attach content
         mime_type = 'html' if content_type == 'html' else 'plain'
         msg.attach(MIMEText(content, mime_type, 'utf-8'))
+        print(f"[EMAIL WORKER] Content attached (type: {mime_type})")
         
         # Connect to SMTP server
-        if config.SMTP_USE_TLS:
+        print(f"[EMAIL WORKER] Connecting to {config.SMTP_HOST}:{config.SMTP_PORT}...")
+        
+        if hasattr(config, 'SMTP_USE_TLS') and config.SMTP_USE_TLS:
+            print(f"[EMAIL WORKER] Using TLS mode...")
             server = smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=30)
+            print(f"[EMAIL WORKER] Starting TLS...")
             server.starttls()
+            print(f"[EMAIL WORKER] TLS started")
         else:
+            print(f"[EMAIL WORKER] Using SSL mode...")
             server = smtplib.SMTP_SSL(config.SMTP_HOST, config.SMTP_PORT, timeout=30)
+            print(f"[EMAIL WORKER] SSL connected")
         
         # Login and send
+        print(f"[EMAIL WORKER] Logging in as {config.SMTP_USERNAME}...")
         server.login(config.SMTP_USERNAME, config.SMTP_PASSWORD)
+        print(f"[EMAIL WORKER] ✓ Login successful")
+        
+        print(f"[EMAIL WORKER] Sending message...")
         server.send_message(msg)
+        print(f"[EMAIL WORKER] ✓ Message sent")
+        
         server.quit()
+        print(f"[EMAIL WORKER] SMTP connection closed")
+        
+        print("=" * 80)
+        print(f"[EMAIL WORKER] ✅ SUCCESS - Email sent to {config.SMTP_TO_EMAIL}")
+        print("=" * 80)
         
         logger.info(f"✓ Email sent: '{title}' to {config.SMTP_TO_EMAIL}")
         
     except smtplib.SMTPAuthenticationError as e:
+        print("=" * 80)
+        print(f"[EMAIL WORKER] ❌ AUTHENTICATION FAILED")
+        print(f"[EMAIL WORKER] Error: {e}")
+        print("=" * 80)
         logger.error(f"✗ Email authentication failed: {e}")
+        import traceback
+        traceback.print_exc()
+        
     except smtplib.SMTPException as e:
+        print("=" * 80)
+        print(f"[EMAIL WORKER] ❌ SMTP ERROR")
+        print(f"[EMAIL WORKER] Error: {e}")
+        print("=" * 80)
         logger.error(f"✗ Email send failed (SMTP error): {e}")
+        import traceback
+        traceback.print_exc()
+        
     except Exception as e:
+        print("=" * 80)
+        print(f"[EMAIL WORKER] ❌ UNEXPECTED ERROR")
+        print(f"[EMAIL WORKER] Error type: {type(e).__name__}")
+        print(f"[EMAIL WORKER] Error message: {e}")
+        print("=" * 80)
         logger.error(f"✗ Email send failed: {e}")
+        import traceback
+        traceback.print_exc()
+
 
 
 # ========== TEST CONNECTION (FOR SETTINGS) ==========

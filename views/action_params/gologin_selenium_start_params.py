@@ -667,97 +667,86 @@ class GoLoginSeleniumStartParams(BaseActionParams):
         refresh_cb.pack(anchor=tk.W, pady=2)      
         
         
-        # ========== PROXY CONFIGURATION SECTION ==========
-        separator2 = ttk.Separator(options_frame, orient='horizontal')
-        separator2.pack(fill=tk.X, pady=10)
         
-        proxy_label = tk.Label(
+        # ========== PROXY CONFIGURATION SECTION ==========
+        separator_proxy = ttk.Separator(options_frame, orient='horizontal')
+        separator_proxy.pack(fill=tk.X, pady=10)
+
+        self.remove_proxy_var = tk.BooleanVar()
+        if self.parameters:
+            self.remove_proxy_var.set(self.parameters.get("remove_proxy", False))
+        else:
+            self.remove_proxy_var.set(False)
+
+        remove_proxy_cb = tk.Checkbutton(
             options_frame,
-            text="Proxy Configuration (Optional - from Variables):",
+            text="Remove proxy of profile before warming up",
+            variable=self.remove_proxy_var,
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10)
+        )
+        remove_proxy_cb.pack(anchor=tk.W, pady=2)
+
+        proxy_file_label = tk.Label(
+            options_frame,
+            text="Proxy File (Optional - TXT format type://host:port:user:pass per line):",
             bg=cfg.LIGHT_BG_COLOR,
             font=("Segoe UI", 10, "bold")
         )
-        proxy_label.pack(anchor=tk.W, pady=(5, 5))
-        
-        # Row 1: Mode Variable, Host Variable, Port Variable
-        row1 = tk.Frame(options_frame, bg=cfg.LIGHT_BG_COLOR)
-        row1.pack(fill=tk.X, pady=3)
-        
-        tk.Label(row1, text="Mode Var:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0,5))
-        
-        self.proxy_mode_var = tk.StringVar()
+        proxy_file_label.pack(anchor=tk.W, pady=(5, 2))
+
+        proxy_browse_frame = tk.Frame(options_frame, bg=cfg.LIGHT_BG_COLOR)
+        proxy_browse_frame.pack(fill=tk.X, pady=(0, 10))
+
+        self.proxy_file_var = tk.StringVar()
         if self.parameters:
-            self.proxy_mode_var.set(self.parameters.get("proxy_mode_variable", ""))
-        else:
-            self.proxy_mode_var.set("")
-        
-        mode_entry = ttk.Entry(row1, textvariable=self.proxy_mode_var, width=15)
-        mode_entry.pack(side=tk.LEFT, padx=5)
-        
-        tk.Label(row1, text="Host Var:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(15,5))
-        
-        self.proxy_host_var = tk.StringVar()
-        if self.parameters:
-            self.proxy_host_var.set(self.parameters.get("proxy_host_variable", ""))
-        else:
-            self.proxy_host_var.set("")
-        
-        host_entry = ttk.Entry(row1, textvariable=self.proxy_host_var, width=15)
-        host_entry.pack(side=tk.LEFT, padx=5)
-        
-        tk.Label(row1, text="Port Var:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(15,5))
-        
-        self.proxy_port_var = tk.StringVar()
-        if self.parameters:
-            self.proxy_port_var.set(self.parameters.get("proxy_port_variable", ""))
-        else:
-            self.proxy_port_var.set("")
-        
-        port_entry = ttk.Entry(row1, textvariable=self.proxy_port_var, width=15)
-        port_entry.pack(side=tk.LEFT, padx=5)
-        
-        # Row 2: Username Variable, Password Variable
-        row2 = tk.Frame(options_frame, bg=cfg.LIGHT_BG_COLOR)
-        row2.pack(fill=tk.X, pady=3)
-        
-        tk.Label(row2, text="User Var:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0,5))
-        
-        self.proxy_username_var = tk.StringVar()
-        if self.parameters:
-            self.proxy_username_var.set(self.parameters.get("proxy_username_variable", ""))
-        else:
-            self.proxy_username_var.set("")
-        
-        user_entry = ttk.Entry(row2, textvariable=self.proxy_username_var, width=20)
-        user_entry.pack(side=tk.LEFT, padx=5)
-        
-        tk.Label(row2, text="Pass Var:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(15,5))
-        
-        self.proxy_password_var = tk.StringVar()
-        if self.parameters:
-            self.proxy_password_var.set(self.parameters.get("proxy_password_variable", ""))
-        else:
-            self.proxy_password_var.set("")
-        
-        pass_entry = ttk.Entry(row2, textvariable=self.proxy_password_var, width=20)
-        pass_entry.pack(side=tk.LEFT, padx=5)
-        
-        # Hint
-        proxy_hint = tk.Label(
+            self.proxy_file_var.set(self.parameters.get("proxy_file", ""))
+
+        proxy_entry = tk.Entry(proxy_browse_frame, textvariable=self.proxy_file_var, font=("Segoe UI", 10))
+        proxy_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+
+        def browse_proxy_file():
+            filename = filedialog.askopenfilename(
+                title="Select Proxy TXT File",
+                filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+            )
+            if filename:
+                self.proxy_file_var.set(filename)
+
+        browse_proxy_button = ttk.Button(proxy_browse_frame, text="Browse...", command=browse_proxy_file)
+        browse_proxy_button.pack(side=tk.LEFT)
+
+        proxy_file_hint = tk.Label(
             options_frame,
-            text="💡 Enter variable NAMES (e.g., proxy_mode, proxy_host). Fill all 5 to update proxy for ALL profiles before starting.",
+            text="File format example:\nhttp://1.2.3.4:8080:user:pass\nsocks5://5.6.7.8:1080:youruser:yourpass\nProxies will be assigned to profiles sequentially or randomly.",
             bg=cfg.LIGHT_BG_COLOR,
             font=("Segoe UI", 8),
             fg="#666666",
             wraplength=500,
             justify=tk.LEFT
         )
-        proxy_hint.pack(anchor=tk.W, pady=(2,0))
-        
+        proxy_file_hint.pack(anchor=tk.W)
 
         # ========== THÊM MULTI-THREADING SECTION ==========
+    
         separator = ttk.Separator(options_frame, orient='horizontal')
         separator.pack(fill=tk.X, pady=10)
+        
+        # ========== THÊM HEADLESS CHECKBOX ==========
+        self.headless_var = tk.BooleanVar()
+        if self.parameters:
+            self.headless_var.set(self.parameters.get("headless", False))
+        else:
+            self.headless_var.set(False)
+    
+        headless_cb = tk.Checkbutton(
+            options_frame,
+            text="Run in Headless mode (no browser UI, faster but harder to debug)",
+            variable=self.headless_var,
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10)
+        )
+        headless_cb.pack(anchor=tk.W, pady=2)
 
         threading_label = tk.Label(
             options_frame,
@@ -1047,11 +1036,8 @@ class GoLoginSeleniumStartParams(BaseActionParams):
         params["refresh_fingerprint"] = self.refresh_fingerprint_var.get()
         
         # Proxy params
-        params["proxy_mode_variable"] = self.proxy_mode_var.get().strip()
-        params["proxy_host_variable"] = self.proxy_host_var.get().strip()
-        params["proxy_port_variable"] = self.proxy_port_var.get().strip()
-        params["proxy_username_variable"] = self.proxy_username_var.get().strip()
-        params["proxy_password_variable"] = self.proxy_password_var.get().strip()
+        params["proxy_file"] = self.proxy_file_var.get().strip()
+        params["remove_proxy"] = self.remove_proxy_var.get()
         
         params["profile_count"] = self.profile_count_var.get().strip()
         params["profile_start_index"] = self.profile_start_index_var.get().strip()
@@ -1065,6 +1051,7 @@ class GoLoginSeleniumStartParams(BaseActionParams):
         # Suffix & Prefix param (SINGLE FIELD)
         params["keywords_suffix_prefix"] = self.keywords_suffix_prefix_var.get().strip()
         
+        params["headless"] = self.headless_var.get()
         params["enable_threading"] = self.enable_threading_var.get()
         params["max_workers"] = self.max_workers_var.get().strip()
         

@@ -197,7 +197,70 @@ class GoLoginAPI:
             return False, str(e)
 
 
+    def get_profile(self, profile_id):
+        """
+        Get single profile details from GoLogin API
+        API: GET https://api.gologin.com/browser/:profileId
+        Documentation: https://gologin.com/docs/api-reference/profile/get-profile
     
+        Args:
+            profile_id: Profile ID to fetch
+    
+        Returns:
+            tuple: (success: bool, profile_data: dict or error_message: str)
+    
+        Example Response:
+            {
+                "id": "abc123",
+                "name": "Profile 1",
+                "os": "win",
+                "navigator": {
+                    "language": "en-US",
+                    "resolution": "1920x1080",
+                    "userAgent": "..."
+                },
+                "proxyEnabled": True,
+                "proxy": {...},
+                ...
+            }
+        """
+        try:
+            # Validate profile_id
+            profile_id = str(profile_id).strip()
+            if not profile_id or ',' in profile_id or ';' in profile_id:
+                return False, f"Invalid profile_id: {profile_id}"
+        
+            url = f"{self.base_url}/browser/{profile_id}"
+        
+            print(f"[GOLOGIN] Getting profile details: {profile_id[:8]}...")
+        
+            # Send GET request
+            response = requests.get(url, headers=self.headers, timeout=30)
+        
+            # Check response
+            if response.status_code == 200:
+                profile_data = response.json()
+                print(f"[GOLOGIN] ✓ Profile retrieved: {profile_data.get('name', 'Unknown')}")
+                return True, profile_data
+            else:
+                error_msg = f"HTTP {response.status_code}"
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get("message", error_msg)
+                except:
+                    error_msg = f"{error_msg}: {response.text[:200]}"
+            
+                print(f"[GOLOGIN] ✗ Get profile failed: {error_msg}")
+                return False, error_msg
+    
+        except Exception as e:
+            print(f"[GOLOGIN] Get profile error: {e}")
+            import traceback
+            traceback.print_exc()
+            return False, str(e)
+
+
+
     def stop_profile(self, profile_id):
         """
         Stop profile - Close browser and cleanup processes WITH TIMEOUT

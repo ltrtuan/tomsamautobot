@@ -653,7 +653,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
                     try:
                         driver.get(url)
                         time.sleep(1)
-                        collect_file = self.params.get("collect_websites_file", "").strip()
+                      
                         # self._capture_page_screenshot(driver, collect_file, profile_id)
                         # ========== CHECK FOR CONNECTION ERRORS ==========
                         page_source = driver.page_source.lower()
@@ -804,81 +804,7 @@ class GoLoginSeleniumCollectAction(BaseAction):
             import traceback
             traceback.print_exc()
             
-    def _capture_page_screenshot(self, driver, collect_file_path, profile_id=""):
-        """
-        Capture screenshot of current page (600x400) before page validation
     
-        Features:
-            - Saves to same directory as collect_file
-            - Max 50 screenshots
-            - Filename format: screenshot_001.png, screenshot_002.png, etc.
-            - Works in headless mode
-            - Resizes window to 600x400 for consistent size
-    
-        Args:
-            driver: Selenium WebDriver instance
-            url (str): Current URL being visited
-            collect_file_path (str): Path to collect file (for determining save directory)
-            profile_id (str): Profile ID for logging
-    
-        Returns:
-            bool: True if screenshot saved, False otherwise
-        """
-        try:
-            # Validate collect file path
-            if not collect_file_path or not collect_file_path.strip():
-                return False
-        
-            from pathlib import Path
-        
-            # Get directory of collect file
-            collect_file = Path(collect_file_path)
-            screenshots_dir = collect_file.parent / "screenshots"
-        
-            # Create screenshots directory (with parent dirs if needed)
-            screenshots_dir.mkdir(parents=True, exist_ok=True)
-        
-            # ========== CHECK SCREENSHOT COUNT ==========
-            existing_screenshots = list(screenshots_dir.glob("screenshot_*.png"))
-            screenshot_count = len(existing_screenshots)
-        
-            if screenshot_count >= 100:
-                # Already have 50 screenshots, don't save more
-                return False
-        
-            # ========== GENERATE FILENAME ==========
-            # Find next available number
-            next_number = screenshot_count + 1
-            screenshot_filename = f"screenshot_{next_number:03d}.png"
-            screenshot_path = screenshots_dir / screenshot_filename
-        
-            # ========== RESIZE WINDOW TO 600x400 ==========
-            original_size = driver.get_window_size()  # Save original size
-            driver.set_window_size(600, 400)
-            time.sleep(0.5)  # Wait for resize to complete
-        
-            # ========== CAPTURE SCREENSHOT ==========
-            driver.save_screenshot(str(screenshot_path))
-        
-            # ========== RESTORE ORIGINAL WINDOW SIZE ==========
-            driver.set_window_size(original_size['width'], original_size['height'])
-        
-            print(f"[GOLOGIN WARMUP {profile_id}] 📸 Screenshot saved ({next_number}/50): {screenshot_filename}")
-        
-            return True
-    
-        except Exception as e:
-            print(f"[GOLOGIN WARMUP {profile_id}] ⚠ Failed to capture screenshot: {e}")
-        
-            # Try to restore window size on error
-            try:
-                if 'original_size' in locals():
-                    driver.set_window_size(original_size['width'], original_size['height'])
-            except:
-                pass
-        
-            return False
-
 
 
     def _detect_page_issues(self, driver, url, profile_id=""):
