@@ -941,26 +941,34 @@ class GoLoginProfileHelper:
                 window_title = ""
             
                 def find_window_callback(window_hwnd, result_list):
-                    """Callback to find window by PID"""
+                    """Callback to find window by PID - EXCLUDE owned windows (popups)"""
                     if not win32gui.IsWindowVisible(window_hwnd):
                         return True
-                
+    
                     try:
                         _, found_pid = win32process.GetWindowThreadProcessId(window_hwnd)
-                    
+        
                         if found_pid == target_pid:
                             # Check if this is the main Chrome window
                             class_name = win32gui.GetClassName(window_hwnd)
                             title = win32gui.GetWindowText(window_hwnd)
-                        
+            
                             # Chrome main window has class "Chrome_WidgetWin_1" and has a title
                             if class_name == "Chrome_WidgetWin_1" and title:
-                                result_list.append((window_hwnd, title))
-                                print(f"{log_prefix} [{profile_id}] Found window candidate: hwnd={window_hwnd}, title='{title}'")
+                                # **CODE MỚI - Filter out owned windows (popups)**
+                                owner_hwnd = win32gui.GetWindow(window_hwnd, 4)  # GW_OWNER = 4
+                
+                                # Only add if this window has NO owner (= main window)
+                                if not owner_hwnd:
+                                    result_list.append((window_hwnd, title))
+                                    print(f"{log_prefix} [{profile_id}] Found MAIN window: hwnd={window_hwnd}, title='{title}'")
+                                else:
+                                    print(f"{log_prefix} [{profile_id}] Skipping owned window (popup): hwnd={window_hwnd}, title='{title}', owner={owner_hwnd}")
                     except:
                         pass
-                
+    
                     return True
+
             
                 # Find all windows for this PID
                 windows = []
@@ -1469,15 +1477,63 @@ class GoLoginProfileHelper:
             return True  # Continue anyway
 
 
+    # @staticmethod
+    # def load_proxies_from_file(proxy_file, log_prefix="[PROXY]"):
+    #     """
+    #     Load proxies from TXT file with format: provider;proxy_type;api_key
+    
+    #     Args:
+    #         proxy_file: Path to proxy TXT file
+    #         log_prefix: Prefix for log messages
+    
+    #     Returns:
+    #         list: List of proxy config dicts or empty list if error
+    #     """
+    #     import os
+    
+    #     if not os.path.exists(proxy_file):
+    #         print(f"{log_prefix} Proxy file not found: {proxy_file}")
+    #         return []
+    
+    #     proxy_configs = []
+    #     with open(proxy_file, 'r', encoding='utf-8') as f:
+    #         for line_num, line in enumerate(f, 1):
+    #             line = line.strip()
+    #             if not line or line.startswith('#'):
+    #                 continue
+    #             parts = line.split('|')
+    #             if len(parts) != 3:
+    #                 print(f"{log_prefix} Warning - Invalid format line {line_num}: {line}")
+    #                 continue
+    #             provider, proxy_type, api_key = [part.strip() for part in parts]
+    #             if not provider or not proxy_type or not api_key:
+    #                 print(f"{log_prefix} Warning - Empty values line {line_num}: {line}")
+    #                 continue
+    #             if proxy_type not in ['socks5', 'http', 'https']:
+    #                 print(f"{log_prefix} Warning - Invalid type '{proxy_type}' line {line_num}")
+    #                 continue
+    #             proxy_configs.append({
+    #                 'provider': provider.lower(),
+    #                 'type': proxy_type,
+    #                 'api_key': api_key,
+    #                 'line_num': line_num
+    #             })
+    
+    #     print(f"{log_prefix} Loaded {len(proxy_configs)} valid proxy configs")
+    #     return proxy_configs
+    
+
     @staticmethod
     def load_proxies_from_file(proxy_file, log_prefix="[PROXY]"):
         """
-        Load proxies from TXT file with format: provider;proxy_type;api_key
+        Load proxies from TXT file with 2 formats:
+        - TMProxy: provider|proxy_type|apikey
+        - ProxyRack: provider|proxy_type|host:port|countries|username|password
     
         Args:
             proxy_file: Path to proxy TXT file
             log_prefix: Prefix for log messages
-    
+        
         Returns:
             list: List of proxy config dicts or empty list if error
         """
@@ -1488,28 +1544,91 @@ class GoLoginProfileHelper:
             return []
     
         proxy_configs = []
+    
         with open(proxy_file, 'r', encoding='utf-8') as f:
             for line_num, line in enumerate(f, 1):
                 line = line.strip()
+            
                 if not line or line.startswith('#'):
                     continue
-                parts = line.split(';')
-                if len(parts) != 3:
+            
+                parts = line.split('|')
+            
+                # Validate basic structure
+                if len(parts) < 3:
                     print(f"{log_prefix} Warning - Invalid format line {line_num}: {line}")
                     continue
-                provider, proxy_type, api_key = [part.strip() for part in parts]
-                if not provider or not proxy_type or not api_key:
-                    print(f"{log_prefix} Warning - Empty values line {line_num}: {line}")
-                    continue
+            
+                provider = parts[0].strip().lower()
+                proxy_type = parts[1].strip()
+            
+                # Validate proxy type
                 if proxy_type not in ['socks5', 'http', 'https']:
                     print(f"{log_prefix} Warning - Invalid type '{proxy_type}' line {line_num}")
                     continue
-                proxy_configs.append({
-                    'provider': provider.lower(),
-                    'type': proxy_type,
-                    'api_key': api_key,
-                    'line_num': line_num
-                })
+            
+                # Parse based on provider
+                if provider == 'tmproxy':
+                    # Format: tmproxy|socks5|apikey
+                    if len(parts) != 3:
+                        print(f"{log_prefix} Warning - TMProxy expects 3 parts, line {line_num}: {line}")
+                        continue
+                
+                    api_key = parts[2].strip()
+                
+                    if not api_key:
+                        print(f"{log_prefix} Warning - Empty api_key line {line_num}")
+                        continue
+                
+                    proxy_configs.append({
+                        'provider': 'tmproxy',
+                        'type': proxy_type,
+                        'api_key': api_key,
+                        'line_num': line_num
+                    })
+                
+                elif provider == 'proxyrack':
+                    # Format: proxyrack|http|premium.residential.proxyrack.net:10000|robertle;country=US,CA,GB|password
+                    # Username đã có country params sẵn, DNS chỉ là host:port
+                    if len(parts) != 5:
+                        print(f"{log_prefix} Warning - ProxyRack expects 5 parts, line {line_num}: {line}")
+                        continue
+    
+                    host_port = parts[2].strip()
+                    username = parts[3].strip()  # Đã có country params: username;country=US,CA,GB
+                    password = parts[4].strip()
+    
+                    if not all([host_port, username, password]):
+                        print(f"{log_prefix} Warning - Empty values line {line_num}")
+                        continue
+    
+                    # Parse host:port (DNS không có country params nữa)
+                    if ':' not in host_port:
+                        print(f"{log_prefix} Warning - Invalid host:port format line {line_num}")
+                        continue
+    
+                    host, port_str = host_port.split(':', 1)
+    
+                    try:
+                        port = int(port_str)
+                    except ValueError:
+                        print(f"{log_prefix} Warning - Invalid port '{port_str}' line {line_num}")
+                        continue
+    
+                    proxy_configs.append({
+                        'provider': 'proxyrack',
+                        'type': proxy_type,
+                        'host': host,
+                        'port': port,
+                        'username': username,  # Giữ nguyên username với country params
+                        'password': password,
+                        'line_num': line_num
+                    })
+
+            
+                else:
+                    print(f"{log_prefix} Warning - Unknown provider '{provider}' line {line_num}")
+                    continue
     
         print(f"{log_prefix} Loaded {len(proxy_configs)} valid proxy configs")
         return proxy_configs
@@ -1602,9 +1721,9 @@ class GoLoginProfileHelper:
             attempts += 1
             tried_lines.add(check_index)
         
-            proxy_info = f"{config['provider']}:{config['type']}:{config['api_key'][-8:]}"
-            line_status = "used" if config['line_num'] in used_lines else "unused"
-            print(f"{log_prefix} Attempt {attempts}/{max_attempts}: {proxy_info} line {config['line_num']} ({line_status})")
+            # proxy_info = f"{config['provider']}:{config['type']}:{config['api_key'][-8:]}"
+            # line_status = "used" if config['line_num'] in used_lines else "unused"
+            # print(f"{log_prefix} Attempt {attempts}/{max_attempts}: {proxy_info} line {config['line_num']} ({line_status})")
         
             try:
                 # Get full proxy details from provider API
@@ -1614,9 +1733,16 @@ class GoLoginProfileHelper:
                     if proxy_details:
                         full_proxy = proxy_details
                 elif config['provider'] == 'proxyrack':
-                    # Implement ProxyRackAPI.get_proxy_static if needed
-                    print(f"{log_prefix} ProxyRack not implemented yet")
-                    continue
+                    # ProxyRack: Build proxy directly from config (no API call needed)
+                    full_proxy = {
+                        'mode': config['type'],
+                        'host': config['host'],
+                        'port': config['port'],
+                        'username': config['username'],  # Đã có: robertle;country=US,CA,GB
+                        'password': config['password']
+                    }
+                    print(f"{log_prefix} Built ProxyRack proxy: {config['host']}:{config['port']}")
+
                 else:
                     print(f"{log_prefix} Unknown provider: {config['provider']}")
                     continue
@@ -1635,9 +1761,8 @@ class GoLoginProfileHelper:
                         used_lines.add(used_line_num)
                         next_index = (check_index + 1) % len(proxy_configs)
                         gv.set("session_used_lines", used_lines.copy())
-                        gv.set("session_proxy_index", next_index)
-                        print(f"{log_prefix} ✓ Assigned {proxy_info} - marked used, next index={next_index}")
-                        return True, f"Assigned {proxy_info}"
+                        gv.set("session_proxy_index", next_index)                      
+                        return True, "Assigned"
                 else:
                     print(f"{log_prefix} API update failed: {message} - continue")
                     time.sleep(1)

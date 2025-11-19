@@ -35,9 +35,9 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         """
         GlobalVariables().set(f'found_clicked_video_{self.profile_id}', False)
         # ========== CHAIN 0: WARM UP BEFORE VIEW VIDEO (BẮT BUỘC) ==========
-        rand_start_chain = random.random()
-        if rand_start_chain < 0.5:     
-            self._warm_up_chain()
+        # rand_start_chain = random.random()
+        # if rand_start_chain < 0.5:     
+        #     self._warm_up_chain()
         
         # ========== CHAIN 1: SEARCH AND START VIDEO (BẮT BUỘC) ==========
         self._build_search_and_start_video_chain()
@@ -123,7 +123,7 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
             ("navigate_youtube", YouTubeNavigateAutoAction(self.profile_id, self.log_prefix))
         )        
         
-        if random.random() < 0.6:
+        if random.random() < 0.75:
             chain1_actions.append(
                 ("move_mouse", YouTubeMouseMoveAutoAction(
                     profile_id=self.profile_id,
@@ -228,6 +228,9 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         # Action 3: Search (if keywords available)
         keywords_list = self.parameters.get("keywords_youtube", [])
         if keywords_list:  # ← Check dict, not instance var
+            chain_actions.append(
+                ("not_found_clicked_video_find_navigate_youtube", YouTubeNavigateAutoAction(self.profile_id, self.log_prefix))
+            )        
             
             chain_actions.append(
                 ("not_found_clicked_video_find_search_box", YouTubeFindSearchBoxAutoAction(
@@ -273,7 +276,7 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         #####################################################          
     
         # 35% oppotunity to click second video of the channel - sidebar or channel page
-        if random.random() < 0.35 and index_action > 1:            
+        if random.random() < 0.45 and index_action > 1:            
            
             second_video = ['sidebar', 'channel']
             second_video_area = random.choice(second_video)
@@ -337,16 +340,15 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
                 
     
         # If already click second video -> just run 1 loop random action
-        num_actions = random.randint(0, 2)
+        num_actions = random.randint(1, 2)
        
-        # action_types = ['mouse_move', 'pause_resume', 'fullscreen', 'prev_next', 'delay_loop']
+        action_types = ['mouse_move', 'pause_resume', 'fullscreen', 'prev_next', 'delay_loop']
         
-        action_types = ['mouse_move', 'delay_loop']
 
         
         for j in range(num_actions):
             chain_actions.append(
-                ("delay", random.randint(10,15))  # ← DELAY TUPLE: ("delay", seconds)
+                ("delay", random.randint(15,25))  # ← DELAY TUPLE: ("delay", seconds)
             )
             action_type = random.choice(action_types)
           
@@ -384,12 +386,15 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
                     log_prefix=self.log_prefix
                 )  
                 
-            elif action_type == 'delay_loop':
-                action = random.randint(2,10)
+            elif action_type == 'delay_loop':                
+                chain_actions.append(
+                    ("delay_loop", random.randint(5,10))  # ← DELAY TUPLE: ("delay", seconds)
+                )
             else:
                 continue
             
-            chain_actions.append((action_type, action))        
+            if action_type != 'delay_loop':
+                chain_actions.append((action_type, action))        
             
         # Add chain to queue
         self.chain_queue.append({

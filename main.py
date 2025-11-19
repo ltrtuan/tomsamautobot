@@ -12,6 +12,7 @@ import atexit
 import sys
 import traceback
 from helpers.email_notifier import send_email, format_crash_email
+
 import logging
 logger = logging.getLogger('TomSamAutobot')
 

@@ -45,7 +45,7 @@ class KeywordVariationHelper:
         """
         # 50% return original keyword
         rand_generate_keyword = random.random()
-        if rand_generate_keyword < 0.3:
+        if rand_generate_keyword < 0.7:
             return original_keyword
         
         # 50% combine với K1 và/hoặc K2
@@ -55,13 +55,13 @@ class KeywordVariationHelper:
         K1 = None
         if suffix_prefix_list:
             # 50% chance to use K1
-            if random.random() < 0.7:
+            if random.random() < 0.5:
                 K1 = random.choice(suffix_prefix_list)
         
         # ========== GENERATE K2 (Random characters) ==========
         K2 = None
         # 50% chance to use K2
-        if random.random() < 0.7:
+        if random.random() < 0.5:
             K2 = KeywordVariationHelper._generate_random_string()
         
         # ========== COMBINE K0, K1, K2 ==========

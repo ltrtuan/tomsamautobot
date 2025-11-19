@@ -203,11 +203,12 @@ class BaseYouTubeFlowAutoIterator:
             result_bring = GoLoginProfileHelper.bring_profile_to_front(self.profile_id, driver=None)
             if result_bring:
                 time.sleep(1)
+                
                 list_special_action = ["not_found_video_home_", "not_found_clicked_video_", "not_clicked_second_video_"]
                 # ========== EXECUTE ALL ACTIONS IN CHAIN ==========
                 for action_name, action_obj in chain_actions:
                     # Handle delay action first
-                    if action_name == "delay":
+                    if action_name == "delay" or action_name == "delay_loop":
                         delay_seconds = action_obj
                         self.log(f" → Delay: {delay_seconds:.1f} seconds")
                         time.sleep(delay_seconds)

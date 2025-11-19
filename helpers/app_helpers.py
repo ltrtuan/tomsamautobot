@@ -228,7 +228,7 @@ def perform_random_movements_with_click_detection(max_attempts=5, type_action=No
             
             # ========== CHECK IF CURSOR IS HAND ==========
             if is_hand_cursor():             
-                
+                time.sleep(random.uniform(0.5, 2))
                 # Click using pyautogui (cursor is already at position)
                 pyautogui.click()
                 

@@ -11,6 +11,7 @@ from helpers.app_helpers import perform_random_movements_with_click_detection
 # Import YouTube sub-actions for Choice 2
 from controllers.actions.flow_auto.actions_auto.youtube_find_search_box_auto_action import YouTubeFindSearchBoxAutoAction
 from controllers.actions.flow_auto.actions_auto.youtube_random_move_scroll_auto_action import YouTubeRandomMoveScrollAutoAction
+from controllers.actions.flow_auto.actions_auto.youtube_skip_ads_auto_action import YouTubeSkipAdsAutoAction
 
 class BrowseWebsiteAutoAction(BaseFlowAutoAction):
     """
@@ -37,13 +38,13 @@ class BrowseWebsiteAutoAction(BaseFlowAutoAction):
         """Execute browse website action with 2 random choices"""
         try:
             # ========== RANDOM CHOICE: 1 or 2 ==========
-            choice = random.choice([1, 2])
-            self.log(f"🎲 Random choice: {choice}")
+            # choice = random.choice([1, 2])
+            # self.log(f"🎲 Random choice: {choice}")
             
-            if choice == 1:
-                return self._execute_choice_1_navigate_and_click()
-            else:
-                return self._execute_choice_2_youtube_search()
+            # if choice == 1:
+            #     return self._execute_choice_1_navigate_and_click()
+            # else:
+            return self._execute_choice_2_youtube_search()
         
         except Exception as e:
             self.log(f"✗ Browse website error: {e}", "ERROR")
@@ -158,7 +159,7 @@ class BrowseWebsiteAutoAction(BaseFlowAutoAction):
           
     
             # ========== STEP 4: FIND SEARCH BOX AND ENTER KEYWORD: RANDOM SEARCH VIDEO AND CLICK RANDOM VIDEO SEARCH OR CLICK RANDOM VIDEO HOME ==========
-            choice = random.choice([1, 2])
+            choice = random.choice([1])
             if choice == 1:
                 self.log("Finding search box and entering keyword")
     
@@ -178,7 +179,7 @@ class BrowseWebsiteAutoAction(BaseFlowAutoAction):
                 # MUST RETURN HOME TO CLICK VIDEO HOME
                 self._navigate_youtube()
                 num_random_actions = random.randint(1, 2)
-                YouTubeRandomMoveScrollAutoAction(self.profile_id, num_random_actions, "main", self.log_prefix)
+                YouTubeRandomMoveScrollAutoAction(self.profile_id, num_random_actions, "main", self.log_prefix).execute()
     
             # ========== STEP 5: CLICK RANDOM VIDEO ==========
             self.log("Clicking random video from search results")
@@ -190,6 +191,12 @@ class BrowseWebsiteAutoAction(BaseFlowAutoAction):
         
             if clicked:
                 self.log(f"✓ Successfully clicked at {position}")
+                time.sleep(random.uniform(2, 3))
+                YouTubeSkipAdsAutoAction(
+                        profile_id=self.profile_id,
+                        parameters=self.parameters,  # Pass keywords dict for ads area params
+                        log_prefix=self.log_prefix
+                ).execute()
             else:
                 self.log("No clickable elements found after 5 attempts", "WARNING")
         
@@ -221,38 +228,4 @@ class BrowseWebsiteAutoAction(BaseFlowAutoAction):
         self.log(f"Waiting {page_load_wait:.1f}s for YouTube to load")
         time.sleep(page_load_wait)
     
-    def _get_current_url(self):
-        """
-        Get current URL from browser address bar
-        
-        Method:
-        1. Focus address bar (Ctrl+L)
-        2. Select all (Ctrl+A)
-        3. Copy to clipboard (Ctrl+C)
-        4. Read from clipboard
-        
-        Returns:
-            str: Current URL, or empty string if failed
-        """
-        try:
-            # Focus address bar
-            pyautogui.hotkey('ctrl', 'l')
-            time.sleep(0.2)
-            
-            # Select all
-            pyautogui.hotkey('ctrl', 'a')
-            time.sleep(0.1)
-            
-            # Copy to clipboard
-            pyautogui.hotkey('ctrl', 'c')
-            time.sleep(0.2)
-            
-            # Read from clipboard
-            import pyperclip
-            url = pyperclip.paste()
-            
-            return url.strip()
-        
-        except Exception as e:
-            self.log(f"Failed to get current URL: {e}", "ERROR")
-            return ""
+    

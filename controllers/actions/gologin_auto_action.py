@@ -36,32 +36,39 @@ class GoLoginAutoAction(BaseAction):
             # Get API token from variable name (original)
             api_key_variable = self.params.get("api_key_variable", "").strip()
             if not api_key_variable:
-                logger.error("[GOLOGIN START] Error: API key variable name is required")
+                logger.error("[GOLOGIN AUTO] Error: API key variable name is required")
                 self.set_variable(False)
                 return
         
             # Get API token value from GlobalVariables (original)
             api_token = GlobalVariables().get(api_key_variable, "")
             if not api_token:
-                logger.error(f"[GOLOGIN START] Error: Variable '{api_key_variable}' is empty or not set")
+                logger.error(f"[GOLOGIN AUTO] Error: Variable '{api_key_variable}' is empty or not set")
                 self.set_variable(False)
-                return
+                
         
-            logger.info(f"[GOLOGIN START] Using API token from variable: {api_key_variable}")
+            logger.info(f"[GOLOGIN AUTO] Using API token from variable: {api_key_variable}")
         
-            # ========== INITIALIZE GOLOGIN API INSTANCE ==========
-            self.gologin_api = get_gologin_api(api_token)
-            # ====================================================
+            try:
+                # ========== INITIALIZE GOLOGIN API INSTANCE ==========
+                self.gologin_api = get_gologin_api(api_token)
+                # ====================================================
         
-            # ========== GET PROFILE LIST USING HELPER ==========
-            success, result = GoLoginProfileHelper.get_profile_list(
-                self.params, api_token, "[GOLOGIN START]"
-            )
-        
-            if not success:
-                print(f"[GOLOGIN START] ✗ {result}")
+                # ========== GET PROFILE LIST USING HELPER ==========
+                success, result = GoLoginProfileHelper.get_profile_list(
+                    self.params, api_token, "[GOLOGIN AUTO]"
+                )
+            except RuntimeError as e:  # ← Catch built-in exception
+                logger.error(f"[GOLOGIN AUTO] ❌ Runtime error: {e}")
+                logger.error("[GOLOGIN AUTO] Stopping action...")
                 self.set_variable(False)
-                return
+                raise  # ← RE-RAISE for email!
+        
+            except Exception as e:
+                logger.error(f"[GOLOGIN AUTO] Error: {e}")
+                self.set_variable(False)
+                raise
+              
         
             profile_list = result
             logger.info(f"[GOLOGIN START] Total profiles to start: {len(profile_list)}")        
@@ -85,6 +92,7 @@ class GoLoginAutoAction(BaseAction):
                 # Start single profile (updated call)
                 single_success = self._start_single_profile(profile_id)
                 self.set_variable(single_success)
+                
             
         except ProxyAssignmentFailed as e:
             # New: Catch proxy fail - stop entire action (critical for YouTube IP safety)
@@ -93,13 +101,15 @@ class GoLoginAutoAction(BaseAction):
             self.set_variable(False)
             # Optional: Cleanup (stop all if partial)
             # self.gologin_api.stop_all_active_profiles()
-            return
+            # ✅ RE-RAISE để action_controller bắt được và gửi email!
+            raise  # ← CRITICAL: Re-raise for email alerting!
         except Exception as e:
             # Original except
             logger.error(f"[GOLOGIN START] Error: {e}")
             import traceback
             traceback.print_exc()
             self.set_variable(False)
+            raise
 
 
     def _type_profile_id_and_enter(self, profile_id, log_prefix):
@@ -663,20 +673,21 @@ class GoLoginAutoAction(BaseAction):
     
                     # Bring profile to front
                     print(f"{log_prefix} Bringing window to front...")
-                    GoLoginProfileHelper.bring_profile_to_front(
+                    result_bring = GoLoginProfileHelper.bring_profile_to_front(
                         profile_id,
                         driver=profile_data[profile_id]['driver'],
                         log_prefix=log_prefix
                     )
-                    time.sleep(random.randint(2,10))
+                    if result_bring:
+                        time.sleep(random.randint(2,10))
     
-                    # Send Alt+F4
-                    print(f"{log_prefix} Sending Alt+F4...")
-                    pyautogui.hotkey('alt', 'f4')
-                    time.sleep(1)
+                        # Send Alt+F4
+                        print(f"{log_prefix} Sending Alt+F4...")
+                        pyautogui.hotkey('alt', 'f4')
+                        time.sleep(1)
     
-                    print(f"{log_prefix} ✓ Browser closed")
-                    closed_count += 1
+                        print(f"{log_prefix} ✓ Browser closed")
+                        closed_count += 1
     
                 except Exception as e:
                     print(f"{log_prefix} ❌ Failed to close: {e}")

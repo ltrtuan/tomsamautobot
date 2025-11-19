@@ -152,9 +152,10 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
                     # Scroll to list videos
                     YouTubeRandomMoveScrollAutoAction(self.profile_id, random.randint(1, 4), "main", self.log_prefix).execute()
                     time.sleep(random.randint(2, 4))
-                    for attempt in range(1, 5):
-                        is_hand_cursor = self._hover_and_check_hand_cursor()
-                        if is_hand_cursor:
+                    for attempt in range(1, 5):                        
+                        _is_hand_cursor_video_page = self._hover_and_check_hand_cursor()
+                        if _is_hand_cursor_video_page:
+                            time.sleep(random.uniform(0.5, 2))
                             pyautogui.click()
                             wait_time = random.uniform(4, 7)
                             time.sleep(wait_time)
@@ -173,9 +174,9 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
             else:
                 # if search home, do not need scroll to much
                 if self.area == "main":
-                    max_retries = random.uniform(2, 5)
+                    max_retries = random.randint(1, 3)
                 else:
-                    max_retries = random.uniform(5, 7)
+                    max_retries = random.randint(4, 7)
                 
             for attempt in range(1, max_retries + 1):
                 self.log(f"Attempt {attempt}/{max_retries}: Looking for logo in {self.area} area")
@@ -195,10 +196,9 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
                         click_x, click_y,
                         click_type=None,
                         fast=False
-                    )
-                    is_hand_cursor = self._hover_and_check_hand_cursor()
-                    if is_hand_cursor:
-                        time.sleep(0.5)
+                    )                    
+                    if is_hand_cursor():
+                        time.sleep(random.uniform(0.5, 2))
                         pyautogui.click()
                     else:
                         continue
@@ -225,7 +225,7 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
          
             # ========== FALLBACK: CLICK RANDOM HAND CURSOR ==========
             self.log(f"✗ Logo not found after {max_retries} attempts", "WARNING")
-            
+            # return False
             if self.flow_type == "browse":
                 return self._fallback_click_for_cookies_only_browse()
             else:                
@@ -236,44 +236,9 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
             self.log(f"✗ Find and click video error: {e}", "ERROR")
             import traceback
             traceback.print_exc()
-            return False        
-
-    def _hover_and_check_hand_cursor(self):
-        """
-        Hover mouse and check hand cursor
-        
-        Returns:
-            bool: True if cursor = hand (clickable), False otherwise
-        """
-        if not self.region:          
             return False
-        
-        region_x, region_y, region_width, region_height = self.region
-        
-        # Random position in ads area
-        random_x = region_x + random.randint(0, region_width)
-        random_y = region_y + random.randint(0, region_height)
-        
-        self.log(f"Hovering on CHANNEL PAGE")
-        
-        # Move mouse (NO CLICK)
-        MouseMoveAction.move_and_click_static(
-            random_x, random_y,
-            click_type=None,  # No click, just hover
-            fast=False
-        )
-        
-        time.sleep(0.2)  # Wait for cursor to update
-        
-        # Check if cursor = hand
-        is_hand = is_hand_cursor()
-        
-        if is_hand:
-            self.log("✓ Cursor = HAND (ads clickable)")
-        else:
-            self.log("Cursor NOT hand (no clickable ads)")
-        
-        return is_hand
+
+    
     
     def _find_and_calculate_click_position(self):
         """
@@ -352,7 +317,42 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
         self.log(f"Logo at ({logo_x}, {logo_y}), video click at ({video_x}, {video_y}), area: {self.area}")
         return (video_x, video_y)
 
-    
+    def _hover_and_check_hand_cursor(self):
+        """
+        Hover mouse and check hand cursor
+        
+        Returns:
+            bool: True if cursor = hand (clickable), False otherwise
+        """
+        if not self.region:          
+            return False
+        
+        region_x, region_y, region_width, region_height = self.region
+        
+        # Random position in ads area
+        random_x = region_x + random.randint(0, region_width)
+        random_y = region_y + random.randint(0, region_height)
+        
+        self.log(f"Hovering on CHANNEL PAGE")
+        
+        # Move mouse (NO CLICK)
+        MouseMoveAction.move_and_click_static(
+            random_x, random_y,
+            click_type=None,  # No click, just hover
+            fast=False
+        )
+        
+        time.sleep(0.5)  # Wait for cursor to update
+        
+        # Check if cursor = hand
+        is_hand = self._is_hand_cursor()
+        
+        if is_hand:
+            self.log("✓ Cursor = HAND (ads clickable)")
+        else:
+            self.log("Cursor NOT hand (no clickable ads)")
+        
+        return is_hand
     
     def _fallback_click_for_cookies(self):
         """
@@ -380,11 +380,11 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
                         random_x, random_y,
                         click_type=None,
                         fast=False
-                    )
-                time.sleep(0.3)
+                    )              
             
                 # Check if cursor is hand (clickable)
                 if is_hand_cursor():
+                    time.sleep(random.uniform(0.5, 2))
                     self.log(f"✓ Found clickable element at ({random_x}, {random_y})")
                 
                     # Click using MouseMoveAction for consistency
@@ -451,6 +451,7 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
             
                 # Check if cursor is hand (clickable)
                 if is_hand_cursor():
+                    time.sleep(random.uniform(0.5, 2))
                     self.log(f"✓ Found clickable element at ({random_x}, {random_y})")
                 
                     # Click using MouseMoveAction for consistency

@@ -112,22 +112,11 @@ class GoLoginSeleniumStartAction(BaseAction):
             if data.get('status') == 'opened' and data.get('driver')
         }
     
-        if not opened_profiles:
-            print(f"[BATCH {batch_num}] ✗ No profiles opened successfully")
-            print(f"[BATCH {batch_num}] Profile statuses:")
-            for pid, data in profile_data.items():
-                status = data.get('status', 'unknown')
-                error = data.get('error', 'N/A')
-                print(f"  - {pid}: {status} (error: {error})")
+        if not opened_profiles:           
             return
     
-        print(f"[BATCH {batch_num}] ✓ {len(opened_profiles)} profile(s) ready for execution:")
-        for pid in opened_profiles.keys():
-            print(f"  - {pid}")
-        print()
-    
         # ========== STEP 2: SUBMIT ALL PROFILES TO THREADPOOLEXECUTOR ==========
-        print(f"[BATCH {batch_num}] Submitting profiles to ThreadPoolExecutor...")
+       
     
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit all profiles

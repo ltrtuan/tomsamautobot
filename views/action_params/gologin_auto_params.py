@@ -1471,7 +1471,7 @@ class GoLoginAutoParams(BaseActionParams):
 
         proxyfile_hint = tk.Label(
             options_frame,
-            text="File format example:\nhttp;your_api_key_1\nsocks5;your_api_key_2\nProxies will be assigned to profiles sequentially or randomly.",
+            text="File format example:\nhttp|your_api_key_1\nsocks5|your_api_key_2\nProxies will be assigned to profiles sequentially or randomly.",
             bg=cfg.LIGHT_BG_COLOR,
             font=("Segoe UI", 8),
             fg="#666666",
@@ -1480,8 +1480,6 @@ class GoLoginAutoParams(BaseActionParams):
         )
         proxyfile_hint.pack(anchor=tk.W)
 
-        
-        
         
 
         # ========== THÊM MULTI-THREADING SECTION ==========

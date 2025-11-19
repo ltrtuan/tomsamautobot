@@ -460,7 +460,41 @@ class BaseFlowAutoAction:
             traceback.print_exc()
             return False
 
-
+    def _get_current_url(self):
+        """
+        Get current URL from browser address bar
+        
+        Method:
+        1. Focus address bar (Ctrl+L)
+        2. Select all (Ctrl+A)
+        3. Copy to clipboard (Ctrl+C)
+        4. Read from clipboard
+        
+        Returns:
+            str: Current URL, or empty string if failed
+        """
+        try:
+            # Focus address bar
+            pyautogui.hotkey('ctrl', 'l')
+            time.sleep(0.2)
+            
+            # Select all
+            pyautogui.hotkey('ctrl', 'a')
+            time.sleep(0.1)
+            
+            # Copy to clipboard
+            pyautogui.hotkey('ctrl', 'c')
+            time.sleep(0.2)
+            
+            # Read from clipboard
+            import pyperclip
+            url = pyperclip.paste()
+            
+            return url.strip()
+        
+        except Exception as e:
+            self.log(f"Failed to get current URL: {e}", "ERROR")
+            return ""
 
     # ========== LOGGING ==========
     

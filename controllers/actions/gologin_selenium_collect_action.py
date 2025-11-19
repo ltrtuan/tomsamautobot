@@ -605,7 +605,6 @@ class GoLoginSeleniumCollectAction(BaseAction):
         
             human = SeleniumHumanActions(driver)
             how_to_get_websites = self.params.get('how_to_get_websites', 'Random')
-            search_gg_yt = self.params.get('search_gg_yt', False)
             
             start_time = time.time()
             visit_count = 0
@@ -756,11 +755,11 @@ class GoLoginSeleniumCollectAction(BaseAction):
                     pass
             
                 
-                rand_gg = random.random()
-                if rand_gg < 0.35:
-                    # Perform search if Google/YouTube - Input keyword to address bar
-                    self._search_on_site(driver, keywords)
-                    self._perform_deeper_clicks(driver, human, start_time, total_seconds, profile_id)
+                # rand_gg = random.random()
+                # if rand_gg < 0.35:
+                #     # Perform search if Google/YouTube - Input keyword to address bar
+                #     self._search_on_site(driver, keywords)
+                #     self._perform_deeper_clicks(driver, human, start_time, total_seconds, profile_id)
                     
                 # Random human-like actions
                 actions_on_page = random.randint(1, 3)
