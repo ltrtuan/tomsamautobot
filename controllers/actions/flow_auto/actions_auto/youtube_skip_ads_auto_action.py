@@ -176,25 +176,25 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
         """Try to find and click skip button once (with hand cursor check)"""
         if self.skip_ads_region:
             region_x, region_y, region_width, region_height = self.skip_ads_region
-          
-            random_x = region_x + random.randint(0, region_width)
-            random_y = region_y + random.randint(0, region_height)
+            for attempt in range(1, 4):
+                random_x = region_x + random.randint(0, region_width)
+                random_y = region_y + random.randint(0, region_height)
             
-            MouseMoveAction.move_and_click_static(
-                random_x, random_y,
-                click_type=None,
-                fast=False
-            )
+                MouseMoveAction.move_and_click_static(
+                    random_x, random_y,
+                    click_type=None,
+                    fast=False
+                )
             
-            time.sleep(0.2)
-                
-            if is_hand_cursor():
-                click_delay = random.uniform(0.5, 1)
-                time.sleep(click_delay)
-                pyautogui.click()
-                self.log(f"✓ Clicked skip button at ({random_x}, {random_y})")
                 time.sleep(1)
-                return True
+                
+                if is_hand_cursor():
+                    click_delay = random.uniform(0.5, 1)
+                    time.sleep(click_delay)
+                    pyautogui.click()
+                    self.log(f"✓ Clicked skip button at ({random_x}, {random_y})")
+                    time.sleep(1)
+                    return True
             
         return False
     

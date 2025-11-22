@@ -34,10 +34,12 @@ class YouTubeFlowAutoBrowseIterator(BaseYouTubeFlowAutoIterator):
         # ========== CHAIN 0: WARM UP BEFORE VIEW VIDEO (BẮT BUỘC) ==========
         self._warm_up_chain()
         self._interaction_website_chains()
-        self._warm_up_chain()
+        
+        self._second_action_chain()
         self._interaction_website_chains()
-        self._warm_up_chain()
+        self._second_action_chain()
         self._interaction_website_chains()
+        self._last_action_chain()
         # ========== CHAIN 1: SEARCH AND START VIDEO (BẮT BUỘC) ==========
         # self._build_search_and_start_video_chain()
         
@@ -70,14 +72,26 @@ class YouTubeFlowAutoBrowseIterator(BaseYouTubeFlowAutoIterator):
         """
         chain_warm_up_actions = []
         
-        chain_warm_up_actions.append(
-            ("move_mouse", BrowseWebsiteAutoAction(
-                profile_id=self.profile_id,
-                parameters = self.parameters,
-                log_prefix=self.log_prefix,
-            ))
-        )
-        
+        choice_browse = random.choice([1,2])
+        if choice_browse == 1:
+            chain_warm_up_actions.append(
+                ("browse", BrowseWebsiteAutoAction(
+                    profile_id=self.profile_id,
+                    parameters = self.parameters,
+                    area = "main",
+                    log_prefix=self.log_prefix,
+                ))
+            )
+        else:
+            chain_warm_up_actions.append(
+                ("browse", BrowseWebsiteAutoAction(
+                    profile_id=self.profile_id,
+                    parameters = self.parameters,
+                    area = "search",
+                    log_prefix=self.log_prefix,
+                ))
+            )
+            
         chain_warm_up_actions.append(
             ("move_mouse", YouTubeMouseMoveAutoAction(
                 profile_id=self.profile_id,
@@ -90,6 +104,60 @@ class YouTubeFlowAutoBrowseIterator(BaseYouTubeFlowAutoIterator):
             'actions': chain_warm_up_actions
         })
         
+        
+    def _second_action_chain(self):      
+        chain_warm_up_actions = []
+        
+        choice_browse = random.choice([1,2])
+        if choice_browse == 1:
+            chain_warm_up_actions.append(
+                ("browse", BrowseWebsiteAutoAction(
+                    profile_id=self.profile_id,
+                    parameters = self.parameters,
+                    area = "search",
+                    log_prefix=self.log_prefix,
+                ))
+            )
+        else:
+            chain_warm_up_actions.append(
+                ("browse", BrowseWebsiteAutoAction(
+                    profile_id=self.profile_id,
+                    parameters = self.parameters,
+                    area = "sidebar",
+                    log_prefix=self.log_prefix,
+                ))
+            )
+            
+        chain_warm_up_actions.append(
+            ("move_mouse", YouTubeMouseMoveAutoAction(
+                profile_id=self.profile_id,
+                click=False,
+                log_prefix=self.log_prefix,
+            ))
+        )
+        self.chain_queue.append({
+            'name': 'second_action_chain',
+            'actions': chain_warm_up_actions
+        }) 
+        
+
+    def _last_action_chain(self):      
+        chain_warm_up_actions = []        
+       
+        chain_warm_up_actions.append(
+            ("browse", BrowseWebsiteAutoAction(
+                profile_id=self.profile_id,
+                parameters = self.parameters,
+                area = "search",
+                choice = "web",
+                log_prefix=self.log_prefix,
+            ))
+        )
+       
+        self.chain_queue.append({
+            'name': 'last_action_chain',
+            'actions': chain_warm_up_actions
+        }) 
         
     def _interaction_website_chains(self):
         """
@@ -114,7 +182,7 @@ class YouTubeFlowAutoBrowseIterator(BaseYouTubeFlowAutoIterator):
         
         for j in range(num_actions):
             chain_actions.append(
-                ("delay", random.randint(2,5))  # ← DELAY TUPLE: ("delay", seconds)
+                ("delay", random.randint(5,10))  # ← DELAY TUPLE: ("delay", seconds)
             )
             action_type = random.choice(action_types)
           

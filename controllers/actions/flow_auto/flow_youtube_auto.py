@@ -59,9 +59,9 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
             self._build_video_interaction_chains(index_action = i) 
             
 
-        rand_end_chain = random.random()
-        if rand_end_chain < 0.5:     
-            self._end_chain()
+        # rand_end_chain = random.random()
+        # if rand_end_chain < 0.5:     
+        self._end_chain()
         
 
     def _warm_up_chain(self):
@@ -88,6 +88,7 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
             ("move_mouse", BrowseWebsiteAutoAction(
                 profile_id=self.profile_id,
                 parameters = self.parameters,
+                choice = "youtube",
                 log_prefix=self.log_prefix,
             ))
         )
@@ -411,7 +412,7 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         RANDOM excute action or not        
         """              
         chain_end_actions = []
-        rand_choice = random.choice([1,2])
+        rand_choice = random.choice([2])
         if rand_choice == 1:
             chain_end_actions.append(
                 ("click_sidebar", YouTubeClickRandomVideoSidebarAutoAction(
@@ -425,6 +426,7 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
                 ("browse_website", BrowseWebsiteAutoAction(
                     profile_id=self.profile_id,
                     parameters = self.parameters,
+                    choice = "web",
                     log_prefix=self.log_prefix
                 ))
             )

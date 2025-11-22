@@ -129,7 +129,7 @@ class GoLoginAutoAction(BaseAction):
             from helpers.app_helpers import check_and_focus_window_by_title
         
             # Clear existing text
-            check_and_focus_window_by_title("GoLogin")
+            check_and_focus_window_by_title("Profiles - GoLogin")
             
             
             # ========== STEP 3: SEND CTRL+F TO OPEN SEARCH ==========         

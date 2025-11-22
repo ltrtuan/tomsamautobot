@@ -38,7 +38,7 @@ class YouTubeNavigateAutoAction(BaseFlowAutoAction):
                 pyautogui.press('enter')
             
                 # Wait for page load
-                wait_time = random.uniform(3, 5)
+                wait_time = random.uniform(4, 6)
                 self.log(f"Waiting {wait_time:.1f}s for page load")
                 time.sleep(wait_time)
             

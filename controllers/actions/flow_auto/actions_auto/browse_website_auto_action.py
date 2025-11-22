@@ -22,7 +22,7 @@ class BrowseWebsiteAutoAction(BaseFlowAutoAction):
     - Choice 2 (50%): If on YouTube → Search → Click video (skip navigation)
     """
     
-    def __init__(self, profile_id, parameters, log_prefix="[BROWSE WEBSITE]"):
+    def __init__(self, profile_id, parameters, area = "search", choice = "youtube", log_prefix="[BROWSE WEBSITE]"):
         """
         Initialize browse website action
         
@@ -33,6 +33,42 @@ class BrowseWebsiteAutoAction(BaseFlowAutoAction):
         """
         super().__init__(profile_id, log_prefix)
         self.parameters = parameters
+        self.area = area.lower()
+        self.choice = choice
+        # ========== EXTRACT PARAMS BASED ON AREA ==========
+        if self.area == "sidebar":
+            self.logo_path = parameters.get('youtube_sidebar_image_search_path', '').strip()
+            area_x = int(parameters.get('youtube_sidebar_area_x', 0))
+            area_y = int(parameters.get('youtube_sidebar_area_y', 0))
+            area_width = int(parameters.get('youtube_sidebar_area_width', 400))
+            area_height = int(parameters.get('youtube_sidebar_area_height', 1080))
+            
+        elif self.area == "main" or self.area == "channel":
+            self.logo_path = parameters.get('youtube_channel_logo_path', '').strip()
+            area_x = int(parameters.get('youtube_main_area_x', 0))
+            area_y = int(parameters.get('youtube_main_area_y', 0))
+            area_width = int(parameters.get('youtube_main_area_width', 400))
+            area_height = int(parameters.get('youtube_main_area_height', 1080))
+            
+        elif self.area == "menu_videos_channel":
+            self.logo_path = parameters.get('youtube_videos_menu_channel_path', '').strip()
+            area_x = int(parameters.get('youtube_main_area_x', 0))
+            area_y = int(parameters.get('youtube_main_area_y', 0))
+            area_width = int(parameters.get('youtube_main_area_width', 400))
+            area_height = int(parameters.get('youtube_main_area_height', 1080))
+            
+        else:
+            self.logo_path = parameters.get('youtube_image_search_path', '').strip()
+            area_x = int(parameters.get('youtube_search_area_x', 0))
+            area_y = int(parameters.get('youtube_search_area_y', 0))
+            area_width = int(parameters.get('youtube_search_area_width', 1920))
+            area_height = int(parameters.get('youtube_search_area_height', 1080))
+
+        
+        # Define search region
+        self.region = None
+        if area_width > 0 and area_height > 0:
+            self.region = (area_x, area_y, area_width, area_height)
     
     def _execute_internal(self):
         """Execute browse website action with 2 random choices"""
@@ -41,10 +77,10 @@ class BrowseWebsiteAutoAction(BaseFlowAutoAction):
             # choice = random.choice([1, 2])
             # self.log(f"🎲 Random choice: {choice}")
             
-            # if choice == 1:
-            #     return self._execute_choice_1_navigate_and_click()
-            # else:
-            return self._execute_choice_2_youtube_search()
+            if self.choice == "web":
+                return self._execute_choice_1_navigate_and_click()
+            else:
+                return self._execute_choice_2_youtube_search()
         
         except Exception as e:
             self.log(f"✗ Browse website error: {e}", "ERROR")
@@ -52,7 +88,7 @@ class BrowseWebsiteAutoAction(BaseFlowAutoAction):
             traceback.print_exc()
             return False
     
-    def _execute_choice_1_navigate_and_click(self):
+    def _execute_choice_1_navigate_and_click(self , random_click = False):
         """
         Choice 1: Navigate to random URL and perform random clicks
         
@@ -105,20 +141,21 @@ class BrowseWebsiteAutoAction(BaseFlowAutoAction):
             page_load_wait = random.uniform(3, 5)
             self.log(f"Waiting {page_load_wait:.1f}s for page load")
             time.sleep(page_load_wait)
+           
+            if random_click:
+                # ========== STEP 5: RANDOM MOUSE MOVEMENTS WITH CLICK DETECTION ==========
+                self.log("Starting random mouse movements (3 attempts)")
         
-            # ========== STEP 5: RANDOM MOUSE MOVEMENTS WITH CLICK DETECTION ==========
-            self.log("Starting random mouse movements (3 attempts)")
+                # Use helper function from app_helpers
+                clicked, position = perform_random_movements_with_click_detection(
+                    max_attempts=2,
+                    type_action=self.parameters.get('keyword_type')
+                )
         
-            # Use helper function from app_helpers
-            clicked, position = perform_random_movements_with_click_detection(
-                max_attempts=2,
-                type_action=self.parameters.get('keyword_type')
-            )
-        
-            if clicked:
-                self.log(f"✓ Successfully clicked at {position}")
-            else:
-                self.log("No clickable elements found after 5 attempts", "WARNING")
+                if clicked:
+                    self.log(f"✓ Successfully clicked at {position}")
+                else:
+                    self.log("No clickable elements found after 5 attempts", "WARNING")
         
             self.log("✓ Choice 1 completed")
             return True
@@ -146,62 +183,73 @@ class BrowseWebsiteAutoAction(BaseFlowAutoAction):
         if result_bring:
             time.sleep(1)
     
-            # ========== STEP 2: GET CURRENT URL ==========
-            current_url = self._get_current_url()
+            # # ========== STEP 2: GET CURRENT URL ==========
+            # current_url = self._get_current_url()
     
-            if current_url:
-                self.log(f"Current URL: {current_url}")
+            # if current_url:
+            #     self.log(f"Current URL: {current_url}")
     
-            # ========== STEP 3: CHECK IF NEED TO NAVIGATE TO YOUTUBE ==========
-            if not current_url or "youtube.com" not in current_url.lower():
-                self.log("Not on YouTube, navigating to youtube.com")
-                self._navigate_youtube()               
-          
+            # # ========== STEP 3: CHECK IF NEED TO NAVIGATE TO YOUTUBE ==========
+            # if not current_url or "youtube.com" not in current_url.lower():
+            #     self.log("Not on YouTube, navigating to youtube.com")
+
+            # If clicked to Short video back to home
+            
+                
+            for attempt in range(1, 6):
+                current_url = self._get_current_url()
+                if "youtube.com/shorts" in current_url.lower() or "youtube.com/watch" not in current_url.lower():
+                    self._navigate_youtube()
+                    time.sleep(random.uniform(2, 3))
+                    
+                if self.area == "main" or self.area == "search":
+                    # self._navigate_youtube()
+                    # ========== STEP 4: FIND SEARCH BOX AND ENTER KEYWORD: RANDOM SEARCH VIDEO AND CLICK RANDOM VIDEO SEARCH OR CLICK RANDOM VIDEO HOME ==========
+                    choice = random.choice([1])
+                    if choice == 1:
+                        self.log("Finding search box and entering keyword")
     
-            # ========== STEP 4: FIND SEARCH BOX AND ENTER KEYWORD: RANDOM SEARCH VIDEO AND CLICK RANDOM VIDEO SEARCH OR CLICK RANDOM VIDEO HOME ==========
-            choice = random.choice([1])
-            if choice == 1:
-                self.log("Finding search box and entering keyword")
+                        search_action = YouTubeFindSearchBoxAutoAction(
+                            profile_id=self.profile_id,
+                            parameters=self.parameters,  # Contains keywords_google
+                            log_prefix=self.log_prefix,
+                            search_type="browse"
+                        )
     
-                search_action = YouTubeFindSearchBoxAutoAction(
-                    profile_id=self.profile_id,
-                    parameters=self.parameters,  # Contains keywords_google
-                    log_prefix=self.log_prefix,
-                    search_type="browse"
-                )
-    
-                search_action.execute()
+                        search_action.execute()
     
            
-                # Wait for search results
-                time.sleep(random.uniform(2, 3))
-            else:
-                # MUST RETURN HOME TO CLICK VIDEO HOME
-                self._navigate_youtube()
-                num_random_actions = random.randint(1, 2)
-                YouTubeRandomMoveScrollAutoAction(self.profile_id, num_random_actions, "main", self.log_prefix).execute()
+                        # Wait for search results
+                        time.sleep(random.uniform(2, 3))
+                    else:                                   
+                        num_random_actions = random.randint(1, 2)
+                        YouTubeRandomMoveScrollAutoAction(self.profile_id, num_random_actions, "main", self.log_prefix).execute()
     
-            # ========== STEP 5: CLICK RANDOM VIDEO ==========
-            self.log("Clicking random video from search results")
+            
+                # ========== STEP 5: CLICK RANDOM VIDEO ==========
+                self.log("Clicking random video from search results")
     
-            # Use helper function from app_helpers
-            clicked, position = perform_random_movements_with_click_detection(
-                max_attempts=5
-            )
+                # Use helper function from app_helpers
+                clicked, position = perform_random_movements_with_click_detection(
+                    max_attempts=5, type_action="youtube" , region = self.region
+                )
         
-            if clicked:
-                self.log(f"✓ Successfully clicked at {position}")
-                time.sleep(random.uniform(2, 3))
-                YouTubeSkipAdsAutoAction(
-                        profile_id=self.profile_id,
-                        parameters=self.parameters,  # Pass keywords dict for ads area params
-                        log_prefix=self.log_prefix
-                ).execute()
-            else:
-                self.log("No clickable elements found after 5 attempts", "WARNING")
-        
-            self.log("✓ Choice 1 completed")
-            return True
+                if clicked:
+                    self.log(f"✓ Successfully clicked at {position}")               
+                    time.sleep(random.uniform(2, 3))
+                    current_url = self._get_current_url()
+                    if "youtube.com/shorts" not in current_url.lower() and "youtube.com/watch" in current_url.lower():
+                        YouTubeSkipAdsAutoAction(
+                                profile_id=self.profile_id,
+                                parameters=self.parameters,  # Pass keywords dict for ads area params
+                                log_prefix=self.log_prefix
+                        ).execute()
+                    return True
+                else:
+                    self.log("No clickable elements found after 5 attempts", "WARNING")
+              
+                if attempt < 5:
+                    continue
         
         return False
     
