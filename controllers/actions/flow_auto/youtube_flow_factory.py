@@ -1,6 +1,6 @@
 # controllers/actions/flow_auto/youtube_flow_factory.py
 
-class YouTubeFlowAuto:
+class YouTubeFlowAutoFactory:
     """
     YouTube Auto Flow Factory
     

@@ -128,7 +128,7 @@ class BaseFlowAutoAction:
         """
         try:
             import win32gui
-            time.sleep(0.1)
+            time.sleep(0.5)
             
             cursor_info = win32gui.GetCursorInfo()
             hand_cursor_handles = [32649, 65567, 65563, 65561, 60171, 60169, 32513]
@@ -373,14 +373,16 @@ class BaseFlowAutoAction:
 
     def _close_extra_tabs_keep_first(self):
         """
-        Close all tabs except the first tab in GoLogin browser profile.
+        Close all tabs except the first tab in current GoLogin browser window.
+    
+        Uses PyAutoGUI + win32gui to close tabs within SAME window only.
     
         Logic:
-        1. Check if current window is GoLogin browser (via process check)
-        2. Switch to tab 1 first (Ctrl+1) - ensure we're on tab 1
-        3. Get tab 1 title as reference
-        4. Loop: Ctrl+Tab to next tab, if title same as tab 1 (cycled back) → break (no more tabs)
-        5. Else: Close tab with Ctrl+W
+        1. Get current window handle (profile browser)
+        2. Switch to tab 1 (Ctrl+1)
+        3. Loop: Ctrl+2 to jump to tab 2 (if exists), check if still same window
+        4. If same window → close tab (Ctrl+W), repeat
+        5. If window changed → break (switched to different profile/app)
     
         Returns:
             bool: True if successfully closed extra tabs or only 1 tab exists, False if error
@@ -396,61 +398,92 @@ class BaseFlowAutoAction:
             import win32gui
             import time
         
-            # Step 2: Switch to tab 1 (first tab) - ensure we start from tab 1
-            pyautogui.hotkey('ctrl', '1')
-            time.sleep(1)  # Wait for tab switch
-            self.log("Switched to tab 1 (first tab)")
+            # Step 2: Get current window handle (IMPORTANT: lock to this window)
+            initial_hwnd = win32gui.GetForegroundWindow()
+            initial_title = win32gui.GetWindowText(initial_hwnd)
+            self.log(f"Target window (hwnd={initial_hwnd}): '{initial_title[:80]}...'")
         
-            # Step 3: Get tab 1 title as reference (for comparison in loop)
-            tab1_hwnd = win32gui.GetForegroundWindow()
-            tab1_title = win32gui.GetWindowText(tab1_hwnd)
+            # Step 3: Switch to tab 1 (first tab)
+            pyautogui.hotkey('ctrl', '1')
+            time.sleep(0.8)
+        
+            # Verify still in same window
+            current_hwnd = win32gui.GetForegroundWindow()
+            if current_hwnd != initial_hwnd:
+                self.log("Window changed after Ctrl+1, aborting", "WARNING")
+                return False
+        
+            tab1_title = win32gui.GetWindowText(current_hwnd)
             self.log(f"Tab 1 title: '{tab1_title[:80]}...'")
         
-            # Step 4: Check if multiple tabs exist (try switch to next tab)
-            pyautogui.hotkey('ctrl', 'tab')
-            time.sleep(1)
+            # Step 4: Try to switch to tab 2 (check if multiple tabs exist)
+            pyautogui.hotkey('ctrl', '2')
+            time.sleep(0.8)
         
             current_hwnd = win32gui.GetForegroundWindow()
+        
+            # FIX: If window changed → switched to different window → abort
+            if current_hwnd != initial_hwnd:
+                self.log("Window changed after Ctrl+2 (different profile/app), aborting", "WARNING")
+                # Switch back to original window
+                win32gui.SetForegroundWindow(initial_hwnd)
+                return False
+        
             current_title = win32gui.GetWindowText(current_hwnd)
         
-            # If title same after Ctrl+Tab → only 1 tab (no switch occurred)
+            # If title same as tab 1 → only 1 tab exists (Ctrl+2 didn't switch)
             if current_title == tab1_title:
-                self.log("Only 1 tab detected (no tab switch occurred), nothing to close")
+                self.log("Only 1 tab detected (Ctrl+2 had no effect), nothing to close")
                 return True
         
-            self.log(f"Multiple tabs detected - current after switch: '{current_title[:80]}...'")
+            self.log(f"Multiple tabs detected - tab 2 title: '{current_title[:80]}...'")
         
-            # Step 5: Close extra tabs (tab 2+) - loop until back to tab 1
+            # Step 5: Close extra tabs (always try Ctrl+2, close if exists)
             max_tabs_to_close = 20  # Safety limit
             tabs_closed = 0
         
             for attempt in range(max_tabs_to_close):
-                # Get current tab title (should be tab 2+ after first Ctrl+Tab above)
+                # Try switch to tab 2 (after closing, next tab becomes tab 2)
+                pyautogui.hotkey('ctrl', '2')
+                time.sleep(0.6)
+            
                 current_hwnd = win32gui.GetForegroundWindow()
+            
+                # FIX: If window changed → break (reached end or switched to other window)
+                if current_hwnd != initial_hwnd:
+                    self.log(f"Window changed (switched to different window), stopping at {tabs_closed} tabs closed")
+                    # Switch back
+                    win32gui.SetForegroundWindow(initial_hwnd)
+                    break
+            
                 current_title = win32gui.GetWindowText(current_hwnd)
             
-                # If current title == tab1_title → cycled back to tab 1 → all extra tabs closed
+                # If current title == tab1_title → cycled back to tab 1 → no more tabs
                 if current_title == tab1_title:
                     self.log(f"✓ All extra tabs closed - back to tab 1 (closed {tabs_closed} tabs)")
                     break
             
                 # Close current tab (tab 2+) with Ctrl+W
-                self.log(f"Closing tab {attempt + 1}: '{current_title[:80]}...'")
+                self.log(f"Closing tab (attempt {attempt + 1}): '{current_title[:60]}...'")
                 pyautogui.hotkey('ctrl', 'w')
-                time.sleep(0.4)  # Wait for tab close + browser auto-switch to next/prev tab
+                time.sleep(0.6)
                 tabs_closed += 1
             
-                # After close, browser auto-switches to prev/next tab (could be tab 1 or tab 3+)
-                # Loop continues to check if current tab is tab 1 (done) or still extra tab (close again)
+                # After close, verify still in same window
+                current_hwnd = win32gui.GetForegroundWindow()
+                if current_hwnd != initial_hwnd:
+                    self.log(f"Window changed after close, stopped at {tabs_closed} tabs closed")
+                    win32gui.SetForegroundWindow(initial_hwnd)
+                    break
         
             if tabs_closed == 0:
-                self.log("No tabs closed (possible logic error)", "WARNING")
+                self.log("No tabs closed - only 1 tab exists")
             else:
-                self.log(f"✓ Successfully closed {tabs_closed} extra tabs, tab 1 kept")
+                self.log(f"✓ Successfully closed {tabs_closed} extra tabs")
         
-            # Final: Ensure we're on tab 1 (safety)
+            # Final: Ensure on tab 1
             pyautogui.hotkey('ctrl', '1')
-            time.sleep(0.2)
+            time.sleep(0.3)
         
             return True
     
@@ -460,6 +493,43 @@ class BaseFlowAutoAction:
             traceback.print_exc()
             return False
 
+
+    def _get_current_url(self):
+        """
+        Get current URL from browser address bar
+    
+        Method:
+        1. Focus address bar (Ctrl+L) - auto selects all
+        2. Copy to clipboard (Ctrl+C)
+        3. Press ESC to exit address bar focus
+        4. Read from clipboard
+    
+        Returns:
+            str: Current URL, or empty string if failed
+        """
+        try:
+            # Focus address bar (auto-selects all text)
+            pyautogui.hotkey('ctrl', 'l')
+            time.sleep(0.2)  # Reduced wait time
+        
+            # Copy to clipboard (no need for Ctrl+A)
+            pyautogui.hotkey('ctrl', 'c')
+            time.sleep(0.2)  # Reduced wait time
+        
+            # ESC to exit address bar focus (prevent paste issues)
+            pyautogui.press('esc')
+            time.sleep(0.1)
+        
+            # Read from clipboard
+            import pyperclip
+            url = pyperclip.paste()
+        
+            self.log(f"Current URL: {url}")
+            return url.strip()
+    
+        except Exception as e:
+            self.log(f"Failed to get current URL: {e}", "ERROR")
+            return ""
 
 
     # ========== LOGGING ==========

@@ -36,6 +36,9 @@ class GoLoginAutoParams(BaseActionParams):
         # ========== KEYWORDS GOOGLE SECTION ==========
         self.create_keywords_google_section()
         
+        # ========== WARMUP WEBSITES SECTION (NEW) ==========
+        self.create_warmup_websites_section()
+        
         # ========== PROFILE IDs SECTION ==========
         self.create_profile_ids_section()
         
@@ -1326,7 +1329,71 @@ class GoLoginAutoParams(BaseActionParams):
         )
         keywords_google_hint.pack(anchor=tk.W)
 
+    def create_warmup_websites_section(self):
+        """Warmup Websites file browse section (NEW)"""
+        warmup_frame = tk.LabelFrame(
+            self.parent_frame,
+            text="Warmup Websites File",
+            bg=cfg.LIGHT_BG_COLOR,
+            pady=10,
+            padx=10
+        )
+        warmup_frame.pack(fill=tk.X, pady=10)
     
+        # Label
+        warmup_label = tk.Label(
+            warmup_frame,
+            text="File warmup websites (TXT file - one URL per line):",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 9)
+        )
+        warmup_label.pack(anchor=tk.W, pady=(0, 3))
+    
+        # Browse frame
+        warmup_browse_frame = tk.Frame(warmup_frame, bg=cfg.LIGHT_BG_COLOR)
+        warmup_browse_frame.pack(fill=tk.X, pady=(0, 5))
+    
+        # Entry
+        self.warmup_websites_file_var = tk.StringVar()
+        if self.parameters:
+            self.warmup_websites_file_var.set(self.parameters.get("warmup_websites_file", ""))
+    
+        warmup_entry = tk.Entry(
+            warmup_browse_frame,
+            textvariable=self.warmup_websites_file_var,
+            font=("Segoe UI", 10)
+        )
+        warmup_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+    
+        # Browse button
+        def browse_warmup_file():
+            filename = filedialog.askopenfilename(
+                title="Select Warmup Websites TXT File",
+                filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+            )
+            if filename:
+                self.warmup_websites_file_var.set(filename)
+    
+        browse_warmup_button = ttk.Button(
+            warmup_browse_frame,
+            text="Browse",
+            command=browse_warmup_file
+        )
+        browse_warmup_button.pack(side=tk.LEFT)
+    
+        # Hint
+        warmup_hint = tk.Label(
+            warmup_frame,
+            text="💡 Random URL from this file will be used to warm up profile (if Action Type is None or Google).",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 8),
+            fg="#666666",
+            wraplength=500,
+            justify=tk.LEFT
+        )
+        warmup_hint.pack(anchor=tk.W)
+
+
     def create_options_section(self):
         """Options checkboxes and cookies import - BỎ HEADLESS VÀ MULTI-THREADING"""
         options_frame = tk.LabelFrame(
@@ -1404,7 +1471,7 @@ class GoLoginAutoParams(BaseActionParams):
 
         proxyfile_hint = tk.Label(
             options_frame,
-            text="File format example:\nhttp;your_api_key_1\nsocks5;your_api_key_2\nProxies will be assigned to profiles sequentially or randomly.",
+            text="File format example:\nhttp|your_api_key_1\nsocks5|your_api_key_2\nProxies will be assigned to profiles sequentially or randomly.",
             bg=cfg.LIGHT_BG_COLOR,
             font=("Segoe UI", 8),
             fg="#666666",
@@ -1413,8 +1480,6 @@ class GoLoginAutoParams(BaseActionParams):
         )
         proxyfile_hint.pack(anchor=tk.W)
 
-        
-        
         
 
         # ========== THÊM MULTI-THREADING SECTION ==========
@@ -1722,6 +1787,8 @@ class GoLoginAutoParams(BaseActionParams):
         # ========== KEYWORDS (YouTube & Google) - GLOBAL ==========     
         params["keywords_google_file"] = self.keywords_google_file_var.get().strip()
         params["keywords_google_variable"] = self.keywords_google_variable_var.get().strip()
+        # ========== WARMUP WEBSITES FILE (NEW) ==========
+        params["warmup_websites_file"] = self.warmup_websites_file_var.get().strip()
     
         # ========== OPTIONS ==========
         params["refresh_fingerprint"] = self.refresh_fingerprint_var.get()

@@ -211,6 +211,7 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
             width=20
         )
         combo.pack(side=tk.LEFT, padx=5)
+       
     
     def create_options_section(self):
         """Options checkboxes and cookies import"""
@@ -383,13 +384,22 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         """Websites file browse and variable"""
         websites_frame = tk.LabelFrame(
             self.parent_frame,
-            text="Websites List (TXT File)",
+            text="Websites Configuration",
             bg=cfg.LIGHT_BG_COLOR,
             pady=10,
             padx=10
         )
         websites_frame.pack(fill=tk.X, pady=10)
-        
+    
+        # ========== EXISTING: WEBSITES LIST (FOR BROWSING) ==========
+        websites_list_label = tk.Label(
+            websites_frame,
+            text="Websites List (for browsing/warmup):",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10, "bold")
+        )
+        websites_list_label.pack(anchor=tk.W, pady=(5, 3))
+    
         # Option 1: Browse TXT file
         browse_label = tk.Label(
             websites_frame,
@@ -398,21 +408,21 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
             font=("Segoe UI", 9)
         )
         browse_label.pack(anchor=tk.W, pady=(0, 3))
-        
+    
         browse_frame = tk.Frame(websites_frame, bg=cfg.LIGHT_BG_COLOR)
         browse_frame.pack(fill=tk.X, pady=(0, 10))
-        
+    
         self.websites_file_var = tk.StringVar()
         if self.parameters:
             self.websites_file_var.set(self.parameters.get("websites_file", ""))
-        
+    
         file_entry = tk.Entry(
             browse_frame,
             textvariable=self.websites_file_var,
             font=("Segoe UI", 10)
         )
         file_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
-        
+    
         def browse_file():
             filename = filedialog.askopenfilename(
                 title="Select Websites TXT File",
@@ -420,14 +430,14 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
             )
             if filename:
                 self.websites_file_var.set(filename)
-        
+    
         browse_button = ttk.Button(
             browse_frame,
             text="Browse",
             command=browse_file
         )
         browse_button.pack(side=tk.LEFT)
-        
+    
         # Option 2: Variable name
         var_label = tk.Label(
             websites_frame,
@@ -436,18 +446,18 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
             font=("Segoe UI", 9)
         )
         var_label.pack(anchor=tk.W, pady=(0, 3))
-        
+    
         self.websites_variable_var = tk.StringVar()
         if self.parameters:
             self.websites_variable_var.set(self.parameters.get("websites_variable", ""))
-        
+    
         var_entry = tk.Entry(
             websites_frame,
             textvariable=self.websites_variable_var,
             font=("Segoe UI", 10)
         )
         var_entry.pack(fill=tk.X, pady=(0, 5))
-        
+    
         # Hint
         hint = tk.Label(
             websites_frame,
@@ -458,12 +468,121 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
             wraplength=500,
             justify=tk.LEFT
         )
-        hint.pack(anchor=tk.W)
-        
-        # ========== THÊM KEYWORDS SECTION ==========
+        hint.pack(anchor=tk.W, pady=(0, 10))
+    
+        # ========== SEPARATOR ==========
         separator = ttk.Separator(websites_frame, orient='horizontal')
         separator.pack(fill=tk.X, pady=10)
     
+        # ========== NEW: FILE TO COLLECT URLs ==========
+        collect_label = tk.Label(
+            websites_frame,
+            text="File to collect URL websites:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10, "bold")
+        )
+        collect_label.pack(anchor=tk.W, pady=(5, 3))
+    
+        collect_browse_frame = tk.Frame(websites_frame, bg=cfg.LIGHT_BG_COLOR)
+        collect_browse_frame.pack(fill=tk.X, pady=(0, 5))
+    
+        self.collect_websites_file_var = tk.StringVar()
+        if self.parameters:
+            self.collect_websites_file_var.set(self.parameters.get("collect_websites_file", ""))
+    
+        collect_file_entry = tk.Entry(
+            collect_browse_frame,
+            textvariable=self.collect_websites_file_var,
+            font=("Segoe UI", 10)
+        )
+        collect_file_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+    
+        def browse_collect_file():
+            filename = filedialog.askopenfilename(
+                title="Select Collect Websites TXT File",
+                filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+            )
+            if filename:
+                self.collect_websites_file_var.set(filename)
+    
+        collect_browse_button = ttk.Button(
+            collect_browse_frame,
+            text="Browse",
+            command=browse_collect_file
+        )
+        collect_browse_button.pack(side=tk.LEFT)
+    
+        # Hint for collect
+        collect_hint = tk.Label(
+            websites_frame,
+            text="💡 Save new URLs discovered from deeper clicks (auto-rotates when file > 10MB)",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 8),
+            fg="#666666",
+            wraplength=500,
+            justify=tk.LEFT
+        )
+        collect_hint.pack(anchor=tk.W, pady=(0, 10))
+    
+        # ========== SEPARATOR ==========
+        separator2 = ttk.Separator(websites_frame, orient='horizontal')
+        separator2.pack(fill=tk.X, pady=10)
+    
+        # ========== NEW: FILE WARMUP WEBSITES ==========
+        warmup_label = tk.Label(
+            websites_frame,
+            text="File URL websites to warmup:",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10, "bold")
+        )
+        warmup_label.pack(anchor=tk.W, pady=(5, 3))
+    
+        warmup_browse_frame = tk.Frame(websites_frame, bg=cfg.LIGHT_BG_COLOR)
+        warmup_browse_frame.pack(fill=tk.X, pady=(0, 5))
+    
+        self.warmup_websites_file_var = tk.StringVar()
+        if self.parameters:
+            self.warmup_websites_file_var.set(self.parameters.get("warmup_websites_file", ""))
+    
+        warmup_file_entry = tk.Entry(
+            warmup_browse_frame,
+            textvariable=self.warmup_websites_file_var,
+            font=("Segoe UI", 10)
+        )
+        warmup_file_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+    
+        def browse_warmup_file():
+            filename = filedialog.askopenfilename(
+                title="Select Warmup Websites TXT File",
+                filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+            )
+            if filename:
+                self.warmup_websites_file_var.set(filename)
+    
+        warmup_browse_button = ttk.Button(
+            warmup_browse_frame,
+            text="Browse",
+            command=browse_warmup_file
+        )
+        warmup_browse_button.pack(side=tk.LEFT)
+    
+        # Hint for warmup
+        warmup_hint = tk.Label(
+            websites_frame,
+            text="💡 Random URLs from this file for human-like browsing (cached for performance)",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 8),
+            fg="#666666",
+            wraplength=500,
+            justify=tk.LEFT
+        )
+        warmup_hint.pack(anchor=tk.W, pady=(0, 10))
+    
+        # ========== SEPARATOR ==========
+        separator3 = ttk.Separator(websites_frame, orient='horizontal')
+        separator3.pack(fill=tk.X, pady=10)
+    
+        # ========== EXISTING: KEYWORDS SECTION ==========
         keywords_label = tk.Label(
             websites_frame,
             text="Search Keywords for Google/YouTube:",
@@ -541,6 +660,8 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
             justify=tk.LEFT
         )
         keywords_hint.pack(anchor=tk.W)
+
+
     
     def create_how_to_get_websites_section(self):
         """How to get websites selection"""
@@ -634,6 +755,8 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         params["websites_variable"] = self.websites_variable_var.get().strip()
         params["how_to_get_websites"] = self.how_to_get_websites_var.get()
         params["duration_minutes"] = self.duration_var.get().strip()    
+        params["collect_websites_file"] = self.collect_websites_file_var.get().strip()
+        params["warmup_websites_file"] = self.warmup_websites_file_var.get().strip()
      
         params["headless"] = self.headless_var.get()
         
@@ -646,5 +769,6 @@ class GoLoginSeleniumCollectParams(BaseActionParams):
         # Proxy file
         params["proxy_file"] = self.proxy_file_var.get().strip()
         params["remove_proxy"] = self.remove_proxy_var.get()
+        
         
         return params

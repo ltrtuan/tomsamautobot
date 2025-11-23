@@ -120,6 +120,15 @@ def check_auth_from_env():
 # Biến toàn cục
 FILE_PATH = ""
 LOG_RETENTION_DAYS = 7
+# ========== SMTP Email Configuration (NEW) ==========
+SMTP_ENABLED = False
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORT = 587
+SMTP_USE_TLS = True
+SMTP_USERNAME = ""       # Email gửi (sender)
+SMTP_PASSWORD = ""       # Password (plain text - simple project)
+SMTP_TO_EMAIL = ""       # Email nhận cảnh báo (recipient)
+SMTP_FROM_EMAIL = ""
 # Ensure the config directory exists
 def ensure_config_directory():
     if not os.path.exists(CONFIG_DIR):
@@ -138,7 +147,16 @@ def save_config():
 
     config_data = {
         "FILE_PATH": FILE_PATH,
-        "LOG_RETENTION_DAYS": LOG_RETENTION_DAYS
+        "LOG_RETENTION_DAYS": LOG_RETENTION_DAYS,
+        # ========== SMTP Config (NEW) ==========
+        "SMTP_ENABLED": SMTP_ENABLED,
+        "SMTP_HOST": SMTP_HOST,
+        "SMTP_PORT": SMTP_PORT,
+        "SMTP_USE_TLS": SMTP_USE_TLS,
+        "SMTP_USERNAME": SMTP_USERNAME,
+        "SMTP_PASSWORD": SMTP_PASSWORD,
+        "SMTP_TO_EMAIL": SMTP_TO_EMAIL,
+        "SMTP_FROM_EMAIL": SMTP_FROM_EMAIL,
     }
 
     try:
@@ -149,9 +167,9 @@ def save_config():
         print(f"Error saving configuration: {e}")
 
 # Hàm tải cấu hình
-def load_config():
-    global FILE_PATH,LOG_RETENTION_DAYS
-    
+def load_config():    
+    global FILE_PATH, SMTP_ENABLED, SMTP_HOST, SMTP_PORT, SMTP_USE_TLS, LOG_RETENTION_DAYS
+    global SMTP_USERNAME, SMTP_PASSWORD, SMTP_TO_EMAIL, SMTP_FROM_EMAIL
     # Ensure the config directory exists
     ensure_config_directory()
     
@@ -162,6 +180,15 @@ def load_config():
                 config_data = json.load(f)
             FILE_PATH = config_data.get("FILE_PATH", "")
             LOG_RETENTION_DAYS = config_data.get("LOG_RETENTION_DAYS", 7)
+            # ========== Load SMTP Config (NEW) ==========
+            SMTP_ENABLED = config_data.get("SMTP_ENABLED", False)
+            SMTP_HOST = config_data.get("SMTP_HOST", "smtp.gmail.com")
+            SMTP_PORT = config_data.get("SMTP_PORT", 587)
+            SMTP_USE_TLS = config_data.get("SMTP_USE_TLS", True)
+            SMTP_USERNAME = config_data.get("SMTP_USERNAME", "")
+            SMTP_PASSWORD = config_data.get("SMTP_PASSWORD", "")
+            SMTP_TO_EMAIL = config_data.get("SMTP_TO_EMAIL", "")
+            SMTP_FROM_EMAIL = config_data.get("SMTP_FROM_EMAIL", "")
 
             print(f"Configuration loaded from {CONFIG_PATH}")
         except Exception as e:
