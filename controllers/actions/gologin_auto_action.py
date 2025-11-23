@@ -491,10 +491,12 @@ class GoLoginAutoAction(BaseAction):
                             'status': 'error',
                             'error': str(e)
                         }
-    
+                    raise
             # ========== USE THREADPOOLEXECUTOR TO OPEN PROFILES ==========
             executor = ThreadPoolExecutor(max_workers=max_parallel_profiles)
-    
+            # ========== CHECK EXCEPTIONS FROM THREADS (NEW) ==========
+            exception_from_thread = None
+            exception_traceback = None
             try:
                 future_to_profile = {}
         
@@ -509,7 +511,30 @@ class GoLoginAutoAction(BaseAction):
                 for future in as_completed(future_to_profile):
                     profile_id = future_to_profile[future]
                     try:
+                        # future.result() sẽ:
+                        # - Block đến khi thread xong
+                        # - Re-raise exception nếu thread có exception
                         future.result()
+                    except (ProxyAssignmentFailed, Exception) as thread_exception:
+                        # ========== EXCEPTION FROM THREAD (UPDATED) ==========
+                        print("=" * 80)
+                        print(f"[BATCH {batch_num}] ⚠ EXCEPTION CAUGHT FROM THREAD: {profile_id}")
+                        print(f"[BATCH {batch_num}] Exception type: {type(thread_exception).__name__}")
+                        print(f"[BATCH {batch_num}] Exception message: {thread_exception}")
+                        print("=" * 80)
+                    
+                        import traceback
+                        exception_traceback = traceback.format_exc()
+                        print(exception_traceback)
+                    
+                        # LƯU EXCEPTION ĐẦU TIÊN
+                        if exception_from_thread is None:
+                            exception_from_thread = thread_exception
+                    
+                        # ===== BREAK IMMEDIATELY - KHÔNG CHỜ CÁC THREADS KHÁC =====
+                        print(f"[BATCH {batch_num}] ⚠ Breaking immediately, will cleanup and re-raise")
+                        break  # ← BREAK RA KHỎI LOOP NGAY
+                    
                     except ProxyAssignmentFailed:
                         # New: If proxy fail raised, cleanup partial opened in this batch, then propagate stop
                         print(f"[BATCH {batch_num}] Proxy fail in thread {profile_id} - cleanup partial and stop action")
@@ -517,14 +542,62 @@ class GoLoginAutoAction(BaseAction):
                         if opened_so_far:
                             self._close_profiles_batch(opened_so_far)  # Assume helper method for close
                         raise  # Propagate to prepare_play
-                    except Exception as e:
-                        print(f"[BATCH {batch_num}] PHASE 1: Thread for {profile_id} raised exception: {e}")
     
             finally:
                 executor.shutdown(wait=True)
                 print(f"[BATCH {batch_num}] PHASE 1: Thread pool shut down")
     
             # ========== CHECK OPENING RESULTS ==========
+            if exception_from_thread is not None:
+                print("=" * 80)
+                print(f"[BATCH {batch_num}] ⚠ CRITICAL: Exception occurred, cleaning up...")
+                print("=" * 80)
+            
+                # ===== CLEANUP: CLOSE ALL OPENED PROFILES IN THIS BATCH =====
+                opened_profiles = [pid for pid, data in profile_data.items() if data.get('status') == 'opened']
+            
+                if opened_profiles:
+                    print(f"[BATCH {batch_num}] Closing {len(opened_profiles)} opened profiles before re-raise...")
+                
+                    try:
+                        for profile_id in opened_profiles:
+                            try:
+                                print(f"[BATCH {batch_num}][{profile_id}] Closing profile...")
+                            
+                                # Bring to front
+                                bring_result = GoLoginProfileHelper.bring_profile_to_front(
+                                    profile_id,
+                                    driver=None,
+                                    log_prefix=f"[BATCH {batch_num}][{profile_id}]"
+                                )
+                                if bring_result:
+                                    time.sleep(1)
+                            
+                                    # Send Alt+F4
+                                    import pyautogui
+                                    pyautogui.hotkey('alt', 'f4')
+                                    time.sleep(1)
+                            
+                                    print(f"[BATCH {batch_num}][{profile_id}] ✓ Profile closed")
+                            
+                            except Exception as close_err:
+                                print(f"[BATCH {batch_num}][{profile_id}] ⚠ Failed to close: {close_err}")
+                            
+                        print(f"[BATCH {batch_num}] ✓ Cleanup completed")
+                    
+                    except Exception as cleanup_err:
+                        print(f"[BATCH {batch_num}] ⚠ Error during cleanup: {cleanup_err}")
+            
+                # ===== RE-RAISE EXCEPTION TO PROPAGATE TO MAIN THREAD =====
+                print("=" * 80)
+                print(f"[BATCH {batch_num}] RE-RAISING EXCEPTION TO MAIN THREAD")
+                print("=" * 80)
+            
+                raise exception_from_thread  # ← RE-RAISE ĐỂ BUBBLE UP
+                # ===========================================================
+
+
+
             opened_profiles = [pid for pid, data in profile_data.items() if data.get('status') == 'opened']
             failed_profiles = [pid for pid, data in profile_data.items() if data.get('status') in ['failed', 'error']]
 

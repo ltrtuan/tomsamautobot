@@ -197,3 +197,335 @@ def load_config():
         # Create a default config file
         save_config()
         print(f"Created default configuration file at {CONFIG_PATH}")
+
+
+
+# ============================================================================
+# AUTO RESTART CONFIGURATION - Quản lý biến môi trường cho tính năng auto restart
+# Đã thêm 13 functions mới:
+
+# ✅ get_auto_restart_minutes() - Đọc setting số phút restart
+# ✅ set_auto_restart_minutes(minutes) - Lưu setting
+# ✅ get_crash_timestamp() - Đọc timestamp crash
+# ✅ set_crash_timestamp(timestamp) - Ghi timestamp crash
+# ✅ clear_crash_timestamp() - Xóa timestamp
+# ✅ get_crash_count() - Đọc số lần crash
+# ✅ increment_crash_count() - Tăng counter
+# ✅ reset_crash_count() - Reset counter về 0
+# ✅ get_last_crash_reset() - Đọc timestamp lần reset cuối
+# ✅ set_last_crash_reset(timestamp) - Ghi timestamp reset
+# ✅ set_app_running(is_running) - Đánh dấu app đang Start
+# ✅ is_app_running() - Check app có đang Start không
+# ✅ get_restart_countdown() - Đọc countdown
+# ✅ set_restart_countdown(minutes) - Ghi countdown
+
+# Pattern đã follow:
+
+# ✅ Đọc từ Windows Registry trước (giống check_auth_from_env)
+# ✅ Fallback sang os.getenv()
+# ✅ Ghi bằng setx (giống set_auth_to_env)
+# ✅ Update luôn os.environ của process hiện tại
+# ============================================================================
+
+def get_auto_restart_minutes():
+    """
+    Lấy số phút đợi trước khi auto restart app sau khi crash
+    
+    Returns:
+        int: Số phút (default = 6)
+    
+    Logic:
+        1. Thử đọc từ Windows Registry (HKEY_CURRENT_USER\\Environment)
+        2. Nếu fail → đọc từ os.getenv()
+        3. Nếu không có → trả về default = 6
+    """
+    restart_minutes = None
+    
+    # Thử đọc từ Windows Registry trước
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment")
+        value, _ = winreg.QueryValueEx(key, "TOMSAM_AUTO_RESTART_MINUTES")
+        restart_minutes = int(value)
+        winreg.CloseKey(key)
+    except Exception as e:
+        # Không có trong Registry hoặc lỗi đọc
+        pass
+    
+    # Nếu không đọc được từ Registry, thử os.getenv()
+    if restart_minutes is None:
+        try:
+            env_value = os.getenv("TOMSAM_AUTO_RESTART_MINUTES")
+            if env_value:
+                restart_minutes = int(env_value)
+        except (ValueError, TypeError):
+            pass
+    
+    # Nếu vẫn không có, trả về default = 6
+    if restart_minutes is None:
+        restart_minutes = 6
+    
+    return restart_minutes
+
+
+def set_auto_restart_minutes(minutes):
+    """
+    Lưu số phút auto restart vào biến môi trường Windows (persistent)
+    
+    Args:
+        minutes (int): Số phút đợi (>= 0, 0 = tắt auto restart)
+    
+    Logic:
+        1. Dùng lệnh setx để ghi vào Windows Registry
+        2. Update luôn os.environ của process hiện tại
+    """
+    # Validate input
+    try:
+        minutes = int(minutes)
+        if minutes < 0:
+            minutes = 0
+    except (ValueError, TypeError):
+        minutes = 6  # Default nếu input không hợp lệ
+    
+    # Ghi vào Windows Registry bằng setx
+    os.system(f'setx TOMSAM_AUTO_RESTART_MINUTES {minutes}')
+    
+    # Update biến môi trường của process hiện tại (để không cần restart app)
+    os.environ['TOMSAM_AUTO_RESTART_MINUTES'] = str(minutes)
+
+
+def get_crash_timestamp():
+    """
+    Lấy timestamp của lần crash cuối cùng
+    
+    Returns:
+        str: Timestamp dạng "2025-11-23 14:33:00" hoặc "" nếu chưa có
+    """
+    crash_timestamp = None
+    
+    # Thử đọc từ Windows Registry trước
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment")
+        value, _ = winreg.QueryValueEx(key, "TOMSAM_CRASH_TIMESTAMP")
+        crash_timestamp = value
+        winreg.CloseKey(key)
+    except Exception:
+        pass
+    
+    # Nếu không đọc được từ Registry, thử os.getenv()
+    if not crash_timestamp:
+        crash_timestamp = os.getenv("TOMSAM_CRASH_TIMESTAMP", "")
+    
+    return crash_timestamp
+
+
+def set_crash_timestamp(timestamp):
+    """
+    Ghi timestamp khi app crash
+    
+    Args:
+        timestamp (str): Timestamp dạng "2025-11-23 14:33:00"
+    """
+    # Ghi vào Windows Registry
+    os.system(f'setx TOMSAM_CRASH_TIMESTAMP "{timestamp}"')
+    
+    # Update process hiện tại
+    os.environ['TOMSAM_CRASH_TIMESTAMP'] = timestamp
+
+
+def clear_crash_timestamp():
+    """
+    Xóa timestamp crash (khi đã xử lý xong hoặc user Start thủ công)
+    """
+    # Ghi chuỗi rỗng vào Registry
+    os.system('setx TOMSAM_CRASH_TIMESTAMP ""')
+    
+    # Update process hiện tại
+    os.environ['TOMSAM_CRASH_TIMESTAMP'] = ''
+
+
+def get_crash_count():
+    """
+    Lấy số lần crash gần đây (dùng để limit max 3 lần/10 phút)
+    
+    Returns:
+        int: Số lần crash (default = 0)
+    """
+    crash_count = None
+    
+    # Thử đọc từ Registry
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment")
+        value, _ = winreg.QueryValueEx(key, "TOMSAM_CRASH_COUNT")
+        crash_count = int(value)
+        winreg.CloseKey(key)
+    except Exception:
+        pass
+    
+    # Fallback sang os.getenv()
+    if crash_count is None:
+        try:
+            env_value = os.getenv("TOMSAM_CRASH_COUNT")
+            if env_value:
+                crash_count = int(env_value)
+        except (ValueError, TypeError):
+            pass
+    
+    # Default = 0
+    if crash_count is None:
+        crash_count = 0
+    
+    return crash_count
+
+
+def increment_crash_count():
+    """
+    Tăng counter crash lên 1 (gọi mỗi khi app crash)
+    """
+    current_count = get_crash_count()
+    new_count = current_count + 1
+    
+    # Ghi vào Registry
+    os.system(f'setx TOMSAM_CRASH_COUNT {new_count}')
+    
+    # Update process hiện tại
+    os.environ['TOMSAM_CRASH_COUNT'] = str(new_count)
+
+
+def reset_crash_count():
+    """
+    Reset counter crash về 0 (gọi sau khi hết 10 phút)
+    """
+    os.system('setx TOMSAM_CRASH_COUNT 0')
+    os.environ['TOMSAM_CRASH_COUNT'] = '0'
+
+
+def get_last_crash_reset():
+    """
+    Lấy timestamp lần cuối reset crash counter
+    
+    Returns:
+        str: Timestamp dạng "2025-11-23 14:33:00" hoặc "" nếu chưa có
+    """
+    last_reset = None
+    
+    # Đọc từ Registry
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment")
+        value, _ = winreg.QueryValueEx(key, "TOMSAM_LAST_CRASH_RESET")
+        last_reset = value
+        winreg.CloseKey(key)
+    except Exception:
+        pass
+    
+    # Fallback
+    if not last_reset:
+        last_reset = os.getenv("TOMSAM_LAST_CRASH_RESET", "")
+    
+    return last_reset
+
+
+def set_last_crash_reset(timestamp):
+    """
+    Ghi timestamp lần cuối reset counter
+    
+    Args:
+        timestamp (str): Timestamp dạng "2025-11-23 14:33:00"
+    """
+    os.system(f'setx TOMSAM_LAST_CRASH_RESET "{timestamp}"')
+    os.environ['TOMSAM_LAST_CRASH_RESET'] = timestamp
+
+
+def set_app_running(is_running):
+    """
+    Đánh dấu app có đang chạy (Start button đã được bấm) hay không
+    
+    Args:
+        is_running (bool): True = đang chạy, False = đã Stop hoặc chưa Start
+    
+    Logic:
+        Ghi "1" nếu True, "0" nếu False
+        Watchdog sẽ check biến này để tự exit khi user đã Start thủ công
+    """
+    value = '1' if is_running else '0'
+    
+    os.system(f'setx TOMSAM_APP_IS_RUNNING {value}')
+    os.environ['TOMSAM_APP_IS_RUNNING'] = value
+
+
+def is_app_running():
+    """
+    Check app có đang chạy (Start) hay không
+    
+    Returns:
+        bool: True nếu đang chạy, False nếu không
+    """
+    app_running = None
+    
+    # Đọc từ Registry
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment")
+        value, _ = winreg.QueryValueEx(key, "TOMSAM_APP_IS_RUNNING")
+        app_running = value
+        winreg.CloseKey(key)
+    except Exception:
+        pass
+    
+    # Fallback
+    if app_running is None:
+        app_running = os.getenv("TOMSAM_APP_IS_RUNNING", "0")
+    
+    return app_running == '1'
+
+
+def get_restart_countdown():
+    """
+    Lấy số phút còn lại đến khi watchdog tự động restart app
+    
+    Returns:
+        int: Số phút còn lại (0 = không có countdown)
+    
+    Note:
+        Biến này do watchdog_monitor.py ghi, ActionListView đọc để hiển thị countdown
+    """
+    countdown = None
+    
+    # Đọc từ Registry
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment")
+        value, _ = winreg.QueryValueEx(key, "TOMSAM_RESTART_COUNTDOWN")
+        countdown = int(value)
+        winreg.CloseKey(key)
+    except Exception:
+        pass
+    
+    # Fallback
+    if countdown is None:
+        try:
+            env_value = os.getenv("TOMSAM_RESTART_COUNTDOWN")
+            if env_value:
+                countdown = int(env_value)
+        except (ValueError, TypeError):
+            pass
+    
+    # Default = 0
+    if countdown is None:
+        countdown = 0
+    
+    return countdown
+
+
+def set_restart_countdown(minutes):
+    """
+    Ghi số phút còn lại đến khi restart (watchdog gọi function này)
+    
+    Args:
+        minutes (int): Số phút còn lại
+    """
+    os.system(f'setx TOMSAM_RESTART_COUNTDOWN {minutes}')
+    os.environ['TOMSAM_RESTART_COUNTDOWN'] = str(minutes)

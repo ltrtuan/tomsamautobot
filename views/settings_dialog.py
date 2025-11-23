@@ -8,7 +8,7 @@ class SettingsDialog:
         self.parent = parent
         self.dialog = tk.Toplevel(parent)
         self.dialog.title("Cài đặt")
-        self.dialog.geometry("500x580")
+        self.dialog.geometry("500x650")
         self.dialog.resizable(False, False)
         self.dialog.transient(parent)
         self.dialog.grab_set()
@@ -189,6 +189,80 @@ class SettingsDialog:
             command=self.test_smtp
         )
         self.test_email_btn.pack(anchor="w", padx=5)
+        
+        
+         # ========== SEPARATOR ========== (THÊM MỚI)
+        ttk.Separator(self.dialog, orient='horizontal').pack(fill='x', padx=20, pady=15)
+        
+        # ========== SECTION 3: AUTO RESTART ========== (THÊM MỚI)
+        restart_label = ttk.Label(self.dialog, text="Tự động khởi động lại", font=("Arial", 12, "bold"))
+        restart_label.pack(pady=10)
+        
+        # Frame chứa field auto restart
+        restart_frame = ttk.Frame(self.dialog)
+        restart_frame.pack(fill="x", padx=20, pady=5)
+        
+        # Label bên trái
+        restart_text_label = ttk.Label(
+            restart_frame,
+            text="Sau bao nhiêu phút app crash thì restart:",
+            font=("Segoe UI", 10)
+        )
+        restart_text_label.grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        
+        # Frame chứa entry + unit label
+        restart_input_frame = ttk.Frame(restart_frame)
+        restart_input_frame.grid(row=0, column=1, sticky="w", padx=5, pady=5)
+        
+        # Entry field với validation
+        self.restart_minutes_var = tk.StringVar(value=str(config.get_auto_restart_minutes()))
+        
+        # Validation function: chỉ cho nhập số >= 0
+        def validate_restart_minutes(P):
+            """
+            Validate input: chỉ cho phép số >= 0
+            P: giá trị mới user đang nhập
+            """
+            if P == "":  # Cho phép xóa hết (để nhập lại)
+                return True
+            try:
+                value = int(P)
+                return value >= 0  # Chỉ chấp nhận số >= 0
+            except ValueError:
+                return False  # Reject nếu không phải số
+        
+        # Register validation command
+        vcmd = (self.dialog.register(validate_restart_minutes), '%P')
+        
+        # Tạo Entry widget
+        self.restart_minutes_entry = ttk.Entry(
+            restart_input_frame,
+            textvariable=self.restart_minutes_var,
+            width=10,
+            font=("Segoe UI", 10),
+            validate='key',  # Validate khi user gõ phím
+            validatecommand=vcmd
+        )
+        self.restart_minutes_entry.pack(side="left")
+        
+        # Label "phút"
+        ttk.Label(
+            restart_input_frame,
+            text="phút",
+            font=("Segoe UI", 10)
+        ).pack(side="left", padx=(5, 0))
+        
+        # Help text (hướng dẫn sử dụng)
+        help_frame = ttk.Frame(self.dialog)
+        help_frame.pack(fill="x", padx=20, pady=(0, 5))
+        
+        help_text = ttk.Label(
+            help_frame,
+            text="(Nhập 0 để tắt tính năng auto restart. Mặc định: 6 phút)",
+            font=("Segoe UI", 8),
+            foreground="gray"
+        )
+        help_text.pack(anchor="w", padx=5)
 
     
         # ========== BUTTON FRAME (SAVE/CANCEL) ==========
@@ -302,6 +376,27 @@ class SettingsDialog:
         config.SMTP_PASSWORD = self.smtp_password_var.get()
         config.SMTP_TO_EMAIL = self.smtp_to_email_var.get()
         config.SMTP_FROM_EMAIL = self.smtp_from_email_var.get()
+        
+        # ========== Lưu AUTO RESTART config (THÊM MỚI) ==========
+        try:
+            # Đọc giá trị từ entry field
+            minutes_str = self.restart_minutes_var.get()
+        
+            # Validate và convert sang int
+            if minutes_str == "":
+                minutes = 6  # Default nếu user để trống
+            else:
+                minutes = int(minutes_str)
+                if minutes < 0:
+                    minutes = 0  # Đảm bảo không âm
+        
+            # Lưu vào biến môi trường Windows
+            config.set_auto_restart_minutes(minutes)
+        
+        except ValueError:
+            # Nếu có lỗi parse, dùng default = 6
+            config.set_auto_restart_minutes(6)
+        
         # Lưu cấu hình vào file
         config.save_config()
     

@@ -7,6 +7,7 @@ from constants import ActionType
 from views.move_index_dialog import MoveIndexDialog
 import json
 from tkinter import filedialog, messagebox
+import config as cfg  # THÊM MỚI - để quản lý biến môi trường auto-restart
 
 class ActionController:
     def __init__(self, root):
@@ -132,7 +133,7 @@ class ActionController:
         # ← ẨN WINDOW NGAY ĐẦU
         print("[EXECUTION] Hiding window to tray...")
         self.root.withdraw()
-    
+        
         exception_to_reraise = None  # ← STORE EXCEPTION
     
         try:
@@ -166,54 +167,23 @@ class ActionController:
                     handler.play()
     
         except Exception as e:
-            # ========== CATCH EXCEPTION TO SEND EMAIL ==========
+            # ========== CATCH EXCEPTION (NO EMAIL - WILL BE SENT BY TKINTER HANDLER) ==========
             print("=" * 80)
-            print("[PLAY_ACTION ERROR] ✅ EXCEPTION CAUGHT IN play_action()")
+            print("[PLAY_ACTION ERROR] Exception caught in play_action()")
             print(f"[PLAY_ACTION ERROR] Exception type: {type(e).__name__}")
             print(f"[PLAY_ACTION ERROR] Exception message: {str(e)}")
             print("=" * 80)
-    
+        
             import traceback
             tb_str = traceback.format_exc()
             print(tb_str)
-    
-            # Send crash email
-            print("[EMAIL DEBUG] 📧 Starting email send process...")
-            try:
-                print("[EMAIL DEBUG] 🔄 Importing email_notifier...")
-                from helpers.email_notifier import send_email, format_crash_email
-                print("[EMAIL DEBUG] ✓ Import successful")
         
-                print("[EMAIL DEBUG] 🔄 Formatting crash email...")
-                title, content = format_crash_email(
-                    exception_type=type(e).__name__,
-                    exception_message=str(e),
-                    traceback_str=tb_str,
-                    context={
-                        'App': 'TomSamAutobot',
-                        'Source': 'Action Execution',
-                        'Action Index': index
-                    }
-                )
-                print(f"[EMAIL DEBUG] ✓ Email formatted - Title: {title[:50]}...")
+            # Store exception to re-raise later
+            exception_to_reraise = e
         
-                print("[EMAIL DEBUG] 🔄 Calling send_email()...")
-                send_email(
-                    title=title,
-                    content=content,
-                    throttle_seconds=0
-                )
-                print("[EMAIL DEBUG] ✓ send_email() returned successfully")
-                print("[EMAIL] ✓ Crash email sent")
-        
-            except Exception as email_err:
-                print("=" * 80)
-                print(f"[EMAIL ERROR] ❌ Failed to send crash email!")
-                print(f"[EMAIL ERROR] Error type: {type(email_err).__name__}")
-                print(f"[EMAIL ERROR] Error message: {email_err}")
-                print("=" * 80)
-                import traceback as tb2
-                tb2.print_exc()
+            print("[PLAY_ACTION] Exception will be re-raised to Tkinter handler")
+            # ===================================================================================
+
 
     
         finally:
@@ -425,6 +395,20 @@ class ActionController:
         # 🔄 RESET execution state
         self.is_execution_stopped = False
         self.is_actions_running = True  # ← SET FLAG: ACTIONS BẮT ĐẦU CHẠY
+        
+        # ========== AUTO-RESTART: SET BIẾN MÔI TRƯỜNG (NEW) ==========
+        # Đánh dấu app đã Start (watchdog sẽ check biến này để tự exit)
+        cfg.set_app_running(True)
+        print("[AUTO-RESTART] ✓ App marked as RUNNING")
+    
+        # Clear countdown nếu đang có (vì user đã Start thủ công)
+        cfg.set_restart_countdown(0)
+        print("[AUTO-RESTART] ✓ Restart countdown cleared")
+    
+        # Clear crash timestamp (user đã Start thủ công → không cần auto-restart nữa)
+        cfg.clear_crash_timestamp()
+        print("[AUTO-RESTART] ✓ Crash timestamp cleared")
+        # ============================================================
     
         # 🎧 BẮT ĐẦU lắng nghe ESC có điều kiện
         self.start_conditional_keyboard_listener()
@@ -667,7 +651,7 @@ class ActionController:
                                         handler_nested = ActionFactory.get_handler(self.root, nested_action, self.view, self.model, self)
                                         if handler_nested:
                                             action_frame = next((f for f in self.view.action_frames
-                                                              if f.action.id == nested_action.id), None)
+                                                                if f.action.id == nested_action.id), None)
                                             if action_frame:
                                                 handler_nested.action_frame = action_frame
                             
@@ -789,84 +773,42 @@ class ActionController:
             #     self.view.show_message("hoàn thành", "chuỗi hành động đã hoàn thành")
 
         except Exception as e:
-            # ========== CATCH AND SEND EMAIL FOR SEQUENCE ERRORS ==========
+            # ========== CATCH EXCEPTION (NO EMAIL - WILL BE SENT BY TKINTER HANDLER) ==========
             print("=" * 80)
-            print("[RUN_SEQUENCE ERROR] Exception in sequence execution:")
+            print("[RUN_SEQUENCE ERROR] Exception in sequence execution")
             print("=" * 80)
-        
+            
             import traceback
             tb_str = traceback.format_exc()
             print(tb_str)
-        
-            # Send crash email
-            try:
-                from helpers.email_notifier import send_email, format_crash_email
             
-                title, content = format_crash_email(
-                    exception_type=type(e).__name__,
-                    exception_message=str(e),
-                    traceback_str=tb_str,
-                    context={
-                        'App': 'TomSamAutobot',
-                        'Source': 'Sequence Execution'
-                    }
-                )
-            
-                print("[EMAIL] Sending crash report...")
-                email_sent = send_email(
-                    title=title,
-                    content=content,
-                    throttle_seconds=0
-                )
-                if email_sent:
-                    print("[EMAIL] ✓ Email thread started successfully")
-    
-                    # ========== WAIT FOR EMAIL THREAD TO COMPLETE ==========
-                    import time
-                    import threading
-    
-                    # Find email worker thread
-                    email_thread = None
-                    for t in threading.enumerate():
-                        if t.name == "EmailSenderThread":
-                            email_thread = t
-                            break
-    
-                    if email_thread and email_thread.is_alive():
-                        print("[EMAIL] ⏳ Waiting for email to send (max 10 seconds)...")
-                        email_thread.join(timeout=10)  # Wait max 10 seconds
-        
-                        if email_thread.is_alive():
-                            print("[EMAIL] ⚠️ Email thread still running after timeout")
-                        else:
-                            print("[EMAIL] ✅ Email thread completed")
-                    # ========================================================
-                else:
-                    print("[EMAIL] ✗ Failed to send crash email (throttled or error)")
-            except Exception as email_err:
-                print(f"[EMAIL ERROR] Failed to send crash email: {email_err}")
-        
-            # Store to re-raise
+            # Store exception to re-raise (NO EMAIL - will be sent by handle_tkinter_exception)
             exception_to_reraise = e
-            # ==============================================================
+            
+            print("[RUN_SEQUENCE] Exception will be re-raised to Tkinter handler")
+            # ===================================================================================
     
         finally:
             # ✅ QUAN TRỌNG: LUÔN RESET FLAGS VÀ DỪNG LISTENER
             self.is_actions_running = False
             self.stop_keyboard_listener()
             print("[EXECUTION CONTROL] 🔄 Reset execution state")
+            
+            # ========== AUTO-RESTART: CLEAR BIẾN MÔI TRƯỜNG (NEW) ==========
+            # Đánh dấu app đã Stop (không còn chạy nữa)
+            cfg.set_app_running(False)
+            print("[AUTO-RESTART] ✓ App marked as STOPPED")
+            # ===============================================================
+
             print("[EXECUTION] Showing window back...")
             self.root.deiconify()
             self.root.lift()
             self.root.focus_force()
     
         # ========== RE-RAISE EXCEPTION ==========
-        try:
-            if exception_to_reraise is not None:
-                print("[RUN_SEQUENCE] Re-raising exception after cleanup...")
-                raise exception_to_reraise
-        except NameError:
-            pass  # No exception occurred
+        if exception_to_reraise is not None:
+            print("[RUN_SEQUENCE] Re-raising exception after cleanup...")
+            raise exception_to_reraise
         # ========================================
 
         

@@ -170,6 +170,7 @@
     <Compile Include="views\screen_area_selector.py" />
     <Compile Include="views\settings_dialog.py" />
     <Compile Include="views\__init__.py" />
+    <Compile Include="watchdog_monitor.py" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="controllers\actions\" />
