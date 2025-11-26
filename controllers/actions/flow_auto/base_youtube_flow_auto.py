@@ -4,6 +4,8 @@ import time
 import random
 from helpers.gologin_profile_helper import GoLoginProfileHelper
 from models.global_variables import GlobalVariables
+import logging
+logger = logging.getLogger('TomSamAutobot')
 
 class BaseYouTubeFlowAutoIterator:
     """
@@ -291,6 +293,16 @@ class BaseYouTubeFlowAutoIterator:
             'percentage': percentage
         }   
     
-    def log(self, message, level="INFO"):
-        """Log message with prefix"""
-        print(f"{self.log_prefix} [{level}] {message}")
+    def log(self, message, level="INFO"):           
+        # Map string levels to logger methods
+        if level == "DEBUG":
+            logger.debug(f"{self.log_prefix} {message}")
+        elif level == "INFO":
+            logger.info(f"{self.log_prefix} {message}")
+        elif level == "WARNING":
+            logger.warning(f"{self.log_prefix} {message}")
+        elif level == "ERROR":
+            logger.error(f"{self.log_prefix} {message}")
+        else:
+            logger.info(f"{self.log_prefix} {message}")
+

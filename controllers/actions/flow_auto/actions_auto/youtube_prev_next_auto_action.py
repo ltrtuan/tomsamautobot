@@ -25,7 +25,7 @@ class YouTubePrevNextAutoAction(BaseFlowAutoAction):
         """
         try:
             # Random total loops between 4 and 8
-            loop_times = random.randint(2, 6)
+            loop_times = random.randint(3, 7)
             self.log(f"Starting {loop_times} random navigation presses (70% next, 30% prev)")
             
             next_count = 0

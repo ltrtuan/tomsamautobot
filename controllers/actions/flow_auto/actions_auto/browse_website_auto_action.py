@@ -182,7 +182,8 @@ class BrowseWebsiteAutoAction(BaseFlowAutoAction):
         result_bring = GoLoginProfileHelper.bring_profile_to_front(self.profile_id, driver=None)
         if result_bring:
             time.sleep(1)
-    
+            self._close_extra_tabs_keep_first()
+            time.sleep(1)
             # # ========== STEP 2: GET CURRENT URL ==========
             # current_url = self._get_current_url()
     
@@ -205,7 +206,7 @@ class BrowseWebsiteAutoAction(BaseFlowAutoAction):
                 if self.area == "main" or self.area == "search":
                     # self._navigate_youtube()
                     # ========== STEP 4: FIND SEARCH BOX AND ENTER KEYWORD: RANDOM SEARCH VIDEO AND CLICK RANDOM VIDEO SEARCH OR CLICK RANDOM VIDEO HOME ==========
-                    choice = random.choice([1])
+                    choice = random.choice([1, 2])
                     if choice == 1:
                         self.log("Finding search box and entering keyword")
     
@@ -222,7 +223,7 @@ class BrowseWebsiteAutoAction(BaseFlowAutoAction):
                         # Wait for search results
                         time.sleep(random.uniform(2, 3))
                     else:                                   
-                        num_random_actions = random.randint(1, 2)
+                        num_random_actions = random.randint(1, 3)
                         YouTubeRandomMoveScrollAutoAction(self.profile_id, num_random_actions, "main", self.log_prefix).execute()
     
             

@@ -349,7 +349,14 @@ class BaseAction(ABC):
         if not target_windows:
             try:
                 print(f"[PROGRAM] Not running, starting: {program_path}")
-                subprocess.Popen(program_path)
+               
+                # ẨN TẤT CẢ CMD WINDOWS
+                subprocess.Popen(
+                    program_path,
+                    creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
             
                 # Đợi tối đa 10 giây
                 for _ in range(20):

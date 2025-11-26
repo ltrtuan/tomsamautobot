@@ -71,8 +71,8 @@ def global_exception_handler(exc_type, exc_value, exc_traceback):
                 last_reset_dt = datetime.strptime(last_reset, "%Y-%m-%d %H:%M:%S")
                 elapsed_seconds = (datetime.now() - last_reset_dt).total_seconds()
                 
-                # Nếu đã quá 10 phút (600 giây) từ lần reset trước → reset counter
-                if elapsed_seconds > 600:
+                # Nếu đã quá 20 phút (1200 giây) từ lần reset trước → reset counter
+                if elapsed_seconds > 1200:
                     cfg.reset_crash_count()
                     cfg.set_last_crash_reset(crash_time)
                     print("[CRASH] Crash counter reset (10 minutes elapsed)")
@@ -90,7 +90,7 @@ def global_exception_handler(exc_type, exc_value, exc_traceback):
         print(f"[CRASH] Crash count: {current_crash_count}/3")
         
         # Chỉ start watchdog nếu chưa quá 3 lần crash
-        if current_crash_count <= 3:
+        if current_crash_count < 3:
             print("[CRASH] Starting watchdog for auto-restart...")
             start_watchdog_process()
         else:
@@ -179,10 +179,18 @@ def start_watchdog_process():
             watchdog_path = os.path.join(app_dir, 'watchdog_monitor.exe')
             
             if os.path.exists(watchdog_path):
-                print(f"[WATCHDOG] Starting watchdog process (production): {watchdog_path}")
+                print(f"[WATCHDOG] Starting watchdog process (production): {watchdog_path}")               
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = subprocess.SW_HIDE
+
                 subprocess.Popen(
                     [watchdog_path],
+                    startupinfo=startupinfo,
                     creationflags=flags,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    stdin=subprocess.DEVNULL,
                     close_fds=True
                 )
                 print("[WATCHDOG] ✓ Watchdog process started")
@@ -233,6 +241,32 @@ class TomSamAutobot:
             self.root = tk.Toplevel()
     
         self.root.title("Tom Sam Autobot")
+        
+        # ========== WINDOW CLOSE HANDLER (NEW) ==========
+        def on_closing():
+            """Handle window close event"""
+            logger.info("[APP] Window close requested")
+            
+            # Cancel auto-trigger if active
+            if hasattr(self, 'controller') and self.controller:
+                if self.controller.auto_trigger_active:
+                    logger.info("[APP] Cancelling auto-trigger (user closing app)")
+                    self.controller.cancel_auto_trigger()
+                    
+                    # ===== STOP TRAY ICON (NEW) =====
+                    try:
+                        self.controller.stop_tray_icon()
+                    except:
+                        pass
+                    # ================================
+            
+            # Close window
+            logger.info("[APP] Closing application")
+            self.root.destroy()
+        
+        self.root.protocol("WM_DELETE_WINDOW", on_closing)
+        logger.info("[INIT] ✓ Window close handler registered")
+        # ================================================
     
         # ========== INSTALL TKINTER EXCEPTION HANDLER ==========
         def handle_tkinter_exception(exc, val, tb):
@@ -286,7 +320,7 @@ class TomSamAutobot:
                     try:
                         last_reset_dt = datetime.strptime(last_reset, "%Y-%m-%d %H:%M:%S")
                         elapsed_seconds = (datetime.now() - last_reset_dt).total_seconds()
-                        if elapsed_seconds > 600:  # 10 phút
+                        if elapsed_seconds > 1200:  # 20 phút
                             cfg.reset_crash_count()
                             cfg.set_last_crash_reset(crash_time)
                     except ValueError:
@@ -307,7 +341,7 @@ class TomSamAutobot:
                 logger.critical("=" * 80)
                 # ================================
                 
-                if current_crash_count <= 3:
+                if current_crash_count < 3:
                     logger.info("[CRASH] Starting watchdog for auto-restart...")
                     start_watchdog_process()
                     logger.info("[CRASH] ✓ Watchdog started")
@@ -370,23 +404,14 @@ class TomSamAutobot:
         self.controller = ActionController(self.root)  # THAY ĐỔI: Lưu vào self.controller
         self.controller.setup(model, view)
         
-        # ========== XỬ LÝ AUTO-START (MOVED HERE) ==========
-        # Kiểm tra xem app có được start bởi watchdog không
+        # ========== AUTO-START LOGIC (NEW - UPDATED) ==========
         if '--auto-start' in sys.argv:
-            print("[AUTO-START] App restarted by watchdog, scheduling auto-start...")
-        
-            def trigger_auto_start():
-                if hasattr(self, 'controller') and self.controller:
-                    print("[AUTO-START] Calling controller.run_sequence()...")
-                    self.controller.run_sequence()  # ← SỬA: run_sequence (có dấu _)
-                    print("[AUTO-START] ✓ Auto-start completed")
-                else:
-                    print("[AUTO-START] ⚠ Warning: controller not found")
-        
-            # Schedule trigger sau 5 giây (đợi GUI load xong)
-            self.root.after(5000, trigger_auto_start)
-            print("[AUTO-START] ✓ Auto-start scheduled (5 seconds)")
-        # ===================================================
+            logger.info("[AUTO-START] App restarted by watchdog")
+            logger.info("[AUTO-START] Starting countdown for auto-trigger...")
+            
+            # Start countdown (reactive to settings)
+            self.controller.start_auto_trigger_countdown()
+        # ======================================================
     
         # Start application (blocking)
         self.root.mainloop()

@@ -1299,21 +1299,18 @@ class ActionListView(ttk.Frame):
         settings_btn.pack(fill=tk.X, padx=4, pady=2)
         
         # ========== THÊM COUNTDOWN LABEL (NEW) ==========
-        # Tạo label countdown (ẩn mặc định)
+        # Tạo label countdown (ẩn mặc định, không pack)
         self.countdown_label = tk.Label(
             sidebar,
             text="",
             bg="#f0f0f0",
-            fg="#FF6B6B",  # Màu đỏ nhạt để nổi bật
+            fg="#FF6B6B",  # Red color
             font=("Segoe UI", 9, "bold"),
             padx=8,
             pady=6,
-            wraplength=180,  # Wrap text nếu quá dài
+            wraplength=180,
             justify=tk.LEFT
         )
-        
-        # Bắt đầu check countdown mỗi 1 giây
-        self.check_restart_countdown()
         # ========================================================
     
         # Content area header - nhỏ gọn hơn
@@ -1726,56 +1723,36 @@ class ActionListView(ttk.Frame):
         if hasattr(self, 'move_callback') and self.move_callback:
             self.move_callback()
             
-    # ========== AUTO-RESTART COUNTDOWN CHECK (NEW) ==========
-    def check_restart_countdown(self):
-        """
-        Check và hiển thị countdown realtime mỗi 1 giây
-        
-        Logic:
-            CHỈ hiển thị countdown khi CẢ 2 điều kiện đều đúng:
-            1. App đã crash trước đó (TOMSAM_CRASH_TIMESTAMP != "")
-            2. Watchdog đang countdown (TOMSAM_RESTART_COUNTDOWN > 0)
             
-            Nếu thiếu 1 trong 2 điều kiện → ẩn label (không hiển thị)
-        
-        Note:
-            - Biến môi trường được ghi bởi watchdog_monitor.py
-            - User có thể cancel bằng cách vào Settings và đổi thành 0
-            - Sau khi user bấm Start thủ công, crash_timestamp sẽ bị clear
+    # ========== COUNTDOWN LABEL METHODS (NEW) ==========
+    def show_countdown(self, seconds_remaining):
         """
+        Show countdown label with seconds remaining
+        
+        Args:
+            seconds_remaining (int): Seconds until auto-trigger
+        """
+        minutes = seconds_remaining // 60
+        secs = seconds_remaining % 60
+        
+        if minutes > 0:
+            text = f"⏰ App sẽ tự động start sau {minutes} phút {secs} giây"
+        else:
+            text = f"⏰ App sẽ tự động start sau {secs} giây"
+        
+        self.countdown_label.config(text=text)
+        
+        # Pack label if not already packed
         try:
-            # ===== ĐIỀU KIỆN 1: Check app đã crash chưa =====
-            crash_timestamp = cfg.get_crash_timestamp()
-            has_crashed = crash_timestamp != "" and crash_timestamp is not None
-            
-            # ===== ĐIỀU KIỆN 2: Check countdown có đang chạy không =====
-            countdown = cfg.get_restart_countdown()
-            is_counting_down = countdown > 0
-            
-            # ===== CHỈ HIỂN THỊ KHI CẢ 2 ĐIỀU KIỆN THỎA =====
-            if has_crashed and is_counting_down:
-                # App đã crash VÀ watchdog đang countdown
-                countdown_text = f"⚠ App sẽ tự động start sau {countdown} phút"
-                self.countdown_label.config(text=countdown_text, fg="red")
-                print(f"[COUNTDOWN] Displaying: {countdown} phút còn lại")
-            else:
-                # Một trong 2 điều kiện không thỏa → ẩn countdown
-                self.countdown_label.config(text="")
-                
-                # Debug: in lý do không hiển thị
-                if not has_crashed and not is_counting_down:
-                    pass  # Bình thường, chưa crash
-                elif not has_crashed:
-                    print("[COUNTDOWN] ✓ No crash detected, countdown hidden")
-                elif not is_counting_down:
-                    print("[COUNTDOWN] ✓ Countdown = 0, label hidden")
-                
-        except Exception as e:
-            # Nếu có lỗi, ẩn countdown và log
-            print(f"[COUNTDOWN] Error checking countdown: {e}")
-            self.countdown_label.config(text="")
-        
-        # Schedule lại function này sau 1 giây (vẫn phải check liên tục)
-        # Lý do: App có thể crash bất cứ lúc nào, cần check realtime
-        self.after(1000, self.check_restart_countdown)
-    # ========================================================
+            self.countdown_label.pack_info()
+        except:
+            # Not packed yet → Pack it
+            self.countdown_label.pack(fill=tk.X, padx=4, pady=2)
+    
+    def hide_countdown(self):
+        """Hide countdown label"""
+        try:
+            self.countdown_label.pack_forget()
+        except:
+            pass
+    # ===================================================

@@ -529,3 +529,27 @@ def set_restart_countdown(minutes):
     """
     os.system(f'setx TOMSAM_RESTART_COUNTDOWN {minutes}')
     os.environ['TOMSAM_RESTART_COUNTDOWN'] = str(minutes)
+
+
+# ========== AUTO-START DELAY SETTING ==========
+def get_auto_start_delay():
+    """
+    Get delay (in seconds) before auto-triggering play after restart
+    
+    Returns:
+        int: Delay in seconds (0 = disable auto-trigger, default = 60)
+    """
+    try:
+        return int(os.environ.get('TOMSAM_AUTO_START_DELAY', '60'))
+    except:
+        return 60  # Default 60 seconds
+
+def set_auto_start_delay(seconds):
+    """
+    Set delay before auto-trigger
+    
+    Args:
+        seconds (int): Delay in seconds (0 to disable)
+    """
+    os.environ['TOMSAM_AUTO_START_DELAY'] = str(int(seconds))
+# ==============================================

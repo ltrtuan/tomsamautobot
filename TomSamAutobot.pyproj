@@ -23,6 +23,8 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="app_info.py" />
+    <Compile Include="build_exe.py" />
     <Compile Include="config.py" />
     <Compile Include="constants.py" />
     <Compile Include="controllers\actions\action_factory.py" />

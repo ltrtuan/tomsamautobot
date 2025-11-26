@@ -201,16 +201,16 @@ def setup_logger():
     # ============================================
     
     # ========== CONSOLE HANDLER (NEW) ==========
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.DEBUG)
+    # console_handler = logging.StreamHandler()
+    # console_handler.setLevel(logging.DEBUG)
     
-    console_formatter = logging.Formatter(
-        fmt='[%(levelname)s] [%(filename)s:%(lineno)d] %(message)s'
-    )
-    console_handler.setFormatter(console_formatter)
-    logger.addHandler(console_handler)
+    # console_formatter = logging.Formatter(
+    #     fmt='[%(levelname)s] [%(filename)s:%(lineno)d] %(message)s'
+    # )
+    # console_handler.setFormatter(console_formatter)
+    # logger.addHandler(console_handler)
     
-    print(f"[LOGGER] ✓ Console handler added")
+    # print(f"[LOGGER] ✓ Console handler added")
     # ===========================================
     
     # Cleanup old logs

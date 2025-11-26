@@ -321,8 +321,10 @@ def perform_random_movements_with_click_detection(max_attempts=5, type_action=No
               
             num_random_scroll = random.randint(2, 5)
             for attempt_scroll in range(1, num_random_scroll + 1):
-                scroll_amount = random.randint(-900, -700)  # Scroll down                    
-                pyautogui.scroll(scroll_amount)
+                choice = random.choice([1, 2])
+                if choice == 1:
+                    scroll_amount = random.randint(-900, -700)  # Scroll down                    
+                    pyautogui.scroll(scroll_amount)
                 
             if attempt < max_attempts:
                 retry_wait = random.uniform(1, 2)

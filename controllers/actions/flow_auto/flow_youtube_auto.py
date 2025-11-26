@@ -88,6 +88,7 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
             ("move_mouse", BrowseWebsiteAutoAction(
                 profile_id=self.profile_id,
                 parameters = self.parameters,
+                area = "main",
                 choice = "youtube",
                 log_prefix=self.log_prefix,
             ))
@@ -117,14 +118,14 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         chain1_actions = []
         
         chain1_actions.append(
-            ("delay", 3)  # ← DELAY TUPLE: ("delay", seconds)
+            ("delay", 1)  # ← DELAY TUPLE: ("delay", seconds)
         )
         # Action 1: Navigate to YouTube
         chain1_actions.append(
             ("navigate_youtube", YouTubeNavigateAutoAction(self.profile_id, self.log_prefix))
         )        
         
-        if random.random() < 0.75:
+        if random.random() < 0.70:
             chain1_actions.append(
                 ("move_mouse", YouTubeMouseMoveAutoAction(
                     profile_id=self.profile_id,
@@ -291,7 +292,7 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
                 chain_actions.append(("not_clicked_second_video_sidebar", action))                
                
             else:
-                # Scroll small to see the logo channe;
+                # Scroll small to see the logo channel
                 action = YouTubeRandomMoveScrollAutoAction(
                     profile_id=self.profile_id,
                     num_actions=1,
@@ -349,7 +350,7 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         
         for j in range(num_actions):
             chain_actions.append(
-                ("delay", random.randint(15,25))  # ← DELAY TUPLE: ("delay", seconds)
+                ("delay", random.randint(12,25))  # ← DELAY TUPLE: ("delay", seconds)
             )
             action_type = random.choice(action_types)
           
@@ -426,6 +427,7 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
                 ("browse_website", BrowseWebsiteAutoAction(
                     profile_id=self.profile_id,
                     parameters = self.parameters,
+                    area = "main",
                     choice = "web",
                     log_prefix=self.log_prefix
                 ))
