@@ -8,7 +8,7 @@ class SettingsDialog:
         self.parent = parent
         self.dialog = tk.Toplevel(parent)
         self.dialog.title("Cài đặt")
-        self.dialog.geometry("500x580")
+        self.dialog.geometry("500x650")
         self.dialog.resizable(False, False)
         self.dialog.transient(parent)
         self.dialog.grab_set()
@@ -189,6 +189,53 @@ class SettingsDialog:
             command=self.test_smtp
         )
         self.test_email_btn.pack(anchor="w", padx=5)
+        
+        
+        # ========== SEPARATOR ========== (THÊM MỚI)
+        ttk.Separator(self.dialog, orient='horizontal').pack(fill='x', padx=20, pady=15)
+        
+        # ========== SECTION 3: AUTO-START DELAY (NEW) ==========
+        auto_start_label = ttk.Label(
+            self.dialog, 
+            text="Tự động khởi động sau khi crash", 
+            font=("Arial", 12, "bold")
+        )
+        auto_start_label.pack(pady=10)
+        
+        # Frame chứa field
+        auto_start_frame = ttk.Frame(self.dialog)
+        auto_start_frame.pack(fill="x", padx=20, pady=5)
+        
+        # Label bên trái
+        ttk.Label(
+            auto_start_frame,
+            text="Delay trước khi auto-start (giây):",
+            font=("Segoe UI", 10)
+        ).grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        
+        # Spinbox cho delay
+        self.auto_start_delay_var = tk.IntVar(value=config.get_auto_start_delay())
+        self.auto_start_delay_spinbox = ttk.Spinbox(
+            auto_start_frame,
+            from_=0,
+            to=9999,  # No limit
+            textvariable=self.auto_start_delay_var,
+            width=10,
+            font=("Segoe UI", 10)
+        )
+        self.auto_start_delay_spinbox.grid(row=0, column=1, sticky="w", padx=5, pady=5)
+        
+        # Help text
+        help_frame = ttk.Frame(self.dialog)
+        help_frame.pack(fill="x", padx=20, pady=(0, 5))
+        help_text = ttk.Label(
+            help_frame,
+            text="(0 = tắt auto-start, mặc định: 60 giây)",
+            font=("Segoe UI", 8),
+            foreground="gray"
+        )
+        help_text.pack(anchor="w", padx=5)
+        # ========================================================
 
     
         # ========== BUTTON FRAME (SAVE/CANCEL) ==========
@@ -302,6 +349,17 @@ class SettingsDialog:
         config.SMTP_PASSWORD = self.smtp_password_var.get()
         config.SMTP_TO_EMAIL = self.smtp_to_email_var.get()
         config.SMTP_FROM_EMAIL = self.smtp_from_email_var.get()
+        
+        # ========== Lưu AUTO_START_DELAY (NEW) ==========
+        try:
+            delay = self.auto_start_delay_var.get()
+            config.set_auto_start_delay(delay)
+        except Exception as e:
+            print(f"[SETTINGS] Failed to save AUTO_START_DELAY: {e}")
+            config.set_auto_start_delay(60)  # Default
+        # ================================================
+
+        
         # Lưu cấu hình vào file
         config.save_config()
     

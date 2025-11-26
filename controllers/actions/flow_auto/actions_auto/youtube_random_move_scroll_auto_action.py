@@ -31,7 +31,7 @@ class YouTubeRandomMoveScrollAutoAction(BaseFlowAutoAction):
                     self.log(f"Moved mouse to safe area ({safe_x}, {safe_y}) before scroll", "INFO")
                 time.sleep(0.3)  # Let UI settle
                 if self.area == "main":
-                    scroll_amount = random.randint(-1100, -800)  # Scroll down
+                    scroll_amount = random.randint(-900, -800)  # Scroll down
                 else:
                     scroll_amount = random.randint(-400, -200)  # Scroll down
                     

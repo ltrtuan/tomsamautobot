@@ -1781,3 +1781,100 @@ class GoLoginProfileHelper:
             raise ProxyAssignmentFailed(
                 f"Cannot assign valid proxy for {profile_id} - all lines failed, IP duplication risk"
             )
+
+    @staticmethod
+    def kill_all_orbita_processes(log_prefix="[CLEANUP]"):
+        """
+        Kill ALL Orbita browser processes (không filter profile cụ thể)
+    
+        Use case:
+        - Trước khi start batch mới → cleanup profiles cũ còn chạy
+        - Emergency cleanup khi app crash
+    
+        Safety checks:
+        - ONLY kill chrome.exe (NOT gologin.exe)
+        - Must be GoLogin Orbita (check exe path + cmdline)
+        - Must have --user-data-dir flag
+    
+        Args:
+            log_prefix: Prefix for log messages
+    
+        Returns:
+            int: Number of processes killed
+        """
+        try:
+            import psutil
+            import logging
+            logger = logging.getLogger('TomSamAutobot')
+        
+            killed_count = 0
+            logger.info(f"{log_prefix} Searching for Orbita processes...")
+        
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'exe']):
+                try:
+                    proc_name = proc.info['name'].lower() if proc.info['name'] else ''
+                    pid = proc.info['pid']
+                
+                    # ONLY kill chrome.exe (NOT gologin.exe)
+                    if proc_name != 'chrome.exe':
+                        continue
+                
+                    cmdline = proc.info.get('cmdline', [])
+                    if not cmdline:
+                        continue
+                
+                    cmdline_str = ' '.join(cmdline).lower()
+                    exe_path = proc.info.get('exe', '').lower() if proc.info.get('exe') else ''
+                
+                    # Check if this is GoLogin Orbita (NOT regular Chrome)
+                    is_gologin_orbita = (
+                        ('.gologin' in exe_path and 'orbita' in exe_path) or
+                        ('appdata\\local\\gologin\\browser' in exe_path) or
+                        ('.gologin' in cmdline_str and 'orbita' in cmdline_str)
+                    )
+                
+                    if not is_gologin_orbita:
+                        continue
+                
+                    # Verify user-data-dir flag (safety check - must be profile browser)
+                    has_profile_flag = (
+                        '--user-data-dir' in cmdline_str or
+                        '--profile-directory' in cmdline_str
+                    )
+                
+                    if not has_profile_flag:
+                        continue
+                
+                    # Skip renderer/GPU processes (only kill main browser process)
+                    if '--type=' in cmdline_str:
+                        continue
+                
+                    # ALL checks passed - safe to kill
+                    logger.info(f"{log_prefix} Killing Orbita PID {pid}")
+                    proc.kill()
+                    proc.wait(timeout=3)  # Wait for process to die
+                    killed_count += 1
+                
+                except psutil.TimeoutExpired:
+                    logger.warning(f"{log_prefix} Timeout killing PID {pid}, trying terminate...")
+                    try:
+                        proc.terminate()
+                    except:
+                        pass
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+        
+            if killed_count > 0:
+                logger.info(f"{log_prefix} ✓ Total killed: {killed_count} Orbita process(es)")
+                import time
+                time.sleep(2)  # Wait for cleanup to complete
+            else:
+                logger.info(f"{log_prefix} No Orbita processes found")
+        
+            return killed_count
+        
+        except Exception as e:
+            print(f"{log_prefix} Error killing Orbita processes: {e}")
+            import traceback
+            traceback.print_exc()
+            return 0

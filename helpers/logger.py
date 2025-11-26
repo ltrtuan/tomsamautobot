@@ -25,12 +25,18 @@ class CustomRotatingFileHandler(RotatingFileHandler):
         self.base_dir = base_dir
         self.current_date = datetime.now().strftime("%d-%m-%Y")
         
+        # ========== LƯU PARAMETERS VÀO self (FIX) ==========
+        self._maxBytes = maxBytes
+        self._backupCount = backupCount
+        # ===================================================
+        
         # Tạo thư mục logs nếu chưa có
         os.makedirs(base_dir, exist_ok=True)
         
         # Tìm file log hiện tại hoặc tạo mới
         filename = self._get_current_log_filename()
         
+        # Gọi parent __init__
         super().__init__(
             filename=filename,
             maxBytes=maxBytes,
@@ -39,77 +45,91 @@ class CustomRotatingFileHandler(RotatingFileHandler):
         )
     
     def _get_current_log_filename(self):
-        """Lấy tên file log hiện tại hoặc tạo tên mới"""
-        date_str = self.current_date
-        base_name = f"tomsamautobot-log-{date_str}"
+        """
+        Tìm file log hiện tại hoặc tạo mới
         
-        # Tìm tất cả log files của ngày hôm nay
+        Returns:
+            str: Full path đến file log
+        """
+        base_name = f"tomsamautobot-log-{self.current_date}"
+        
+        # Tìm file hiện tại (nếu có)
         pattern = os.path.join(self.base_dir, f"{base_name}*.log")
         existing_files = glob.glob(pattern)
         
         if not existing_files:
-            # Chưa có log file cho ngày hôm nay
+            # Chưa có file → Tạo file mới
             return os.path.join(self.base_dir, f"{base_name}.log")
         
-        # Tìm index cao nhất
-        max_index = 0
-        for filepath in existing_files:
-            basename = os.path.basename(filepath)
-            # Check format: tomsamautobot-log-{date}-{index}.log
-            if basename == f"{base_name}.log":
-                max_index = max(max_index, 0)
-            else:
-                try:
-                    # Extract index từ filename
-                    index_part = basename.replace(f"{base_name}-", "").replace(".log", "")
-                    index = int(index_part)
-                    max_index = max(max_index, index)
-                except ValueError:
-                    pass
+        # Có file rồi → Tìm file mới nhất
+        existing_files.sort()
+        latest_file = existing_files[-1]
+        
+        # Check format: tomsamautobot-log-{date}-{index}.log
+        basename = os.path.basename(latest_file)
+        
+        if basename == f"{base_name}.log":
+            # Format: tomsamautobot-log-{date}.log
+            max_index = 0
+        else:
+            # Format: tomsamautobot-log-{date}-{index}.log
+            try:
+                # Extract index từ filename
+                index_part = basename.replace(f"{base_name}-", "").replace(".log", "")
+                max_index = int(index_part)
+            except ValueError:
+                max_index = 0
         
         # Kiểm tra file hiện tại có còn chỗ không
-        if max_index == 0:
-            current_file = os.path.join(self.base_dir, f"{base_name}.log")
-        else:
-            current_file = os.path.join(self.base_dir, f"{base_name}-{max_index}.log")
-        
-        # Nếu file đã đạt maxBytes, tạo file mới với index tăng
-        if os.path.exists(current_file) and os.path.getsize(current_file) >= self.maxBytes:
+        if os.path.exists(latest_file) and os.path.getsize(latest_file) >= self._maxBytes:
+            # File đã đạt maxBytes → Tạo file mới với index tăng
             max_index += 1
             return os.path.join(self.base_dir, f"{base_name}-{max_index}.log")
-        
-        return current_file
+        else:
+            # File còn chỗ → Dùng file hiện tại
+            return latest_file
     
     def shouldRollover(self, record):
-        """Override: Kiểm tra xem cần rotate không"""
-        # Check nếu đổi ngày mới
+        """
+        Override method để check rollover
+        
+        Rollover khi:
+        1. File size >= maxBytes
+        2. Ngày thay đổi (tạo file mới cho ngày mới)
+        """
+        # Check ngày thay đổi
         current_date = datetime.now().strftime("%d-%m-%Y")
         if current_date != self.current_date:
+            # Ngày mới → Rollover
             self.current_date = current_date
-            # Đổi sang file log ngày mới
-            new_filename = self._get_current_log_filename()
-            if new_filename != self.baseFilename:
-                self.baseFilename = new_filename
-                return False  # Không rollover, chỉ switch file
+            return True
         
-        # Check size-based rotation
-        if self.maxBytes > 0:
+        # Check file size
+        if self.stream is None:
+            self.stream = self._open()
+        
+        # ========== FIX: DÙNG self._maxBytes THAY VÌ self.maxBytes ==========
+        if self._maxBytes > 0:
             msg = "%s\n" % self.format(record)
             self.stream.seek(0, 2)  # Seek to end
-            if self.stream.tell() + len(msg) >= self.maxBytes:
+            if self.stream.tell() + len(msg.encode('utf-8')) >= self._maxBytes:
                 return True
+        # =====================================================================
+        
         return False
     
     def doRollover(self):
-        """Override: Tạo file mới khi rotate"""
+        """Override method để rollover với custom naming"""
         if self.stream:
             self.stream.close()
             self.stream = None
         
-        # Tạo file log mới với index tăng
+        # Tìm file mới
         self.baseFilename = self._get_current_log_filename()
-        self.mode = 'a'
+        
+        # Open file mới
         self.stream = self._open()
+
 
 
 def cleanup_old_logs(log_dir, retention_days):
@@ -146,48 +166,62 @@ def cleanup_old_logs(log_dir, retention_days):
 
 def setup_logger():
     """Setup logger - gọi 1 lần duy nhất khi app start"""
-    """
-        logger.debug("This is a DEBUG message")
-        logger.info("This is an INFO message")
-        logger.warning("This is a WARNING message")
-        logger.error("This is an ERROR message")
-        logger.critical("This is a CRITICAL message")
-    """
-    logger = logging.getLogger('TomSamAutobot')  # ← Singleton name
+    logger = logging.getLogger('TomSamAutobot')
     
-    # Nếu đã setup rồi, return luôn
-    if logger.handlers:
-        return logger
+    # ========== FIX: REMOVE OLD HANDLERS TRƯỚC KHI SETUP (NEW) ==========
+    # Xóa tất cả handlers cũ để tránh duplicate hoặc stale handlers
+    for handler in logger.handlers[:]:
+        handler.close()
+        logger.removeHandler(handler)
+    
+    print("[LOGGER] Setting up logger...")
+    # =====================================================================
     
     logger.setLevel(logging.DEBUG)
     
     # Lấy log directory
     log_dir = os.path.join(config.FILE_PATH, 'logs') if config.FILE_PATH else 'logs'
     
-    # Custom handler
-    handler = CustomRotatingFileHandler(
+    # ========== FILE HANDLER (ROTATING) ==========
+    file_handler = CustomRotatingFileHandler(
         base_dir=log_dir,
         maxBytes=10*1024*1024,
         backupCount=999,
         encoding='utf-8'
     )
     
-    # Formatter
-    formatter = logging.Formatter(
-        fmt='[%(asctime)s] [%(levelname)s] [%(filename)s] [%(funcName)s] %(message)s',
+    file_formatter = logging.Formatter(
+        fmt='[%(asctime)s] [%(levelname)s] [%(filename)s:%(lineno)d] [%(funcName)s] %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
-    handler.setFormatter(formatter)
+    file_handler.setFormatter(file_formatter)
+    logger.addHandler(file_handler)
     
-    logger.addHandler(handler)
+    print(f"[LOGGER] ✓ File handler added: {file_handler.baseFilename}")
+    # ============================================
+    
+    # ========== CONSOLE HANDLER (NEW) ==========
+    # console_handler = logging.StreamHandler()
+    # console_handler.setLevel(logging.DEBUG)
+    
+    # console_formatter = logging.Formatter(
+    #     fmt='[%(levelname)s] [%(filename)s:%(lineno)d] %(message)s'
+    # )
+    # console_handler.setFormatter(console_formatter)
+    # logger.addHandler(console_handler)
+    
+    # print(f"[LOGGER] ✓ Console handler added")
+    # ===========================================
     
     # Cleanup old logs
     try:
         cleanup_old_logs(log_dir, config.LOG_RETENTION_DAYS)
     except Exception as e:
-        print(f"[LOG CLEANUP] Error: {e}")
+        print(f"[LOG CLEANUP] Error: {e}")    
+   
     
     return logger
+
 
 def reset_logger():
     """Reset logger khi FILE_PATH thay đổi"""

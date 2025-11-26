@@ -1297,6 +1297,21 @@ class ActionListView(ttk.Frame):
             command=self.open_settings
         )
         settings_btn.pack(fill=tk.X, padx=4, pady=2)
+        
+        # ========== THÊM COUNTDOWN LABEL (NEW) ==========
+        # Tạo label countdown (ẩn mặc định, không pack)
+        self.countdown_label = tk.Label(
+            sidebar,
+            text="",
+            bg="#f0f0f0",
+            fg="#FF6B6B",  # Red color
+            font=("Segoe UI", 9, "bold"),
+            padx=8,
+            pady=6,
+            wraplength=180,
+            justify=tk.LEFT
+        )
+        # ========================================================
     
         # Content area header - nhỏ gọn hơn
         content_header = tk.Frame(content, bg=cfg.LIGHT_BG_COLOR)
@@ -1435,6 +1450,8 @@ class ActionListView(ttk.Frame):
             pady=1
         )
         status_bar.pack(fill=tk.X, side=tk.BOTTOM)
+        
+        
         
         # Nút Xóa tất cả (đặt bên trái)
         self.delete_all_button = tk.Button(
@@ -1706,4 +1723,36 @@ class ActionListView(ttk.Frame):
         if hasattr(self, 'move_callback') and self.move_callback:
             self.move_callback()
             
+            
+    # ========== COUNTDOWN LABEL METHODS (NEW) ==========
+    def show_countdown(self, seconds_remaining):
+        """
+        Show countdown label with seconds remaining
+        
+        Args:
+            seconds_remaining (int): Seconds until auto-trigger
+        """
+        minutes = seconds_remaining // 60
+        secs = seconds_remaining % 60
+        
+        if minutes > 0:
+            text = f"⏰ App sẽ tự động start sau {minutes} phút {secs} giây"
+        else:
+            text = f"⏰ App sẽ tự động start sau {secs} giây"
+        
+        self.countdown_label.config(text=text)
+        
+        # Pack label if not already packed
+        try:
+            self.countdown_label.pack_info()
+        except:
+            # Not packed yet → Pack it
+            self.countdown_label.pack(fill=tk.X, padx=4, pady=2)
     
+    def hide_countdown(self):
+        """Hide countdown label"""
+        try:
+            self.countdown_label.pack_forget()
+        except:
+            pass
+    # ===================================================

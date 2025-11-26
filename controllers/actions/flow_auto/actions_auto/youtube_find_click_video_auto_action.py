@@ -188,37 +188,87 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
             
                     if video_position:
                         self.log(f"✓ Found video position on attempt {attempt}")
-                
-                        # ========== CLICK VIDEO DIRECTLY ==========
+    
+                        # ========== LOGIC RANDOM SCROLL FOR SEARCH AREA ==========
+                        should_random_scroll = False
+                        if self.area == "search" and attempt > 1:
+                            # Random 50% giữa click trực tiếp và scroll random
+                            should_random_scroll = random.choice([True, False])
+        
+                        if should_random_scroll:
+                            self.log(f"[HUMAN SIMULATION] Randomly scrolling before clicking (attempt {attempt})")
+        
+                            # Số lần scroll random từ 1-3
+                            scroll_count = random.randint(1, 3)
+                            scroll_history = []  # Lưu lại scroll_amount của mỗi lần scroll
+        
+                            # Scroll down random
+                            for i in range(scroll_count):
+                                scroll_amount = random.randint(-700, -500)
+                                scroll_history.append(scroll_amount)
+            
+                                self.log(f"[SCROLL DOWN] Loop {i+1}/{scroll_count}: scroll_amount={scroll_amount}")
+                                pyautogui.scroll(scroll_amount)
+            
+                                # Sleep random 1-2 giây
+                                sleep_time = random.uniform(1, 2)
+                                time.sleep(sleep_time)
+        
+                            # Scroll ngược lại với đúng số lần và scroll_amount
+                            self.log(f"[SCROLL UP] Scrolling back up with {scroll_count} scrolls")
+                            for i, original_scroll in enumerate(reversed(scroll_history)):
+                                # Scroll ngược lại (đổi dấu)
+                                reverse_scroll = -original_scroll
+                                self.log(f"[SCROLL UP] Loop {i+1}/{scroll_count}: scroll_amount={reverse_scroll} (reverse of {original_scroll})")
+                                pyautogui.scroll(reverse_scroll)
+            
+                                # Sleep random 1-2 giây
+                                sleep_time = random.uniform(1, 2)
+                                time.sleep(sleep_time)
+        
+                            # Tìm lại vị trí click sau khi scroll
+                            self.log("[RE-FIND] Searching for logo position again after scrolling")
+                            video_position = self._find_and_calculate_click_position()
+        
+                            if not video_position:
+                                self.log("[RE-FIND] ✗ Lost video position after scrolling, continuing to next attempt", "WARNING")
+                                continue
+        
+                            self.log(f"[RE-FIND] ✓ Found video position again after scroll")
+    
+                        # ========== CLICK VIDEO (COMMON FOR BOTH CASES) ==========
                         click_x, click_y = video_position
                         self.log(f"Clicking video at ({click_x}, {click_y})")
-                
+    
                         # Click using human-like movement
                         MouseMoveAction.move_and_click_static(
                             click_x, click_y,
                             click_type=None,
                             fast=False
-                        )                    
+                        )
+    
                         if is_hand_cursor():
                             time.sleep(random.uniform(0.5, 2))
                             pyautogui.click()
                         else:
                             continue
+    
                         # Wait for video to start
                         wait_time = random.uniform(4, 7)
                         self.log(f"Waiting {wait_time:.1f}s for video to start")
                         time.sleep(wait_time)
-                
+    
                         self.log("✓ Video clicked successfully")
-                    
                         GlobalVariables().set(f'found_clicked_video_{self.profile_id}', True)
+    
                         #If click video in home page youtube
-                        if self.area == "main":                        
+                        if self.area == "main":
                             GlobalVariables().set(f'found_video_home_{self.profile_id}', True)
                         elif self.area == "sidebar":
                             GlobalVariables().set(f'clicked_second_video_{self.profile_id}', True)
-                        
+    
                         return True
+
             
                     # Not found: Scroll and retry
                     if attempt < max_retries:                   
@@ -230,9 +280,11 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
                 # return False
                 if self.flow_type == "browse":
                     return self._fallback_click_for_cookies_only_browse()
-                else:                
-                    return self._fallback_click_for_cookies()
-                
+                else:
+                    if random.random() < 0.35:
+                        return self._fallback_click_for_cookies()
+                    
+                return True
         
             except Exception as e:
                 self.log(f"✗ Find and click video error: {e}", "ERROR")

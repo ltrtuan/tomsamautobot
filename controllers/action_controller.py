@@ -2,11 +2,15 @@
 import os
 import time
 import pyautogui
+import pystray
 from PIL import Image
 from constants import ActionType
 from views.move_index_dialog import MoveIndexDialog
 import json
 from tkinter import filedialog, messagebox
+import config as cfg  # THÊM MỚI - để quản lý biến môi trường auto-restart
+import logging
+logger = logging.getLogger('TomSamAutobot')
 
 class ActionController:
     def __init__(self, root):
@@ -17,6 +21,183 @@ class ActionController:
         self.is_execution_stopped = False
         self._keyboard_listener = None
         self.is_actions_running = False
+        
+        # ========== AUTO-TRIGGER STATE (NEW) ==========
+        self.auto_trigger_remaining = 0
+        self.auto_trigger_cancelled = False
+        self.auto_trigger_active = False
+        
+
+    def create_tray_icon(self):
+        """
+        Create system tray icon with menu
+    
+        Features:
+        - Double-click: Show window
+        - Right-click menu: Show/Stop/Exit
+        """
+     
+        controller_ref = self
+        # ===== LOAD ICON FROM RESOURCES FOLDER (NEW) =====
+        def load_icon_image():
+            """Load app icon from resources folder"""
+            import sys
+            try:
+                # Thử các đường dẫn có thể (runtime và dev mode)
+                icon_paths = [
+                    os.path.join('resources', 'tomsamautobot.ico'),  # ← Dev mode
+                    'resources/tomsamautobot.ico',
+                    'tomsamautobot.ico',  # ← Runtime (PyInstaller extracted)
+                    os.path.join(sys._MEIPASS, 'resources', 'tomsamautobot.ico') if hasattr(sys, '_MEIPASS') else None,  # ← PyInstaller temp folder
+                ]
+        
+                # Filter out None
+                icon_paths = [p for p in icon_paths if p]
+        
+                for icon_path in icon_paths:
+                    if os.path.exists(icon_path):
+                        logger.info(f"[TRAY] Loading icon from: {icon_path}")
+                        return Image.open(icon_path)
+        
+                # Nếu không tìm thấy, tạo icon đơn giản
+                logger.warning("[TRAY] Icon file not found, creating simple icon")
+                return create_simple_icon()
+
+            
+            except Exception as e:
+                logger.error(f"[TRAY] Error loading icon: {e}")
+                return create_simple_icon()
+    
+        def create_simple_icon():
+            """Fallback: Create simple icon if file not found"""
+            from PIL import ImageDraw
+        
+            width = 64
+            height = 64
+            color_bg = (0, 120, 212)  # Blue
+            color_fg = (255, 255, 255)  # White
+        
+            image = Image.new('RGB', (width, height), color_bg)
+            dc = ImageDraw.Draw(image)
+            dc.ellipse((8, 8, 56, 56), fill=color_fg)
+            dc.ellipse((16, 16, 48, 48), fill=color_bg)
+        
+            return image
+        # =================================================
+    
+        # Action handlers (giữ nguyên như cũ)
+        def show_window_action():
+            """Show main window - THREAD SAFE"""
+            try:
+                self.root.after(0, lambda: self.root.deiconify())
+                self.root.after(0, lambda: self.root.lift())
+                self.root.after(0, lambda: self.root.focus_force())
+                logger.info("[TRAY] Window shown")
+            except Exception as e:
+                logger.error(f"[TRAY] Show window error: {e}")
+    
+        def stop_execution_action():
+            """Stop execution - THREAD SAFE"""
+            try:
+                if self.is_actions_running:
+                    self.root.after(0, self.stop_execution)
+                    logger.info("[TRAY] Stop execution requested")
+                else:
+                    logger.info("[TRAY] No execution running")
+            except Exception as e:
+                logger.error(f"[TRAY] Stop error: {e}")
+    
+        def exit_app_action():
+            """Exit application - THREAD SAFE"""
+            try:
+                logger.info("[TRAY] Exit requested from tray")
+            
+                # Stop tray icon
+                if hasattr(self, 'tray_icon') and self.tray_icon:
+                    self.tray_icon.stop()
+            
+                # Quit app
+                # self.root.after(0, self.root.quit)
+                controller_ref.root.after(0, controller_ref.root.destroy)
+            except Exception as e:
+                logger.error(f"[TRAY] Exit error: {e}")
+    
+        # Wrapper functions for menu
+        def on_show(icon, item):
+            show_window_action()
+    
+        def on_stop(icon, item):
+            stop_execution_action()
+    
+        def on_exit(icon, item):
+            exit_app_action()
+    
+        def on_double_click(icon, item):
+            """Handle double-click on tray icon"""
+            show_window_action()
+    
+        # Create menu
+        menu = pystray.Menu(
+            pystray.MenuItem("Show Window", on_show),
+            pystray.MenuItem(
+                "Stop Execution", 
+                on_stop,
+                visible=lambda item: self.is_actions_running
+            ),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Exit", on_exit)
+        )
+    
+        # Create icon with app icon image
+        self.tray_icon = pystray.Icon(
+            "TomSamAutobot",
+            load_icon_image(),  # ← SỬ DỤNG ICON TỪ FILE
+            "TomSamAutobot - Running",
+            menu,
+            on_activated=on_double_click
+        )
+    
+        logger.info("[TRAY] System tray icon created")
+
+
+    def start_tray_icon(self):
+        """Start tray icon in separate daemon thread"""
+        import threading
+    
+        if not hasattr(self, 'tray_icon') or self.tray_icon is None:
+            self.create_tray_icon()
+    
+        # Check if already running
+        if hasattr(self, 'tray_thread') and self.tray_thread and self.tray_thread.is_alive():
+            logger.info("[TRAY] Icon already running")
+            return
+    
+        # Run tray icon in daemon thread
+        def run_tray():
+            try:
+                logger.info("[TRAY] Icon thread started")
+                self.tray_icon.run()  # Blocking call
+                logger.info("[TRAY] Icon thread stopped")
+            except Exception as e:
+                logger.error(f"[TRAY] Icon thread error: {e}")
+    
+        self.tray_thread = threading.Thread(target=run_tray, daemon=True)
+        self.tray_thread.start()
+        logger.info("[TRAY] System tray icon started in background")
+
+    def stop_tray_icon(self):
+        """Stop tray icon"""
+        if hasattr(self, 'tray_icon') and self.tray_icon is not None:
+            try:
+                self.tray_icon.stop()
+                self.tray_icon = None
+                logger.info("[TRAY] System tray icon stopped")
+            except Exception as e:
+                logger.warning(f"[TRAY] Error stopping icon: {e}")
+
+
+
+
         
     def setup(self, model, view):
         self.model = model
@@ -39,7 +220,7 @@ class ActionController:
         )
         
         # ✅ KHỞI ĐỘNG LISTENER NGAY KHI APP START
-        self.start_conditional_keyboard_listener()
+        # self.start_conditional_keyboard_listener()
         
         # Load sample data
         self.model.load_actions()
@@ -132,7 +313,7 @@ class ActionController:
         # ← ẨN WINDOW NGAY ĐẦU
         print("[EXECUTION] Hiding window to tray...")
         self.root.withdraw()
-    
+        
         exception_to_reraise = None  # ← STORE EXCEPTION
     
         try:
@@ -166,80 +347,70 @@ class ActionController:
                     handler.play()
     
         except Exception as e:
-            # ========== CATCH EXCEPTION TO SEND EMAIL ==========
+            # ========== CATCH EXCEPTION (NO EMAIL - WILL BE SENT BY TKINTER HANDLER) ==========
             print("=" * 80)
-            print("[PLAY_ACTION ERROR] ✅ EXCEPTION CAUGHT IN play_action()")
+            print("[PLAY_ACTION ERROR] Exception caught in play_action()")
             print(f"[PLAY_ACTION ERROR] Exception type: {type(e).__name__}")
             print(f"[PLAY_ACTION ERROR] Exception message: {str(e)}")
             print("=" * 80)
-    
+        
             import traceback
             tb_str = traceback.format_exc()
             print(tb_str)
-    
-            # Send crash email
-            print("[EMAIL DEBUG] 📧 Starting email send process...")
-            try:
-                print("[EMAIL DEBUG] 🔄 Importing email_notifier...")
-                from helpers.email_notifier import send_email, format_crash_email
-                print("[EMAIL DEBUG] ✓ Import successful")
         
-                print("[EMAIL DEBUG] 🔄 Formatting crash email...")
-                title, content = format_crash_email(
-                    exception_type=type(e).__name__,
-                    exception_message=str(e),
-                    traceback_str=tb_str,
-                    context={
-                        'App': 'TomSamAutobot',
-                        'Source': 'Action Execution',
-                        'Action Index': index
-                    }
-                )
-                print(f"[EMAIL DEBUG] ✓ Email formatted - Title: {title[:50]}...")
+            # Store exception to re-raise later
+            exception_to_reraise = e
         
-                print("[EMAIL DEBUG] 🔄 Calling send_email()...")
-                send_email(
-                    title=title,
-                    content=content,
-                    throttle_seconds=0
-                )
-                print("[EMAIL DEBUG] ✓ send_email() returned successfully")
-                print("[EMAIL] ✓ Crash email sent")
-        
-            except Exception as email_err:
-                print("=" * 80)
-                print(f"[EMAIL ERROR] ❌ Failed to send crash email!")
-                print(f"[EMAIL ERROR] Error type: {type(email_err).__name__}")
-                print(f"[EMAIL ERROR] Error message: {email_err}")
-                print("=" * 80)
-                import traceback as tb2
-                tb2.print_exc()
+            print("[PLAY_ACTION] Exception will be re-raised to Tkinter handler")
+            # ===================================================================================
+
 
     
         finally:
+            # ===== STOP TRAY ICON & SHOW WINDOW (NEW) =====
+            try:
+                self.stop_tray_icon()
+            except Exception as tray_err:
+                logger.warning(f"[TRAY] Error stopping icon: {tray_err}")
             # ← QUAN TRỌNG: LUÔN SHOW LẠI WINDOW (ngay cả khi có lỗi)
-            print("[EXECUTION] Showing window back...")
+            # print("[EXECUTION] Showing window back...")
             self.root.deiconify()
             self.root.lift()
             self.root.focus_force()
     
         # ========== RE-RAISE EXCEPTION AFTER CLEANUP ==========
         if exception_to_reraise is not None:
-            print("[PLAY_ACTION] Re-raising exception after cleanup...")
+            logger.info("[PLAY_ACTION] Re-raising exception after cleanup...")
             raise exception_to_reraise
         # ======================================================
+
 
 
 
     def temporarily_disable_esc_listener(self):
         """Tạm thời disable ESC listener (dùng khi Keyboard Action bấm ESC)"""
         self._esc_listener_enabled = False
-        print("[KEYBOARD LISTENER] 🔇 ESC listener temporarily disabled")
+        logger.info("[KEYBOARD LISTENER] 🔇 ESC listener temporarily disabled")
 
     def re_enable_esc_listener(self):
         """Bật lại ESC listener"""
         self._esc_listener_enabled = True
-        print("[KEYBOARD LISTENER] 🔊 ESC listener re-enabled")
+        logger.info("[KEYBOARD LISTENER] 🔊 ESC listener re-enabled")
+
+    def press_esc_safely(self):
+        """
+        Press ESC key without triggering stop execution
+    
+        Wrapper that temporarily disables listener
+        """       
+    
+        self.temporarily_disable_esc_listener()
+    
+        try:
+            pyautogui.press('esc')
+            time.sleep(0.3)
+        finally:
+            self.re_enable_esc_listener()
 
 
     def _find_and_execute_else_if_for_standalone(self, if_index):
@@ -415,8 +586,21 @@ class ActionController:
     
     def run_sequence(self):
         # ← THÊM: ẨN WINDOW
-        print("[EXECUTION] Hiding window to tray...")
+        # print("[EXECUTION] Hiding window to tray...")
         self.root.withdraw()
+        
+        # ===== START TRAY ICON (NEW) =====
+        try:
+            self.start_tray_icon()
+        except Exception as tray_err:
+            logger.warning(f"[TRAY] Could not start tray icon: {tray_err}")
+        # =================================
+        
+        # ========== CANCEL AUTO-TRIGGER IF ACTIVE (NEW) ==========
+        if self.auto_trigger_active:
+            logger.info("[RUN_SEQUENCE] Cancelling auto-trigger (manual play)")
+            self.cancel_auto_trigger()
+        # ==========================================================
         
         from models.global_variables import GlobalVariables
         from constants import ActionType
@@ -425,9 +609,20 @@ class ActionController:
         # 🔄 RESET execution state
         self.is_execution_stopped = False
         self.is_actions_running = True  # ← SET FLAG: ACTIONS BẮT ĐẦU CHẠY
+        
+        # ========== AUTO-RESTART: SET BIẾN MÔI TRƯỜNG (NEW) ==========
+        # Đánh dấu app đã Start (watchdog sẽ check biến này để tự exit)
+        cfg.set_app_running(True)
+        print("[AUTO-RESTART] ✓ App marked as RUNNING")
+    
+        # Clear countdown nếu đang có (vì user đã Start thủ công)
+        cfg.set_restart_countdown(0)
+        print("[AUTO-RESTART] ✓ Restart countdown cleared")    
+       
+        # ============================================================
     
         # 🎧 BẮT ĐẦU lắng nghe ESC có điều kiện
-        self.start_conditional_keyboard_listener()
+        # self.start_conditional_keyboard_listener()
 
         try:
             # Lấy danh sách hành động từ model
@@ -454,7 +649,7 @@ class ActionController:
         
                 # ← THÊM CHECK DISABLED
                 if action.is_disabled:
-                    print(f"[EXECUTION] ⏭️ Skipping disabled action at index {i}: {action.action_type}")
+                    logger.info(f"[EXECUTION] ⏭️ Skipping disabled action at index {i}: {action.action_type}")
                     i += 1
                     continue
     
@@ -478,7 +673,7 @@ class ActionController:
             
                 # ⚡ CHECK ESC BEFORE EACH ACTION
                 if self.is_execution_stopped:
-                    print("[EXECUTION CONTROL] 🛑 Breaking due to ESC")
+                    logger.info("[EXECUTION CONTROL] 🛑 Breaking due to ESC")
                     break
             
                 # Xử lý IF condition
@@ -518,8 +713,8 @@ class ActionController:
         
                 # Xử lý ELSE IF condition
                 elif action_type == ActionType.ELSE_IF_CONDITION:
-                    print(f"[CONTROLLER DEBUG] *** BẮT ĐẦU XỬ LÝ ELSE_IF tại index {i} ***")
-                    print(f"[CONTROLLER DEBUG] if_stack state: {if_stack}")
+                    logger.info(f"[CONTROLLER DEBUG] *** BẮT ĐẦU XỬ LÝ ELSE_IF tại index {i} ***")
+                    logger.info(f"[CONTROLLER DEBUG] if_stack state: {if_stack}")
     
                     handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
                     if handler:
@@ -528,11 +723,11 @@ class ActionController:
                         if action_frame:
                             handler.action_frame = action_frame
         
-                        print(f"[CONTROLLER DEBUG] Gọi handler.play() cho ELSE_IF")
+                        logger.info(f"[CONTROLLER DEBUG] Gọi handler.play() cho ELSE_IF")
                         result = handler.play()
-                        print(f"[CONTROLLER DEBUG] ELSE_IF trả về: {result}")
+                        logger.info(f"[CONTROLLER DEBUG] ELSE_IF trả về: {result}")
                     else:
-                        print(f"[CONTROLLER DEBUG] KHÔNG thể tạo handler cho ELSE_IF!")
+                        logger.info(f"[CONTROLLER DEBUG] KHÔNG thể tạo handler cho ELSE_IF!")
         
                 # Xử lý END IF condition
                 elif action_type == ActionType.END_IF_CONDITION:
@@ -667,7 +862,7 @@ class ActionController:
                                         handler_nested = ActionFactory.get_handler(self.root, nested_action, self.view, self.model, self)
                                         if handler_nested:
                                             action_frame = next((f for f in self.view.action_frames
-                                                              if f.action.id == nested_action.id), None)
+                                                                if f.action.id == nested_action.id), None)
                                             if action_frame:
                                                 handler_nested.action_frame = action_frame
                             
@@ -701,9 +896,6 @@ class ActionController:
                     # Sau khi hoàn thành vòng lặp, nhảy đến action sau End For
                     i = end_for_index + 1
                     continue
-
-
-
 
 
                 # Xử lý END FOR LOOP
@@ -789,84 +981,42 @@ class ActionController:
             #     self.view.show_message("hoàn thành", "chuỗi hành động đã hoàn thành")
 
         except Exception as e:
-            # ========== CATCH AND SEND EMAIL FOR SEQUENCE ERRORS ==========
+            # ========== CATCH EXCEPTION (NO EMAIL - WILL BE SENT BY TKINTER HANDLER) ==========
             print("=" * 80)
-            print("[RUN_SEQUENCE ERROR] Exception in sequence execution:")
+            print("[RUN_SEQUENCE ERROR] Exception in sequence execution")
             print("=" * 80)
-        
+            
             import traceback
             tb_str = traceback.format_exc()
             print(tb_str)
-        
-            # Send crash email
-            try:
-                from helpers.email_notifier import send_email, format_crash_email
             
-                title, content = format_crash_email(
-                    exception_type=type(e).__name__,
-                    exception_message=str(e),
-                    traceback_str=tb_str,
-                    context={
-                        'App': 'TomSamAutobot',
-                        'Source': 'Sequence Execution'
-                    }
-                )
-            
-                print("[EMAIL] Sending crash report...")
-                email_sent = send_email(
-                    title=title,
-                    content=content,
-                    throttle_seconds=0
-                )
-                if email_sent:
-                    print("[EMAIL] ✓ Email thread started successfully")
-    
-                    # ========== WAIT FOR EMAIL THREAD TO COMPLETE ==========
-                    import time
-                    import threading
-    
-                    # Find email worker thread
-                    email_thread = None
-                    for t in threading.enumerate():
-                        if t.name == "EmailSenderThread":
-                            email_thread = t
-                            break
-    
-                    if email_thread and email_thread.is_alive():
-                        print("[EMAIL] ⏳ Waiting for email to send (max 10 seconds)...")
-                        email_thread.join(timeout=10)  # Wait max 10 seconds
-        
-                        if email_thread.is_alive():
-                            print("[EMAIL] ⚠️ Email thread still running after timeout")
-                        else:
-                            print("[EMAIL] ✅ Email thread completed")
-                    # ========================================================
-                else:
-                    print("[EMAIL] ✗ Failed to send crash email (throttled or error)")
-            except Exception as email_err:
-                print(f"[EMAIL ERROR] Failed to send crash email: {email_err}")
-        
-            # Store to re-raise
+            # Store exception to re-raise (NO EMAIL - will be sent by handle_tkinter_exception)
             exception_to_reraise = e
-            # ==============================================================
+            
+            print("[RUN_SEQUENCE] Exception will be re-raised to Tkinter handler")
+            # ===================================================================================
     
         finally:
             # ✅ QUAN TRỌNG: LUÔN RESET FLAGS VÀ DỪNG LISTENER
             self.is_actions_running = False
             self.stop_keyboard_listener()
             print("[EXECUTION CONTROL] 🔄 Reset execution state")
+            
+            # ========== AUTO-RESTART: CLEAR BIẾN MÔI TRƯỜNG (NEW) ==========
+            # Đánh dấu app đã Stop (không còn chạy nữa)
+            cfg.set_app_running(False)
+            print("[AUTO-RESTART] ✓ App marked as STOPPED")
+            # ===============================================================
+
             print("[EXECUTION] Showing window back...")
             self.root.deiconify()
             self.root.lift()
             self.root.focus_force()
     
         # ========== RE-RAISE EXCEPTION ==========
-        try:
-            if exception_to_reraise is not None:
-                print("[RUN_SEQUENCE] Re-raising exception after cleanup...")
-                raise exception_to_reraise
-        except NameError:
-            pass  # No exception occurred
+        if exception_to_reraise is not None:
+            print("[RUN_SEQUENCE] Re-raising exception after cleanup...")
+            raise exception_to_reraise
         # ========================================
 
         
@@ -1157,19 +1307,19 @@ class ActionController:
                 if key == keyboard.Key.esc:
                     # ✅ CHỈ XỬ LÝ ESC KHI ACTIONS ĐANG CHẠY VÀ LISTENER ĐƯỢC BẬT
                     if self.is_actions_running and self._esc_listener_enabled:  # ← THÊM CHECK
-                        print("[ESC DETECTED] 🛑 Người dùng bấm ESC - Dừng execution!")
+                        logger.info("[ESC DETECTED] 🛑 Người dùng bấm ESC - Dừng execution!")
                         self.stop_execution()
                         return False  # Dừng listener
                     else:
                         # ✅ ACTIONS KHÔNG CHẠY HOẶC LISTENER BỊ DISABLE - IGNORE ESC
-                        print("[ESC IGNORED] 🔕 ESC bị ignore")
+                        logger.info("[ESC IGNORED] 🔕 ESC bị ignore")
             except AttributeError:
                 pass
     
         # Tạo và start listener
         self._keyboard_listener = keyboard.Listener(on_press=on_key_press)
         self._keyboard_listener.start()
-        print("[KEYBOARD LISTENER] 🎧 Đã bắt đầu lắng nghe ESC có điều kiện")
+        logger.info("[KEYBOARD LISTENER] 🎧 Đã bắt đầu lắng nghe ESC có điều kiện")
 
 
     def stop_keyboard_listener(self):
@@ -1607,5 +1757,108 @@ class ActionController:
             else:
                 print(f"[IF CONDITION] ❌ FALSE → No Else If, skip entire block")
                 return True
+            
+
+    # ========== AUTO-TRIGGER COUNTDOWN METHODS (NEW) ==========
+    def start_auto_trigger_countdown(self):
+        """
+        Start countdown for auto-triggering play after restart
+        """
+        import logging
+        logger = logging.getLogger('TomSamAutobot')
+    
+        initial_delay = cfg.get_auto_start_delay()
+    
+        if initial_delay == 0:
+            logger.info("[AUTO-TRIGGER] Disabled (delay = 0)")
+            self.reset_crash_env_vars()
+            return
+    
+        logger.info(f"[AUTO-TRIGGER] Starting countdown: {initial_delay}s")
+        self.auto_trigger_remaining = initial_delay
+        self.auto_trigger_cancelled = False
+        self.auto_trigger_active = True
+    
+        # ========== LƯU INITIAL DELAY (FIX) ==========
+        self.auto_trigger_initial_delay = initial_delay  # ← THÊM DÒNG NÀY!
+        # =============================================
+    
+        def countdown_loop():
+            """Countdown loop - runs every second"""
+        
+            # Check cancelled
+            if self.auto_trigger_cancelled:
+                logger.info("[AUTO-TRIGGER] Cancelled by user action")
+                self.view.hide_countdown()
+                self.auto_trigger_active = False
+                return
+        
+            # Check settings changed
+            current_delay = cfg.get_auto_start_delay()
+        
+            if current_delay == 0:
+                # User disabled auto-trigger
+                logger.info("[AUTO-TRIGGER] Cancelled (delay set to 0)")
+                self.view.hide_countdown()
+                self.reset_crash_env_vars()
+                self.auto_trigger_active = False
+                return
+        
+            # ========== FIX: SO SÁNH VỚI INITIAL DELAY (FIX) ==========
+            if current_delay != self.auto_trigger_initial_delay:
+                # Settings changed → Reset countdown
+                logger.info(f"[AUTO-TRIGGER] Settings changed: {self.auto_trigger_initial_delay}s → {current_delay}s, resetting countdown")
+                self.auto_trigger_remaining = current_delay
+                self.auto_trigger_initial_delay = current_delay  # Update initial
+            # ==========================================================
+        
+            # Update UI countdown
+            self.view.show_countdown(self.auto_trigger_remaining)
+        
+            # Check countdown finished
+            if self.auto_trigger_remaining <= 0:
+                logger.info("[AUTO-TRIGGER] Countdown finished, triggering play...")
+                self.view.hide_countdown()
+                self.auto_trigger_active = False
+            
+                # Trigger play
+                self.run_sequence()
+                return
+        
+            # Decrement countdown
+            self.auto_trigger_remaining -= 1
+        
+            # Schedule next tick (1 second)
+            self.root.after(1000, countdown_loop)
+    
+        # Start countdown loop
+        countdown_loop()
+
+    
+    def cancel_auto_trigger(self):
+        """Cancel auto-trigger countdown"""
+        if self.auto_trigger_active:
+            import logging
+            logger = logging.getLogger('TomSamAutobot')
+            logger.info("[AUTO-TRIGGER] Cancelling countdown...")
+            self.auto_trigger_cancelled = True
+    
+    def reset_crash_env_vars(self):
+        """
+        Reset all crash-related environment variables
+        
+        Called when:
+        - Auto-trigger completes successfully
+        - User manually clicks Play
+        - User closes app
+        - User disables auto-trigger (delay = 0)
+        """
+        import logging
+        logger = logging.getLogger('TomSamAutobot')
+        
+        cfg.clear_crash_timestamp()
+        logger.info("[AUTO-TRIGGER] ✓ Crash env vars reset")
+    # ==========================================================
+
 
 
