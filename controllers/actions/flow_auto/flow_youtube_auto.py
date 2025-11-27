@@ -125,7 +125,7 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
             ("navigate_youtube", YouTubeNavigateAutoAction(self.profile_id, self.log_prefix))
         )        
         
-        if random.random() < 0.70:
+        if random.random() < 0.75:
             chain1_actions.append(
                 ("move_mouse", YouTubeMouseMoveAutoAction(
                     profile_id=self.profile_id,
