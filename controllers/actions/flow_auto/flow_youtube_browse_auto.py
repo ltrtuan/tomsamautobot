@@ -31,14 +31,26 @@ class YouTubeFlowAutoBrowseIterator(BaseYouTubeFlowAutoIterator):
         Chain 1: Search and start video (BẮT BUỘC - TẤT CẢ PROFILE ĐỀU CHẠY)
         Chain 2-N: Random video interactions (RANDOM SỐ LƯỢNG VÀ LOẠI)
         """
+        opened_profiles = self.parameters.get('opened_profiles', [])
         # ========== CHAIN 0: WARM UP BEFORE VIEW VIDEO (BẮT BUỘC) ==========
         self._warm_up_chain()
         self._interaction_website_chains()
         
-        self._second_action_chain()
-        self._interaction_website_chains()
-        self._second_action_chain()
-        self._interaction_website_chains()
+        repeat_count = 2
+        if len(opened_profiles) == 2:
+            repeat_count = 6
+        elif len(opened_profiles) == 1:
+            repeat_count = 10
+        
+        for i in range(repeat_count):
+            choice_browse = random.choice([1,2])
+            if choice_browse == 1:
+                self._second_action_chain()
+            else:
+                self._warm_up_chain()
+                
+            self._interaction_website_chains()
+            
         self._last_action_chain()
       
         

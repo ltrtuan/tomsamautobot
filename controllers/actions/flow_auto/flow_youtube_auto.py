@@ -51,9 +51,9 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         repeat_count = 3
        
         if len(opened_profiles) == 2:
-            repeat_count = 10
+            repeat_count = 8
         elif len(opened_profiles) == 1:
-            repeat_count = 25
+            repeat_count = 15
         
         for i in range(repeat_count):
             self._build_video_interaction_chains(index_action = i) 
