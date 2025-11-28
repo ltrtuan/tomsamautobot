@@ -110,17 +110,107 @@ class ActionController:
         def exit_app_action():
             """Exit application - THREAD SAFE"""
             try:
-                logger.info("[TRAY] Exit requested from tray")
-            
-                # Stop tray icon
-                if hasattr(self, 'tray_icon') and self.tray_icon:
-                    self.tray_icon.stop()
-            
-                # Quit app
-                # self.root.after(0, self.root.quit)
+                logger.info("[TRAY] Exit requested from tray - Force stopping all threads")
+        
+                # ===== STEP 1: SET STOP FLAG (NEW) =====
+                controller_ref.is_execution_stopped = True
+                controller_ref.is_actions_running = False
+                logger.info("[TRAY] Set execution stop flags")
+                # ========================================
+
+                # ===== STEP 1.5: SHUTDOWN THREADPOOLEXECUTOR (NEW) =====
+                # Force kill any running executors in background
+                import concurrent.futures
+        
+                # Get all ThreadPoolExecutor instances (hacky but works)
+                import gc
+                for obj in gc.get_objects():
+                    if isinstance(obj, concurrent.futures.ThreadPoolExecutor):
+                        try:
+                            logger.info(f"[TRAY] Found ThreadPoolExecutor, shutting down...")
+                            obj.shutdown(wait=False, cancel_futures=True)  # Cancel all pending futures
+                        except Exception as e:
+                            logger.error(f"[TRAY] Error shutting executor: {e}")
+                # =======================================================
+        
+                # ===== STEP 2: CANCEL AUTO-TRIGGER (NEW) =====
+                if hasattr(controller_ref, 'auto_trigger_active') and controller_ref.auto_trigger_active:
+                    try:
+                        controller_ref.cancel_auto_trigger()
+                        logger.info("[TRAY] Cancelled auto-trigger")
+                    except:
+                        pass
+                # ==============================================
+        
+                # ===== STEP 3: STOP KEYBOARD LISTENER (NEW) =====
+                try:
+                    controller_ref.stop_conditional_keyboard_listener()
+                    logger.info("[TRAY] Stopped keyboard listener")
+                except:
+                    pass
+                # ================================================
+        
+                # ===== STEP 4: STOP TRAY ICON =====
+                if hasattr(controller_ref, 'tray_icon') and controller_ref.tray_icon:
+                    try:
+                        controller_ref.tray_icon.stop()
+                        logger.info("[TRAY] Tray icon stopped")
+                    except Exception as stop_err:
+                        logger.error(f"[TRAY] Error stopping tray: {stop_err}")
+                # ===================================
+        
+                # ===== STEP 5: WAIT FOR THREADS CLEANUP (NEW) =====
+                logger.info("[TRAY] Waiting 2s for threads to cleanup...")
+                time.sleep(2)  # Give threads time to see stop flags and exit
+                # ==================================================
+                
+                # ===== DEBUG: LIST ACTIVE THREADS (NEW) =====
+                import threading
+                active_threads = threading.enumerate()
+                logger.info(f"[TRAY] Active threads before exit: {len(active_threads)}")
+                for thread in active_threads:
+                    logger.info(f"[TRAY]   - Thread: {thread.name}, daemon={thread.daemon}, alive={thread.is_alive()}")
+                # ============================================
+
+        
+                # ===== STEP 6: FORCE DESTROY WINDOW =====
+                logger.info("[TRAY] Destroying Tkinter window...")
                 controller_ref.root.after(0, controller_ref.root.destroy)
+                # ========================================
+        
+                # ===== STEP 7: FORCE EXIT PROCESS (NEW) =====
+                # Fallback: If destroy doesn't work, force exit after 3s
+                def force_exit():
+                    logger.info("[TRAY] Waiting 5s before force exit...")
+                    time.sleep(5)
+    
+                    # Check if still alive
+                    import threading
+                    active = threading.enumerate()
+                    logger.warning(f"[TRAY] FORCE EXIT: Still {len(active)} threads alive")
+                    for t in active:
+                        logger.warning(f"[TRAY]   - {t.name}: daemon={t.daemon}")
+    
+                    logger.info("[TRAY] Force killing process with os._exit(0)...")
+                    import os
+                    os._exit(0)  # ← FORCE KILL PROCESS (không cleanup, kill ngay)
+        
+                import threading
+                exit_thread = threading.Thread(target=force_exit, daemon=True)
+                exit_thread.start()
+                # ============================================
+        
+                logger.info("[TRAY] Exit procedure completed")
+        
             except Exception as e:
                 logger.error(f"[TRAY] Exit error: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+        
+                # Emergency exit
+                import sys
+                sys.exit(0)
+
     
         # Wrapper functions for menu
         def on_show(icon, item):
@@ -220,7 +310,7 @@ class ActionController:
         )
         
         # ✅ KHỞI ĐỘNG LISTENER NGAY KHI APP START
-        # self.start_conditional_keyboard_listener()
+        self.start_conditional_keyboard_listener()
         
         # Load sample data
         self.model.load_actions()
@@ -622,7 +712,7 @@ class ActionController:
         # ============================================================
     
         # 🎧 BẮT ĐẦU lắng nghe ESC có điều kiện
-        # self.start_conditional_keyboard_listener()
+        self.start_conditional_keyboard_listener()
 
         try:
             # Lấy danh sách hành động từ model
@@ -785,6 +875,12 @@ class ActionController:
     
                     try:
                         while loop_count < total_loops:
+                            # ===== CHECK STOP FLAG AT START (NEW) =====
+                            if self.is_execution_stopped:
+                                logger.info(f"[FOR LOOP] PAUSE/BREAK detected before iteration {loop_count+1}")
+                                i = end_for_index + 1
+                                break  # Exit for loop
+                            # ==========================================
                             print(f"[CONTROLLER DEBUG] For Loop - Iteration {loop_count}/{total_loops}")
                             for_handler = ActionFactory.get_handler(self.root, action, self.view, self.model, self)
                             if for_handler:
@@ -878,6 +974,13 @@ class ActionController:
                                 print(f"[CONTROLLER DEBUG] ⏭️ LoopSkipException caught: {e}")
                                 print(f"[CONTROLLER DEBUG] Skipping iteration {loop_count + 1}")
                                 iteration_completed = True  # ← Skip cũng coi là completed
+                                
+                            # ===== CHECK STOP FLAG AFTER ITERATION (NEW) =====
+                            if self.is_execution_stopped:
+                                logger.info(f"[FOR LOOP] PAUSE/BREAK detected after iteration {loop_count+1}")
+                                i = end_for_index + 1
+                                break  # Exit for loop
+                            # ================================================
             
                             # ✅ FIXED: Chỉ tăng loop_count MỘT LẦN duy nhất
                             if iteration_completed:
@@ -975,10 +1078,10 @@ class ActionController:
                 i += 1
     
             # Show completion or stop message
-            # if self.is_execution_stopped:
-            #     self.view.show_message("đã dừng", "chuỗi hành động đã được dừng (esc)")
-            # else:
-            #     self.view.show_message("hoàn thành", "chuỗi hành động đã hoàn thành")
+            if self.is_execution_stopped:
+                self.view.show_message("đã dừng", "chuỗi hành động đã được dừng (esc)")
+            else:
+                self.view.show_message("hoàn thành", "chuỗi hành động đã hoàn thành")
 
         except Exception as e:
             # ========== CATCH EXCEPTION (NO EMAIL - WILL BE SENT BY TKINTER HANDLER) ==========
@@ -1301,15 +1404,18 @@ class ActionController:
     
         # ← THÊM FLAG
         self._esc_listener_enabled = True
-    
+        controller_ref = self  # ← CAPTURE self
         def on_key_press(key):
             try:
-                if key == keyboard.Key.esc:
-                    # ✅ CHỈ XỬ LÝ ESC KHI ACTIONS ĐANG CHẠY VÀ LISTENER ĐƯỢC BẬT
+                if key == keyboard.Key.pause:
+                    # ✅ CHỈ XỬ LÝ pause/break KHI ACTIONS ĐANG CHẠY VÀ LISTENER ĐƯỢC BẬT
                     if self.is_actions_running and self._esc_listener_enabled:  # ← THÊM CHECK
-                        logger.info("[ESC DETECTED] 🛑 Người dùng bấm ESC - Dừng execution!")
-                        self.stop_execution()
-                        return False  # Dừng listener
+                        # ===== PAUSE = EXIT APP (NEW) =====
+                        logger.info("[PAUSE DETECTED] 🛑 Người dùng bấm PAUSE/BREAK - Thoát app!")
+            
+                        # Call exit logic (giống Exit tray icon)
+                        self.root.after(0, controller_ref._exit_from_keyboard)  # Schedule on main thread
+                        return False  # Stop listener
                     else:
                         # ✅ ACTIONS KHÔNG CHẠY HOẶC LISTENER BỊ DISABLE - IGNORE ESC
                         logger.info("[ESC IGNORED] 🔕 ESC bị ignore")
@@ -1320,6 +1426,87 @@ class ActionController:
         self._keyboard_listener = keyboard.Listener(on_press=on_key_press)
         self._keyboard_listener.start()
         logger.info("[KEYBOARD LISTENER] 🎧 Đã bắt đầu lắng nghe ESC có điều kiện")
+        
+
+
+    def _exit_from_keyboard(self):
+        """Exit app when Pause/Break pressed - Same as tray Exit"""
+        try:
+            logger.info("[KEYBOARD] Exit requested via PAUSE/BREAK key")
+        
+            # ===== STEP 1: SET STOP FLAGS =====
+            self.is_execution_stopped = True
+            self.is_actions_running = False
+            logger.info("[KEYBOARD] Set execution stop flags")
+            # ==================================
+        
+            # ===== STEP 2: SHUTDOWN THREADPOOLEXECUTOR =====
+            import concurrent.futures
+            import gc
+            for obj in gc.get_objects():
+                if isinstance(obj, concurrent.futures.ThreadPoolExecutor):
+                    try:
+                        logger.info("[KEYBOARD] Found ThreadPoolExecutor, shutting down...")
+                        obj.shutdown(wait=False, cancel_futures=True)
+                    except Exception as e:
+                        logger.error(f"[KEYBOARD] Error shutting executor: {e}")
+            # ===============================================
+        
+            # ===== STEP 3: CANCEL AUTO-TRIGGER =====
+            if hasattr(self, 'auto_trigger_active') and self.auto_trigger_active:
+                try:
+                    self.cancel_auto_trigger()
+                    logger.info("[KEYBOARD] Cancelled auto-trigger")
+                except:
+                    pass
+            # =======================================
+        
+            # ===== STEP 4: STOP KEYBOARD LISTENER =====
+            try:
+                self.stop_conditional_keyboard_listener()
+                logger.info("[KEYBOARD] Stopped keyboard listener")
+            except:
+                pass
+            # ==========================================
+        
+            # ===== STEP 5: STOP TRAY ICON =====
+            if hasattr(self, 'tray_icon') and self.tray_icon:
+                try:
+                    self.tray_icon.stop()
+                    logger.info("[KEYBOARD] Tray icon stopped")
+                except Exception as e:
+                    logger.error(f"[KEYBOARD] Error stopping tray: {e}")
+            # ==================================
+        
+            # ===== STEP 6: WAIT FOR CLEANUP =====
+            logger.info("[KEYBOARD] Waiting 2s for threads to cleanup...")
+            time.sleep(2)
+            # ====================================
+        
+            # ===== STEP 7: DESTROY WINDOW =====
+            logger.info("[KEYBOARD] Destroying Tkinter window...")
+            self.root.destroy()
+            # ==================================
+        
+            # ===== STEP 8: FORCE EXIT FALLBACK =====
+            def force_exit():
+                time.sleep(5)
+                logger.warning("[KEYBOARD] Force exiting...")
+                import os
+                os._exit(0)
+        
+            import threading
+            exit_thread = threading.Thread(target=force_exit, daemon=True)
+            exit_thread.start()
+            # =======================================
+        
+            logger.info("[KEYBOARD] Exit procedure completed")
+        
+        except Exception as e:
+            logger.error(f"[KEYBOARD] Exit error: {e}")
+            import sys
+            sys.exit(0)
+
 
 
     def stop_keyboard_listener(self):
@@ -1336,7 +1523,7 @@ class ActionController:
         print("[EXECUTION CONTROL] ⏹️ Execution đã được dừng bởi người dùng")
     
         try:
-            self.view.show_message("Đã Dừng", "Đã dừng chuỗi hành động theo yêu cầu (ESC)")
+            self.view.show_message("Đã Dừng", "Đã dừng chuỗi hành động theo yêu cầu (PAUSE/BREAK)")
         except:
             pass
 
@@ -1649,7 +1836,6 @@ class ActionController:
         ⚠️ ẢNH HƯỞNG: Không ảnh hưởng action cũ
         """
         from models.global_variables import GlobalVariables
-        import random
     
         action = actions[for_index]
         params = action.parameters
@@ -1665,7 +1851,7 @@ class ActionController:
         except:
             iterations = 1
     
-        print(f"[FOR LOOP] Starting {iterations} iterations (index {for_index} to {end_for_index})")
+        logger.info(f"[FOR LOOP] Starting {iterations} iterations (index {for_index} to {end_for_index})")
     
         # Execute loop
         for iteration in range(iterations):
@@ -1681,9 +1867,28 @@ class ActionController:
             )
             if hasattr(for_handler, 'set_loop_index'):
                 for_handler.set_loop_index(iteration, iterations)
+            if for_handler:
+                result = for_handler.play()  # ← LƯU RETURN VALUE
+    
+                # ===== CHECK RESULT (NEW) =====
+                if result is False:  # Explicit check for False (not just falsy)
+                    logger.warning(f"[ACTION RANGE] execute_for_loop_range stopping")
+                    return False
+                # ==============================
+            # ===== CHECK STOP FLAG BEFORE EXECUTE (NEW) =====
+            if self.is_execution_stopped:
+                logger.info(f"[FOR LOOP] PAUSE/BREAK detected before executing iteration {iteration+1}")
+                return False
+            # ================================================
         
             # Execute actions inside loop
             success = self.execute_action_range(actions, for_index, end_for_index, context)
+            
+            # ===== CHECK STOP FLAG AFTER EXECUTE (NEW) =====
+            if self.is_execution_stopped:
+                logger.info(f"[FOR LOOP] PAUSE/BREAK detected after iteration {iteration+1} completed")
+                return False
+            # ===============================================
         
             if not success:
                 return False

@@ -307,7 +307,7 @@ class GoLoginAPI:
 
     
         # Run gl.stop() in separate thread with 60s timeout
-        stop_thread = threading.Thread(target=_stop_internal, daemon=False)
+        stop_thread = threading.Thread(target=_stop_internal, daemon=True)
         stop_thread.start()
         print(f"[GOLOGIN] Waiting for gl.stop() to complete (max 180s)...")
         stop_thread.join(timeout=180)

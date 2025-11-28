@@ -57,7 +57,6 @@
     <Compile Include="controllers\actions\gologin_clone_action.py" />
     <Compile Include="controllers\actions\gologin_create_action.py" />
     <Compile Include="controllers\actions\gologin_get_cookies_action.py" />
-    <Compile Include="controllers\actions\gologin_selenium_collect_action-28-10-2025-10PM.py" />
     <Compile Include="controllers\actions\gologin_selenium_collect_action.py" />
     <Compile Include="controllers\actions\gologin_selenium_start_action.py" />
     <Compile Include="controllers\actions\gologin_selenium_stop_action.py" />
@@ -131,6 +130,7 @@
     <Compile Include="models\text_searcher.py" />
     <Compile Include="models\tmproxy_api.py" />
     <Compile Include="models\__init__.py" />
+    <Compile Include="resources\generate_keywords.py" />
     <Compile Include="views\action_dialog_view.py" />
     <Compile Include="views\action_list_view.py" />
     <Compile Include="views\action_params\base_params.py" />
@@ -178,6 +178,7 @@
     <Folder Include="controllers\actions\" />
     <Folder Include="controllers\actions\flow_auto\" />
     <Folder Include="controllers\actions\flow_auto\actions_auto\" />
+    <Folder Include="dist\" />
     <Folder Include="helpers\actions\" />
     <Folder Include="helpers\actions_headless\" />
     <Folder Include="models\" />
@@ -185,6 +186,7 @@
     <Folder Include="core\" />
     <Folder Include="exceptions\" />
     <Folder Include="helpers\" />
+    <Folder Include="resources\" />
     <Folder Include="views\" />
     <Folder Include="views\action_params\" />
   </ItemGroup>
@@ -192,8 +194,9 @@
     <InterpreterReference Include="Global|PythonCore|3.12" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="controllers\actions\gologin_auto_action.py-bak-3-11-2025" />
-    <Content Include="views\action_params\gologin_auto_params.py-bak-3-11-2025" />
+    <Content Include="dist\TomSamAutobot.exe" />
+    <Content Include="dist\watchdog_monitor.exe" />
+    <Content Include="resources\tomsamautobot.ico" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in

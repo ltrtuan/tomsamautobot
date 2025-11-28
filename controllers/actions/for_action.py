@@ -1,10 +1,17 @@
 ﻿from controllers.actions.base_action import BaseAction
 from models.global_variables import GlobalVariables
+import logging
+logger = logging.getLogger('TomSamAutobot')
 
 class ForAction(BaseAction):
     def prepare_play(self):
         """For action được xử lý trực tiếp trong ActionController.run_sequence()"""
         print(f"[FOR ACTION] For action prepare_play() - Logic được xử lý trong controller")
+        # ===== CHECK STOP FLAG AT START OF BATCH (FIX) =====
+        if self.controller and hasattr(self.controller, 'is_execution_stopped') and self.controller.is_execution_stopped:
+            logger.info(f"[ForAction prepare_play PAUSE/BREAK")
+            return False
+        # ====================================================
         return False  # Không cần xử lý gì thêm ở đây
 
     def set_loop_index(self, current_iteration, total_iterations):

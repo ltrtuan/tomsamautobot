@@ -9,7 +9,7 @@ class YouTubeFlowAutoFactory:
     """
     
     @staticmethod
-    def create_flow_iterator(profile_id, parameters, log_prefix="[YOUTUBE AUTO]", flow_type="search"):
+    def create_flow_iterator(profile_id, parameters, log_prefix="[YOUTUBE AUTO]", flow_type="search", controller = None):
         """
         Create flow iterator
         
@@ -28,11 +28,11 @@ class YouTubeFlowAutoFactory:
         """
         if flow_type == "search":
             from controllers.actions.flow_auto.flow_youtube_auto import YouTubeFlowAutoIterator
-            return YouTubeFlowAutoIterator(profile_id, parameters, log_prefix)
+            return YouTubeFlowAutoIterator(profile_id, parameters, log_prefix, controller)
         
         elif flow_type == "browse":
             from controllers.actions.flow_auto.flow_youtube_browse_auto import YouTubeFlowAutoBrowseIterator
-            return YouTubeFlowAutoBrowseIterator(profile_id, parameters, log_prefix)
+            return YouTubeFlowAutoBrowseIterator(profile_id, parameters, log_prefix, controller)
         
         else:
             raise ValueError(f"Unknown flow_type: '{flow_type}'. Supported: 'search', 'browse'")

@@ -191,7 +191,7 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
     
                         # ========== LOGIC RANDOM SCROLL FOR SEARCH AREA ==========
                         should_random_scroll = False
-                        if self.area == "search" and attempt > 1:
+                        if self.area == "search" and attempt <= 2:
                             # Random 50% giữa click trực tiếp và scroll random
                             should_random_scroll = random.choice([True, False])
         
@@ -354,7 +354,7 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
             rand_choice = random.choice([1, 2, 3])
             if rand_choice == 1:
                 # CLICK VÀO THUMBNAIL                
-                offset_x = random.randint(-320, -70)
+                offset_x = random.randint(-320, -90)
                 offset_y = random.randint(-10, 120)
             elif rand_choice == 2:
                 # CLICK VÀO TITLE

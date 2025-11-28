@@ -9,6 +9,7 @@ from controllers.actions.flow_auto.actions_auto.youtube_random_move_scroll_auto_
 from controllers.actions.flow_auto.actions_auto.base_flow_auto_action import BaseFlowAutoAction
 from controllers.actions.mouse_move_action import MouseMoveAction
 from helpers.app_helpers import is_hand_cursor
+from models.global_variables import GlobalVariables
 
 class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
     """
@@ -62,21 +63,24 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
         try:
             self.log("Checking for ads")
             time.sleep(6)  # Wait for skip button to appear
-            
+            GlobalVariables().set(f'click_ads_{self.profile_id}', False)
             # ========== NEW STRATEGY: HOVER ADS AREA FIRST ==========
-            # Step 1: Hover mouse vào ADS area
-            ads_hand_cursor = self._hover_and_check_ads_area()
             
-            if ads_hand_cursor:
-                # Cursor = hand → Random select Case 1 (30%) or Case 2 (70%)
-                if random.random() < 0.3:
+            # Cursor = hand → Random select Case 1 (30%) or Case 2 (70%)
+            if random.random() < 0.3:
+                # Step 1: Hover mouse vào ADS area
+                ads_hand_cursor = self._hover_and_check_ads_area()            
+                if ads_hand_cursor:
                     self.log("Selected CASE 1: Click ads → Interact → Skip (30%)")
-                    return self._case1_click_ads_then_skip()
-                else:
-                    self.log("Selected CASE 2: Move to Skip Ads area → Check hand → Click (70%)")
-                    self._case2_hover_skip_ads_then_click()
-                    time.sleep(random.uniform(5, 7))
-                    return self._case2_hover_skip_ads_then_click()
+                    self._case1_click_ads_then_skip()
+                    
+            already_click_ads = GlobalVariables().get(f'click_ads_{self.profile_id}', False)
+            if not already_click_ads:
+                self._case2_hover_skip_ads_then_click()
+                time.sleep(random.uniform(5, 7))
+                
+            return self._case2_hover_skip_ads_then_click()
+            
             
         except Exception as e:
             self.log(f"Skip ads error: {e}", "ERROR")
@@ -131,13 +135,13 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
             time.sleep(click_delay)
             pyautogui.click()
             self.log("✓ Clicked ads")
-            
+            GlobalVariables().set(f'click_ads_{self.profile_id}', True)
             # Step 2: Wait and check if new tab opened
             time.sleep(2)
             
             if not self._check_new_tab_opened():
                 self.log("No new tab opened, falling back to direct skip")
-                return self._try_skip_ads_once()()
+                return self._try_skip_ads_once()
             
             self.log("✓ New tab opened, interacting...")
             
@@ -165,8 +169,22 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
         try:
             # Reuse _try_skip_ads_once() (same logic: hover + check hand + click)
             if self._try_skip_ads_once():
+                time.sleep(2)
+                #Case : click on Logo Channel on the right bottom of the video
+                if self._check_new_tab_opened():
+                    # Step 4: Close new tab
+                    self._close_new_tab()
+            
+                    # Step 5: Return to YouTube tab
+                    self._return_to_youtube_tab()
+            
+                    # Step 6: Resume YouTube video
+                    self._resume_youtube_video()
+                
                 return True      
-        
+            
+            return False
+                
         except Exception as e:
             self.log(f"Case 2 error: {e}", "ERROR")
             return True
@@ -176,7 +194,7 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
         """Try to find and click skip button once (with hand cursor check)"""
         if self.skip_ads_region:
             region_x, region_y, region_width, region_height = self.skip_ads_region
-            for attempt in range(1, 4):
+            for attempt in range(1, 2):
                 random_x = region_x + random.randint(0, region_width)
                 random_y = region_y + random.randint(0, region_height)
             
@@ -189,7 +207,7 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
                 time.sleep(1)
                 
                 if is_hand_cursor():
-                    click_delay = random.uniform(0.5, 1)
+                    click_delay = random.uniform(0.5, 0.7)
                     time.sleep(click_delay)
                     pyautogui.click()
                     self.log(f"✓ Clicked skip button at ({random_x}, {random_y})")
@@ -206,12 +224,11 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
             bool: True if new tab opened (not on YouTube)
         """
         try:
-            hwnd = win32gui.GetForegroundWindow()
-            window_title = win32gui.GetWindowText(hwnd)
-            
-            self.log(f"Current window title: '{window_title}'")
-            
-            is_youtube = "youtube" in window_title.lower()
+            # hwnd = win32gui.GetForegroundWindow()
+            # window_title = win32gui.GetWindowText(hwnd)
+            # is_youtube = "youtube" in window_title.lower()
+            current_url = self._get_current_url()
+            is_youtube = "youtube.com/watch" in current_url.lower()
             
             if is_youtube:
                 self.log("Still on YouTube tab (no new tab opened)")
@@ -287,15 +304,18 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
     def _is_on_youtube_tab(self):
         """Check if current tab is YouTube"""
         try:
-            hwnd = win32gui.GetForegroundWindow()
-            window_title = win32gui.GetWindowText(hwnd)
-            return "youtube" in window_title.lower()
+            # hwnd = win32gui.GetForegroundWindow()
+            # window_title = win32gui.GetWindowText(hwnd)
+            current_url = self._get_current_url()
+            is_youtube = "youtube.com/watch" in current_url.lower()
+            return is_youtube
         except:
             return False
     
     def _resume_youtube_video(self):
         """Resume YouTube video (press Space)"""
         self.log("Resuming YouTube video (Space)")
+        pyautogui.press('esc')
         time.sleep(1)
         pyautogui.press('space')
         time.sleep(0.5)
