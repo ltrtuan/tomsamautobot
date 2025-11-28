@@ -15,7 +15,7 @@ class BaseYouTubeFlowAutoIterator:
     Provides common initialization and chain execution logic.
     """
     
-    def __init__(self, profile_id, parameters, log_prefix="[YOUTUBE AUTO]"):
+    def __init__(self, profile_id, parameters, log_prefix="[YOUTUBE AUTO]", controller = None):
         """
         Initialize YouTube Auto Flow Iterator
     
@@ -33,7 +33,7 @@ class BaseYouTubeFlowAutoIterator:
         self.profile_id = profile_id
         self.parameters = parameters
         self.log_prefix = log_prefix
-    
+        self.controller = controller
         # ========== MULTI-CHANNEL LOGIC ==========
         # Select random enabled channel (MANDATORY)
         self.selected_channel = self._select_random_channel()
@@ -190,6 +190,11 @@ class BaseYouTubeFlowAutoIterator:
         Returns:
             bool: True if chain executed successfully
         """
+        # ===== CHECK STOP FLAG AT START (NEW) =====
+        if self.controller and hasattr(self.controller, 'is_execution_stopped') and self.controller.is_execution_stopped:
+            self.log("ESC/Exit detected at execute_next_chain - Stopping chain execution", "WARNING")
+            return False
+        # ==========================================
         if not self.has_next_chain():
             self.log("No more chains to execute", "WARNING")
             return False
@@ -209,6 +214,13 @@ class BaseYouTubeFlowAutoIterator:
                 list_special_action = ["not_found_video_home_", "not_found_clicked_video_", "not_clicked_second_video_"]
                 # ========== EXECUTE ALL ACTIONS IN CHAIN ==========
                 for action_name, action_obj in chain_actions:
+                    # ===== CHECK STOP FLAG BEFORE EACH ACTION (NEW) =====
+                    if self.controller and hasattr(self.controller, 'is_execution_stopped') and self.controller.is_execution_stopped:
+                        self.log(f"ESC/Exit detected before action '{action_name}' - Stopping", "WARNING")
+                        return False
+                    # ====================================================
+
+
                     # Handle delay action first
                     if action_name == "delay" or action_name == "delay_loop":
                         delay_seconds = action_obj

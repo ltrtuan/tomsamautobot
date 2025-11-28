@@ -2,7 +2,7 @@
 APP_TITLE = "Ứng dụng Điều Khiển Máy Tính"
 APP_WIDTH = 600
 APP_HEIGHT = 500
-
+APP_VERSION = "1.0"
 
 # Default values
 DEFAULT_CONFIDENCE = 0.8
@@ -539,10 +539,28 @@ def get_auto_start_delay():
     Returns:
         int: Delay in seconds (0 = disable auto-trigger, default = 60)
     """
+    delay = None
+    
+    # ===== TRY READ FROM REGISTRY FIRST (NEW) =====
     try:
-        return int(os.environ.get('TOMSAM_AUTO_START_DELAY', '60'))
-    except:
-        return 60  # Default 60 seconds
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment")
+        value, _ = winreg.QueryValueEx(key, "TOMSAM_AUTO_START_DELAY")
+        delay = int(value)
+        winreg.CloseKey(key)
+    except Exception:
+        pass
+    # ===============================================
+    
+    # Fallback to os.getenv if not in Registry
+    if delay is None:
+        try:
+            delay = int(os.environ.get('TOMSAM_AUTO_START_DELAY', '60'))
+        except:
+            delay = 60
+    
+    return delay
+
 
 def set_auto_start_delay(seconds):
     """
@@ -551,5 +569,17 @@ def set_auto_start_delay(seconds):
     Args:
         seconds (int): Delay in seconds (0 to disable)
     """
-    os.environ['TOMSAM_AUTO_START_DELAY'] = str(int(seconds))
-# ==============================================
+    # Validate input
+    try:
+        seconds = int(seconds)
+        if seconds < 0:
+            seconds = 0
+    except (ValueError, TypeError):
+        seconds = 60  # Default if invalid input
+    
+    # ===== WRITE TO REGISTRY USING setx (NEW) =====
+    os.system(f"setx TOMSAM_AUTO_START_DELAY {seconds}")
+    # ==============================================
+    
+    # Update current process env
+    os.environ['TOMSAM_AUTO_START_DELAY'] = str(seconds)

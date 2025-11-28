@@ -315,6 +315,7 @@ class YouTubeSkipAdsAutoAction(BaseFlowAutoAction):
     def _resume_youtube_video(self):
         """Resume YouTube video (press Space)"""
         self.log("Resuming YouTube video (Space)")
+        pyautogui.press('esc')
         time.sleep(1)
         pyautogui.press('space')
         time.sleep(0.5)

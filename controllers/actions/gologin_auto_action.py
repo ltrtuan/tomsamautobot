@@ -31,7 +31,11 @@ class GoLoginAutoAction(BaseAction):
     
     def prepare_play(self):
         """Execute GoLogin Selenium Start Profile - Updated for per-profile proxy assignment with retry/stop logic."""
-   
+        # ===== CHECK STOP FLAG AT START OF BATCH (FIX) =====
+        if self.controller and hasattr(self.controller, 'is_execution_stopped') and self.controller.is_execution_stopped:
+            logger.info(f"[GoLoginAutoAction prepare_play PAUSE/BREAK")
+            return False
+        # ====================================================
         try:
             # Get API token from variable name (original)
             api_key_variable = self.params.get("api_key_variable", "").strip()
@@ -440,6 +444,12 @@ class GoLoginAutoAction(BaseAction):
         profile_open_lock = threading.Lock()  # ← THÊM LOCK MỚI
         # ========== PROCESS EACH BATCH ==========
         for batch_num, batch_profiles in enumerate(batches, 1):
+            # ===== CHECK STOP FLAG AT START OF BATCH (FIX) =====
+            if self.controller and hasattr(self.controller, 'is_execution_stopped') and self.controller.is_execution_stopped:
+                logger.info(f"[BATCH {batch_num}] PAUSE/BREAK detected at start - Skipping this batch")
+                break  # Exit outer loop, không xử lý batch này nữa
+            # ====================================================
+
             print("=" * 80)
             print(f"[BATCH {batch_num}/{len(batches)}] Processing {len(batch_profiles)} profiles: {batch_profiles}")
             print("=" * 80)
@@ -454,9 +464,10 @@ class GoLoginAutoAction(BaseAction):
             def open_profile_thread(profile_id):
                 """Thread function to open 1 profile WITHOUT Selenium"""
                 try:
-                    with profile_open_lock:  # ← LOCK TOÀN BỘ OPEN PROCESS
+                    with profile_open_lock:  # ← LOCK TOÀN BỘ OPEN PROCESS                
+
                         print(f"[BATCH {batch_num}][{profile_id}] Opening profile...")
-            
+                        
                         # ========== CALL _open_profile() METHOD (UPDATED: PASS PROXY ARGS) ==========
                         result = self._open_profile(profile_id, batch_num)
             
@@ -613,6 +624,22 @@ class GoLoginAutoAction(BaseAction):
                 print(f"[BATCH {batch_num}] No profiles opened successfully, skipping to next batch")
                 total_failed += len(batch_profiles)
                 continue
+            
+            # ===== CHECK STOP FLAG AFTER PHASE 1 (NEW) =====
+            if self.controller and hasattr(self.controller, 'is_execution_stopped') and self.controller.is_execution_stopped:
+                logger.info(f"[BATCH {batch_num}] PAUSE/BREAK detected after PHASE 1 - Closing opened profiles")
+                # Close opened profiles before exit
+                for profile_id in opened_profiles:
+                    try:
+                        result_bring = GoLoginProfileHelper.bring_profile_to_front(profile_id, driver=None, log_prefix=f"[BATCH {batch_num}][{profile_id}]")
+                        if result_bring:
+                            time.sleep(1)
+                            pyautogui.hotkey('alt', 'f4')
+                            time.sleep(1)
+                    except:
+                        pass
+                break  # Exit batch loop
+            # ================================================
     
             # ========== PHASE 2, 3, 4: KEEP EXACTLY AS ORIGINAL (START ACTION CODE) ==========
             # Check action type
@@ -638,13 +665,16 @@ class GoLoginAutoAction(BaseAction):
                                 profile_id=profile_id,
                                 parameters={**self.params, 'opened_profiles': opened_profiles, 'max_workers' : max_parallel_profiles, 'list_warmup_url' : mixed_keyword, 'keyword_type' : keyword_type},
                                 log_prefix=f"[BATCH {batch_num}][{profile_id}]",
-                                flow_type="browse"
+                                flow_type="browse",
+                                controller = self.controller
                             )
                         else:
                             flow_iterator = YouTubeFlowAutoFactory.create_flow_iterator(
                                 profile_id=profile_id,
                                 parameters={**self.params, 'opened_profiles': opened_profiles, 'max_workers' : max_parallel_profiles, 'list_warmup_url' : mixed_keyword, 'keyword_type' : keyword_type},
-                                log_prefix=f"[BATCH {batch_num}][{profile_id}]"
+                                log_prefix=f"[BATCH {batch_num}][{profile_id}]",
+                                flow_type="search",
+                                controller = self.controller
                             )
                       
                     elif action_type == "Google":
@@ -683,11 +713,11 @@ class GoLoginAutoAction(BaseAction):
                 profiles_to_remove = []
         
                 for profile_id in active_profiles:
-                    # ===== CHECK ESC FLAG AT START (FIX) =====
-                    # if self.controller and hasattr(self.controller, 'is_execution_stopped') and self.controller.is_execution_stopped:
-                    #     logger.info(f"[BATCH {batch_num}] ROUND {round_num} ESC detected - Stopping all profiles")
-                    #     active_profiles.clear()  # Clear để thoát outer loop
-                    #     break
+                    # ===== CHECK PAUSE/BREAK FLAG AT START (FIX) =====
+                    if self.controller and hasattr(self.controller, 'is_execution_stopped') and self.controller.is_execution_stopped:
+                        logger.info(f"[BATCH {batch_num}] ROUND {round_num} ESC detected - Stopping all profiles")
+                        active_profiles.clear()  # Clear để thoát outer loop
+                        break
                     # =========================================
                     flow = flow_iterators[profile_id]
             
@@ -715,20 +745,20 @@ class GoLoginAutoAction(BaseAction):
                     # Execute chain with lock
                     print(f"[BATCH {batch_num}] ROUND {round_num} [{profile_id}] ========== ACQUIRING LOCK → EXECUTING CHAIN")
                     
-                    # ===== CHECK ESC FLAG BEFORE EXECUTE (FIX) =====
-                    # if self.controller and hasattr(self.controller, 'is_execution_stopped') and self.controller.is_execution_stopped:
-                    #     logger.info(f"[BATCH {batch_num}] [{profile_id}] ESC detected before execute")
-                    #     profiles_to_remove.append(profile_id)
-                    #     continue
+                    # ===== CHECK PAUSE/BREAK FLAG BEFORE EXECUTE (FIX) =====
+                    if self.controller and hasattr(self.controller, 'is_execution_stopped') and self.controller.is_execution_stopped:
+                        logger.info(f"[BATCH {batch_num}] [{profile_id}] ESC detected before execute")
+                        profiles_to_remove.append(profile_id)
+                        continue
                     # ===============================================
             
                     try:
                         success = flow.execute_next_chain()
-                        # ===== CHECK ESC FLAG AFTER EXECUTE (FIX) =====
-                        # if self.controller and hasattr(self.controller, 'is_execution_stopped') and self.controller.is_execution_stopped:
-                        #     logger.info(f"[BATCH {batch_num}] [{profile_id}] ESC detected after execute")
-                        #     profiles_to_remove.append(profile_id)
-                        #     continue
+                        # ===== CHECK PAUSE/BREAK FLAG AFTER EXECUTE (FIX) =====
+                        if self.controller and hasattr(self.controller, 'is_execution_stopped') and self.controller.is_execution_stopped:
+                            logger.info(f"[BATCH {batch_num}] [{profile_id}] ESC detected after execute")
+                            profiles_to_remove.append(profile_id)
+                            continue
                         # ==============================================
                         if success:
                             print(f"[BATCH {batch_num}] ROUND {round_num} [{profile_id}] ✓ Chain executed successfully")
@@ -996,13 +1026,16 @@ class GoLoginAutoAction(BaseAction):
                         profile_id=profile_id,
                         parameters={**self.params, 'opened_profiles': [profile_id], 'max_workers' : 1, 'list_warmup_url' : mixed_keyword, 'keyword_type' : keyword_type},
                         log_prefix=f"[AUTO][{profile_id}]",
-                        flow_type="browse"
+                        flow_type="browse",
+                        controller = self.controller
                     )
                 else:
                     flow_iterator = YouTubeFlowAutoFactory.create_flow_iterator(
                         profile_id=profile_id,
                         parameters={**self.params, 'opened_profiles': [profile_id], 'max_workers' : 1, 'list_warmup_url' : mixed_keyword, 'keyword_type' : keyword_type},
-                        log_prefix=f"[AUTO][{profile_id}]"
+                        log_prefix=f"[AUTO][{profile_id}]",
+                        flow_type="search",
+                        controller = self.controller
                     )
             elif action_type == "Google":
                 # TODO: Implement GoogleFlowAuto later
@@ -1030,10 +1063,10 @@ class GoLoginAutoAction(BaseAction):
         chain_num = 0
 
         while flow_iterator.has_next_chain():
-            # ===== CHECK ESC FLAG (FIX) =====
-            # if self.controller and hasattr(self.controller, 'is_execution_stopped') and self.controller.is_execution_stopped:
-            #     logger.info(f"[{profile_id}] ESC detected at start of loop - Stopping chain execution")
-            #     break
+            # ===== CHECK PAUSE/BREAK FLAG (FIX) =====
+            if self.controller and hasattr(self.controller, 'is_execution_stopped') and self.controller.is_execution_stopped:
+                logger.info(f"[{profile_id}] ESC detected at start of loop - Stopping chain execution")
+                break
             # =================================
             chain_num += 1
     
@@ -1053,19 +1086,19 @@ class GoLoginAutoAction(BaseAction):
             except Exception as e:
                 print(f"[{profile_id}] Could not bring to front: {e}")
     
-            # ===== CHECK ESC FLAG BEFORE EXECUTE (FIX) =====
-            # if self.controller and hasattr(self.controller, 'is_execution_stopped') and self.controller.is_execution_stopped:
-            #     logger.info(f"[{profile_id}] ESC detected before executing chain {chain_num}")
-            #     break
+            # ===== CHECK PAUSE/BREAK FLAG BEFORE EXECUTE (FIX) =====
+            if self.controller and hasattr(self.controller, 'is_execution_stopped') and self.controller.is_execution_stopped:
+                logger.info(f"[{profile_id}] ESC detected before executing chain {chain_num}")
+                break
             # ===============================================
 
             # Execute chain
             try:
                 success = flow_iterator.execute_next_chain()
-                # ===== CHECK ESC FLAG AFTER EXECUTE (FIX) =====
-                # if self.controller and hasattr(self.controller, 'is_execution_stopped') and self.controller.is_execution_stopped:
-                #     logger.info(f"[{profile_id}] ESC detected after executing chain {chain_num}")
-                #     break
+                # ===== CHECK PAUSE/BREAK FLAG AFTER EXECUTE (FIX) =====
+                if self.controller and hasattr(self.controller, 'is_execution_stopped') and self.controller.is_execution_stopped:
+                    logger.info(f"[{profile_id}] ESC detected after executing chain {chain_num}")
+                    break
                 # ==============================================
         
                 if success:

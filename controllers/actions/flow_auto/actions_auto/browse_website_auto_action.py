@@ -199,7 +199,7 @@ class BrowseWebsiteAutoAction(BaseFlowAutoAction):
                 
             for attempt in range(1, 6):
                 current_url = self._get_current_url()
-                if "youtube.com/shorts" in current_url.lower() or "youtube.com/watch" not in current_url.lower():
+                if "youtube.com/watch" not in current_url.lower():
                     self._navigate_youtube()
                     time.sleep(random.uniform(2, 3))
                     

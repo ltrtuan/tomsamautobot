@@ -43,7 +43,7 @@ def global_exception_handler(exc_type, exc_value, exc_traceback):
         traceback_str=traceback.format_exc(),
         context={
             'App': 'TomSamAutobot',
-            'Version': '1.0.0',
+            'Version': cfg.APP_VERSION,
         }
     )
     
@@ -240,8 +240,8 @@ class TomSamAutobot:
             # Nếu đã tồn tại (từ login), sử dụng Toplevel
             self.root = tk.Toplevel()
     
-        self.root.title("Tom Sam Autobot")
-        
+        self.root.title(f"TomSamAutobot {cfg.APP_VERSION}")
+        self.root.iconbitmap("resources/tomsamautobot.ico")
         # ========== WINDOW CLOSE HANDLER (NEW) ==========
         def on_closing():
             """Handle window close event"""

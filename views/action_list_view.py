@@ -1270,17 +1270,7 @@ class ActionListView(ttk.Frame):
         content = tk.Frame(main_frame, bg=cfg.LIGHT_BG_COLOR)
         content.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
     
-        # Sidebar header - nhỏ gọn hơn
-        sidebar_header = tk.Label(
-            sidebar,
-            text="TomSamAutobot",
-            font=("Segoe UI", 12, "bold"),  # Giảm kích thước font
-            fg=cfg.PRIMARY_COLOR,
-            bg="#f0f0f0",
-            pady=8  # Giảm padding
-        )
-        sidebar_header.pack(fill=tk.X)
-    
+      
         # Các nút trong sidebar - nhỏ gọn hơn       
     
         # Thêm nút Cài đặt - phong cách PAD

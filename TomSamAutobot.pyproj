@@ -57,7 +57,6 @@
     <Compile Include="controllers\actions\gologin_clone_action.py" />
     <Compile Include="controllers\actions\gologin_create_action.py" />
     <Compile Include="controllers\actions\gologin_get_cookies_action.py" />
-    <Compile Include="controllers\actions\gologin_selenium_collect_action-28-10-2025-10PM.py" />
     <Compile Include="controllers\actions\gologin_selenium_collect_action.py" />
     <Compile Include="controllers\actions\gologin_selenium_start_action.py" />
     <Compile Include="controllers\actions\gologin_selenium_stop_action.py" />
@@ -195,11 +194,9 @@
     <InterpreterReference Include="Global|PythonCore|3.12" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="controllers\actions\gologin_auto_action.py-bak-3-11-2025" />
     <Content Include="dist\TomSamAutobot.exe" />
     <Content Include="dist\watchdog_monitor.exe" />
     <Content Include="resources\tomsamautobot.ico" />
-    <Content Include="views\action_params\gologin_auto_params.py-bak-3-11-2025" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in
