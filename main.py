@@ -241,7 +241,28 @@ class TomSamAutobot:
             self.root = tk.Toplevel()
     
         self.root.title(f"TomSamAutobot {cfg.APP_VERSION}")
-        self.root.iconbitmap("resources/tomsamautobot.ico")
+        # ===== FIX: Icon path for both .py and .exe (UPDATED) =====
+        try:
+            # Detect if running as .exe (frozen) or .py (development)
+            if getattr(sys, 'frozen', False):
+                # Running as .exe - use sys._MEIPASS
+                base_path = sys._MEIPASS
+            else:
+                # Running as .py - use script directory
+                base_path = os.path.dirname(os.path.abspath(__file__))
+    
+            icon_path = os.path.join(base_path, "resources", "tomsamautobot.ico")
+    
+            if os.path.exists(icon_path):
+                self.root.iconbitmap(icon_path)
+                logger.info(f"[INIT] Icon loaded: {icon_path}")
+            else:
+                logger.warning(f"[INIT] Icon not found: {icon_path}")
+        except Exception as e:
+            logger.warning(f"[INIT] Failed to load icon: {e}")
+        # ==========================================================
+
+
         # ========== WINDOW CLOSE HANDLER (NEW) ==========
         def on_closing():
             """Handle window close event"""
