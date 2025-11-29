@@ -21,7 +21,7 @@ class BaseFlowAutoAction:
         """
         self.profile_id = profile_id
         self.log_prefix = log_prefix
-    
+        self.parameters = {}
     # ========== ABSTRACT METHOD (TEMPLATE PATTERN) ==========
 
     def execute(self):
@@ -530,7 +530,94 @@ class BaseFlowAutoAction:
         except Exception as e:
             self.log(f"Failed to get current URL: {e}", "ERROR")
             return ""
+        
+    
+    def check_page_fully_loaded(self):
+        """
+        Check if page is fully loaded by detecting reload icon
+        
+        Logic:
+        - Find reload icon in reload browser area
+        - If reload icon FOUND → page fully loaded → return True
+        - If NOT found after max_wait_seconds → still loading/timeout → return False
+        - Check every check_interval seconds
+        
+        All params are hardcoded from self.params (set by subclass)
+        
+        Returns:
+            bool: True if page fully loaded (reload icon found), False if timeout/still loading
+        """
+        reload_icon_path = self.parameters.get("reload_browser_icon_path", "").strip()        
+        if not reload_icon_path:
+            try:
+           
+                area_x = int(self.parameters.get("reload_browser_area_x", "0"))
+                area_y = int(self.parameters.get("reload_browser_area_y", "0"))
+                area_width = int(self.parameters.get("reload_browser_area_width", "200"))
+                area_height = int(self.parameters.get("reload_browser_area_height", "100"))
+            
+                # Hardcoded timing
+                max_wait_seconds = 10.0
+                check_interval = 1.0
+            
+                if not reload_icon_path:
+                    self.log("No reload icon path specified", "WARNING")
+                    return False
+            
+                # Check if icon file exists
+                import os
+                if not os.path.exists(reload_icon_path):
+                    self.log(f"Reload icon file not found: {reload_icon_path}", "ERROR")
+                    return False
+            
+                # Define search region
+                search_region = None
+                if area_width > 0 and area_height > 0:
+                    search_region = (area_x, area_y, area_width, area_height)
+                    self.log(f"Reload check region: {search_region}")
+                else:
+                    self.log("Invalid reload check region", "ERROR")
+                    return False
+            
+                # Loop: Check for reload icon until found or timeout
+                elapsed_time = 0.0
+                check_count = 0
+            
+                while elapsed_time < max_wait_seconds:
+                    check_count += 1
+                    self.log(f"[CHECK {check_count}] Looking for reload icon... (elapsed: {elapsed_time:.1f}s)")
+                
+                    # Find reload icon
+                    result = self._find_image_on_screen(
+                        image_path=reload_icon_path,
+                        region=search_region,
+                        accuracy=0.8,
+                        click_offset_x=0,
+                        click_offset_y=0
+                    )
+                
+                    if result and result['found']:
+                        # Reload icon FOUND → page fully loaded
+                        reload_x, reload_y = result['center']
+                        self.log(f"✓ Page FULLY LOADED - reload icon found at ({reload_x}, {reload_y})")
+                        return True
+                    else:
+                        # NOT found yet → still loading, wait and retry
+                        self.log(f"⟳ Page still loading - reload icon not found yet")
+                        time.sleep(check_interval)
+                        elapsed_time += check_interval
+            
+                # Timeout - reload icon never appeared
+                self.log(f"✗ Timeout after {max_wait_seconds}s - reload icon NOT found", "WARNING")
+                return False
+            
+            except Exception as e:
+                self.log(f"Error checking page load: {e}", "ERROR")
+                import traceback
+                traceback.print_exc()
+                return False
 
+        return False
 
     # ========== LOGGING ==========
     

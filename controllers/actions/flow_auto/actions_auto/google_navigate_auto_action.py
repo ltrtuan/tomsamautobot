@@ -11,8 +11,7 @@ class GoogleNavigateAutoAction(BaseFlowAutoAction):
     """Navigate to YouTube using Ctrl+L keyboard shortcut"""
     
     def __init__(self, profile_id, log_prefix="[YOUTUBE AUTO]"):
-        self.profile_id = profile_id
-        self.log_prefix = log_prefix
+       super().__init__(profile_id, log_prefix)
     
     def _execute_internal(self):
         """Execute navigate action"""

@@ -289,7 +289,7 @@ class GoLoginAutoAction(BaseAction):
                 gologin_window = app.window(handle=hwnd)  # Use handle directly (faster than title_re search)
                 gologin_window.wait('visible', timeout=5)  # Short timeout OK (window already focused)
             except Exception as e:
-                print(f"{log_prefix} ❌ Failed to get window object: {e}")
+                logger.info(f"{log_prefix} ❌ Failed to get window object: {e}")
                 return {
                     'success': False,
                     'profile_id': profile_id,
@@ -305,7 +305,7 @@ class GoLoginAutoAction(BaseAction):
            
 
             # ========== STEP 4.5: RETRY TYPING UNTIL PROFILE FOUND (SMART RETRY) ==========
-            max_retries = 3  # Retry typing 3 times total (initial + 2 retries)
+            max_retries = 5  # Retry typing 3 times total (initial + 2 retries)
             retry_interval = 2  # Wait 2s between retries
             run_button = None
 
@@ -413,18 +413,18 @@ class GoLoginAutoAction(BaseAction):
         action_type = self.params.get("action_type", None)
         browse_youtube = self.params.get("browse_youtube", False)
 
-        print("[GOLOGIN AUTO] ========== PARALLEL MODE ==========")
-        print("=" * 80)
-        print(f"[PARALLEL MODE] BATCH PROCESSING (batch size: {max_parallel_profiles})")
-        print(f"[PARALLEL MODE] Total profiles: {len(profile_list)}")
-        print(f"[PARALLEL MODE] Action type: {action_type}")
-        print("=" * 80)
+        logger.info("[GOLOGIN AUTO] ========== PARALLEL MODE ==========")
+        logger.info("=" * 80)
+        logger.info(f"[PARALLEL MODE] BATCH PROCESSING (batch size: {max_parallel_profiles})")
+        logger.info(f"[PARALLEL MODE] Total profiles: {len(profile_list)}")
+        logger.info(f"[PARALLEL MODE] Action type: {action_type}")
+        logger.info("=" * 80)
 
         # ========== RANDOMIZE PROFILE LIST IF NEEDED ==========
         how_to_get = self.params.get("how_to_get", "Random")
     
         if how_to_get == "Random":
-            print(f"[GOLOGIN WARMUP] how_to_get = Random → Creating randomized list")
+            logger.info(f"[GOLOGIN WARMUP] how_to_get = Random → Creating randomized list")
             profile_list = GoLoginProfileHelper.create_randomized_profile_list(
                 original_profile_list=profile_list,
                 max_workers=max_parallel_profiles,
@@ -436,7 +436,7 @@ class GoLoginAutoAction(BaseAction):
             batch = profile_list[i:i + max_parallel_profiles]
             batches.append(batch)
 
-        print(f"[PARALLEL MODE] Divided into {len(batches)} batches\n")
+        logger.info(f"[PARALLEL MODE] Divided into {len(batches)} batches\n")
 
         total_success = 0
         total_failed = 0
@@ -450,13 +450,13 @@ class GoLoginAutoAction(BaseAction):
                 break  # Exit outer loop, không xử lý batch này nữa
             # ====================================================
 
-            print("=" * 80)
-            print(f"[BATCH {batch_num}/{len(batches)}] Processing {len(batch_profiles)} profiles: {batch_profiles}")
-            print("=" * 80)
-            print()
+            logger.info("=" * 80)
+            logger.info(f"[BATCH {batch_num}/{len(batches)}] Processing {len(batch_profiles)} profiles: {batch_profiles}")
+            logger.info("=" * 80)
+            
     
             # ========== PHASE 1: OPEN BATCH PROFILES (UPDATED) ==========
-            print(f"[BATCH {batch_num}] PHASE 1: Opening {len(batch_profiles)} profiles (max {max_parallel_profiles} concurrent)...")
+            logger.info(f"[BATCH {batch_num}] PHASE 1: Opening {len(batch_profiles)} profiles (max {max_parallel_profiles} concurrent)...")
     
             profile_data = {}  # profile_id → {'driver': ..., 'debugger_address': ..., 'status': ...}
             open_lock = threading.Lock()
@@ -466,7 +466,7 @@ class GoLoginAutoAction(BaseAction):
                 try:
                     with profile_open_lock:  # ← LOCK TOÀN BỘ OPEN PROCESS                
 
-                        print(f"[BATCH {batch_num}][{profile_id}] Opening profile...")
+                        logger.info(f"[BATCH {batch_num}][{profile_id}] Opening profile...")
                         
                         # ========== CALL _open_profile() METHOD (UPDATED: PASS PROXY ARGS) ==========
                         result = self._open_profile(profile_id, batch_num)
@@ -480,21 +480,21 @@ class GoLoginAutoAction(BaseAction):
                                 'debugger_address': None,  # ← NOT NEEDED (manual mode)
                                 'status': 'opened'
                             }
-                            print(f"[BATCH {batch_num}][{profile_id}] ✓ Profile opened successfully (MANUAL mode)")
+                            logger.info(f"[BATCH {batch_num}][{profile_id}] ✓ Profile opened successfully (MANUAL mode)")
                         else:
                             # ========== OPENING FAILED ==========
                             profile_data[profile_id] = {
                                 'status': 'failed',
                                 'error': result['error']
                             }
-                            print(f"[BATCH {batch_num}][{profile_id}] ❌ Failed to open: {result['error']}")
+                            logger.info(f"[BATCH {batch_num}][{profile_id}] ❌ Failed to open: {result['error']}")
         
                 except ProxyAssignmentFailed:
                     # New: Propagate proxy fail raise (stop entire action if required)
-                    print(f"[BATCH {batch_num}][{profile_id}] Proxy failed - propagating stop")
+                    logger.info(f"[BATCH {batch_num}][{profile_id}] Proxy failed - propagating stop")
                     raise  # Re-raise to as_completed
                 except Exception as e:
-                    print(f"[BATCH {batch_num}][{profile_id}] ❌ Exception while opening: {e}")
+                    logger.info(f"[BATCH {batch_num}][{profile_id}] ❌ Exception while opening: {e}")
                     import traceback
                     traceback.print_exc()
             
@@ -517,7 +517,7 @@ class GoLoginAutoAction(BaseAction):
                         time.sleep(2)  # Stagger delay
                     future = executor.submit(open_profile_thread, profile_id)
                     future_to_profile[future] = profile_id
-                    print(f"[BATCH {batch_num}] PHASE 1: Submitted thread {i+1}/{len(batch_profiles)}: {profile_id}")
+                    logger.info(f"[BATCH {batch_num}] PHASE 1: Submitted thread {i+1}/{len(batch_profiles)}: {profile_id}")
         
                 # Wait for all to complete
                 for future in as_completed(future_to_profile):                    
@@ -530,27 +530,27 @@ class GoLoginAutoAction(BaseAction):
                         future.result()
                     except (ProxyAssignmentFailed, Exception) as thread_exception:
                         # ========== EXCEPTION FROM THREAD (UPDATED) ==========
-                        print("=" * 80)
-                        print(f"[BATCH {batch_num}] ⚠ EXCEPTION CAUGHT FROM THREAD: {profile_id}")
-                        print(f"[BATCH {batch_num}] Exception type: {type(thread_exception).__name__}")
-                        print(f"[BATCH {batch_num}] Exception message: {thread_exception}")
-                        print("=" * 80)
+                        logger.info("=" * 80)
+                        logger.info(f"[BATCH {batch_num}] ⚠ EXCEPTION CAUGHT FROM THREAD: {profile_id}")
+                        logger.info(f"[BATCH {batch_num}] Exception type: {type(thread_exception).__name__}")
+                        logger.info(f"[BATCH {batch_num}] Exception message: {thread_exception}")
+                        logger.info("=" * 80)
                     
                         import traceback
                         exception_traceback = traceback.format_exc()
-                        print(exception_traceback)
+                        logger.info(exception_traceback)
                     
                         # LƯU EXCEPTION ĐẦU TIÊN
                         if exception_from_thread is None:
                             exception_from_thread = thread_exception
                     
                         # ===== BREAK IMMEDIATELY - KHÔNG CHỜ CÁC THREADS KHÁC =====
-                        print(f"[BATCH {batch_num}] ⚠ Breaking immediately, will cleanup and re-raise")
+                        logger.info(f"[BATCH {batch_num}] ⚠ Breaking immediately, will cleanup and re-raise")
                         break  # ← BREAK RA KHỎI LOOP NGAY
                     
                     except ProxyAssignmentFailed:
                         # New: If proxy fail raised, cleanup partial opened in this batch, then propagate stop
-                        print(f"[BATCH {batch_num}] Proxy fail in thread {profile_id} - cleanup partial and stop action")
+                        logger.info(f"[BATCH {batch_num}] Proxy fail in thread {profile_id} - cleanup partial and stop action")
                         opened_so_far = [pid for pid, data in profile_data.items() if data.get('status') == 'opened']
                         if opened_so_far:
                             self._close_profiles_batch(opened_so_far)  # Assume helper method for close
@@ -558,24 +558,24 @@ class GoLoginAutoAction(BaseAction):
     
             finally:
                 executor.shutdown(wait=True)
-                print(f"[BATCH {batch_num}] PHASE 1: Thread pool shut down")
+                logger.info(f"[BATCH {batch_num}] PHASE 1: Thread pool shut down")
     
             # ========== CHECK OPENING RESULTS ==========
             if exception_from_thread is not None:
-                print("=" * 80)
-                print(f"[BATCH {batch_num}] ⚠ CRITICAL: Exception occurred, cleaning up...")
-                print("=" * 80)
+                logger.info("=" * 80)
+                logger.info(f"[BATCH {batch_num}] ⚠ CRITICAL: Exception occurred, cleaning up...")
+                logger.info("=" * 80)
             
                 # ===== CLEANUP: CLOSE ALL OPENED PROFILES IN THIS BATCH =====
                 opened_profiles = [pid for pid, data in profile_data.items() if data.get('status') == 'opened']
             
                 if opened_profiles:
-                    print(f"[BATCH {batch_num}] Closing {len(opened_profiles)} opened profiles before re-raise...")
+                    logger.info(f"[BATCH {batch_num}] Closing {len(opened_profiles)} opened profiles before re-raise...")
                 
                     try:
                         for profile_id in opened_profiles:
                             try:
-                                print(f"[BATCH {batch_num}][{profile_id}] Closing profile...")
+                                logger.info(f"[BATCH {batch_num}][{profile_id}] Closing profile...")
                             
                                 # Bring to front
                                 bring_result = GoLoginProfileHelper.bring_profile_to_front(
@@ -590,20 +590,20 @@ class GoLoginAutoAction(BaseAction):
                                     pyautogui.hotkey('alt', 'f4')
                                     time.sleep(1)
                             
-                                    print(f"[BATCH {batch_num}][{profile_id}] ✓ Profile closed")
+                                    logger.info(f"[BATCH {batch_num}][{profile_id}] ✓ Profile closed")
                             
                             except Exception as close_err:
-                                print(f"[BATCH {batch_num}][{profile_id}] ⚠ Failed to close: {close_err}")
+                                logger.info(f"[BATCH {batch_num}][{profile_id}] ⚠ Failed to close: {close_err}")
                             
-                        print(f"[BATCH {batch_num}] ✓ Cleanup completed")
+                        logger.info(f"[BATCH {batch_num}] ✓ Cleanup completed")
                     
                     except Exception as cleanup_err:
-                        print(f"[BATCH {batch_num}] ⚠ Error during cleanup: {cleanup_err}")
+                        logger.info(f"[BATCH {batch_num}] ⚠ Error during cleanup: {cleanup_err}")
             
                 # ===== RE-RAISE EXCEPTION TO PROPAGATE TO MAIN THREAD =====
-                print("=" * 80)
-                print(f"[BATCH {batch_num}] RE-RAISING EXCEPTION TO MAIN THREAD")
-                print("=" * 80)
+                logger.info("=" * 80)
+                logger.info(f"[BATCH {batch_num}] RE-RAISING EXCEPTION TO MAIN THREAD")
+                logger.info("=" * 80)
             
                 raise exception_from_thread  # ← RE-RAISE ĐỂ BUBBLE UP
                 # ===========================================================
@@ -613,15 +613,15 @@ class GoLoginAutoAction(BaseAction):
             opened_profiles = [pid for pid, data in profile_data.items() if data.get('status') == 'opened']
             failed_profiles = [pid for pid, data in profile_data.items() if data.get('status') in ['failed', 'error']]
 
-            print(f"[BATCH {batch_num}] PHASE 1: Opening results:")
-            print(f"  ✓ Successfully opened: {len(opened_profiles)}/{len(batch_profiles)}")
+            logger.info(f"[BATCH {batch_num}] PHASE 1: Opening results:")
+            logger.info(f"  ✓ Successfully opened: {len(opened_profiles)}/{len(batch_profiles)}")
     
             if failed_profiles:
-                print(f"  ❌ Failed: {len(failed_profiles)}")
-            print()
+                logger.info(f"  ❌ Failed: {len(failed_profiles)}")
+            
     
             if not opened_profiles:
-                print(f"[BATCH {batch_num}] No profiles opened successfully, skipping to next batch")
+                logger.info(f"[BATCH {batch_num}] No profiles opened successfully, skipping to next batch")
                 total_failed += len(batch_profiles)
                 continue
             
@@ -644,14 +644,14 @@ class GoLoginAutoAction(BaseAction):
             # ========== PHASE 2, 3, 4: KEEP EXACTLY AS ORIGINAL (START ACTION CODE) ==========
             # Check action type
             if action_type is None:
-                print(f"[BATCH {batch_num}] PHASE 2: Action type is None, skipping flow creation and execution")
-                print(f"[BATCH {batch_num}] Batch profiles opened and kept running (no cleanup)")
+                logger.info(f"[BATCH {batch_num}] PHASE 2: Action type is None, skipping flow creation and execution")
+                logger.info(f"[BATCH {batch_num}] Batch profiles opened and kept running (no cleanup)")
                 total_success += len(opened_profiles)
                 total_failed += len(failed_profiles)
                 continue  # Skip to next batch, profiles stay open
     
             # ========== PHASE 2: CREATE FLOW ITERATORS (KEEP ORIGINAL) ==========
-            print(f"[BATCH {batch_num}] PHASE 2: Creating flow iterators for opened profiles...")
+            logger.info(f"[BATCH {batch_num}] PHASE 2: Creating flow iterators for opened profiles...")
     
             flow_iterators = {}  # profile_id → flow_iterator
            
@@ -679,36 +679,36 @@ class GoLoginAutoAction(BaseAction):
                       
                     elif action_type == "Google":
                         # TODO: Implement GoogleFlowAuto later
-                        print(f"[BATCH {batch_num}][{profile_id}] Google flow not implemented for Auto Action yet")
+                        logger.info(f"[BATCH {batch_num}][{profile_id}] Google flow not implemented for Auto Action yet")
                         continue
                     else:
-                        print(f"[BATCH {batch_num}][{profile_id}] Unknown action type: {action_type}")
+                        logger.info(f"[BATCH {batch_num}][{profile_id}] Unknown action type: {action_type}")
                         continue
             
                     flow_iterators[profile_id] = flow_iterator
         
                 except Exception as e:
-                    print(f"[BATCH {batch_num}][{profile_id}] Failed to create flow iterator: {e}")
+                    logger.info(f"[BATCH {batch_num}][{profile_id}] Failed to create flow iterator: {e}")
                     import traceback
                     traceback.print_exc()
                     opened_profiles.remove(profile_id)
     
-            print(f"[BATCH {batch_num}] PHASE 2: Created {len(flow_iterators)} flow iterators")
+            logger.info(f"[BATCH {batch_num}] PHASE 2: Created {len(flow_iterators)} flow iterators")
     
             # ========== PHASE 3: EXECUTE CHAINS ROUND-ROBIN (KEEP ORIGINAL) ==========
-            print(f"[BATCH {batch_num}] PHASE 3: Starting round-robin chain execution...")
-            print("=" * 80)
+            logger.info(f"[BATCH {batch_num}] PHASE 3: Starting round-robin chain execution...")
+            logger.info("=" * 80)
     
             active_profiles = opened_profiles.copy()
             round_num = 0
     
             while active_profiles:
                 round_num += 1
-                print()
-                print("=" * 80)
-                print(f"[BATCH {batch_num}] ROUND {round_num}: Active profiles ({len(active_profiles)}/{len(opened_profiles)})")
-                print("=" * 80)
-                print()
+                
+                logger.info("=" * 80)
+                logger.info(f"[BATCH {batch_num}] ROUND {round_num}: Active profiles ({len(active_profiles)}/{len(opened_profiles)})")
+                logger.info("=" * 80)
+                
         
                 profiles_to_remove = []
         
@@ -723,11 +723,11 @@ class GoLoginAutoAction(BaseAction):
             
                     # Show progress
                     progress = flow.get_progress()
-                    print(f"[BATCH {batch_num}] ROUND {round_num} [{profile_id}] Progress: {progress['current']}/{progress['total']} chains ({progress['percentage']:.1f}%)")
+                    logger.info(f"[BATCH {batch_num}] ROUND {round_num} [{profile_id}] Progress: {progress['current']}/{progress['total']} chains ({progress['percentage']:.1f}%)")
             
                     # Check if completed
                     if not flow.has_next_chain():
-                        print(f"[BATCH {batch_num}] ROUND {round_num} [{profile_id}] All chains completed")
+                        logger.info(f"[BATCH {batch_num}] ROUND {round_num} [{profile_id}] All chains completed")
                         profiles_to_remove.append(profile_id)
                         continue
             
@@ -738,12 +738,12 @@ class GoLoginAutoAction(BaseAction):
                             driver=profile_data[profile_id]['driver'],
                             log_prefix=f"[BATCH {batch_num}] ROUND {round_num} [{profile_id}]"
                         )
-                        print(f"[BATCH {batch_num}] ROUND {round_num} [{profile_id}] Window brought to front")
+                        logger.info(f"[BATCH {batch_num}] ROUND {round_num} [{profile_id}] Window brought to front")
                     except Exception as e:
-                        print(f"[BATCH {batch_num}] ROUND {round_num} [{profile_id}] Could not bring to front: {e}")
+                        logger.info(f"[BATCH {batch_num}] ROUND {round_num} [{profile_id}] Could not bring to front: {e}")
             
                     # Execute chain with lock
-                    print(f"[BATCH {batch_num}] ROUND {round_num} [{profile_id}] ========== ACQUIRING LOCK → EXECUTING CHAIN")
+                    logger.info(f"[BATCH {batch_num}] ROUND {round_num} [{profile_id}] ========== ACQUIRING LOCK → EXECUTING CHAIN")
                     
                     # ===== CHECK PAUSE/BREAK FLAG BEFORE EXECUTE (FIX) =====
                     if self.controller and hasattr(self.controller, 'is_execution_stopped') and self.controller.is_execution_stopped:
@@ -761,32 +761,32 @@ class GoLoginAutoAction(BaseAction):
                             continue
                         # ==============================================
                         if success:
-                            print(f"[BATCH {batch_num}] ROUND {round_num} [{profile_id}] ✓ Chain executed successfully")
+                            logger.info(f"[BATCH {batch_num}] ROUND {round_num} [{profile_id}] ✓ Chain executed successfully")
                         else:
-                            print(f"[BATCH {batch_num}] ROUND {round_num} [{profile_id}] ❌ Chain execution failed")
+                            logger.info(f"[BATCH {batch_num}] ROUND {round_num} [{profile_id}] ❌ Chain execution failed")
                             profiles_to_remove.append(profile_id)
             
                     except Exception as e:
-                        print(f"[BATCH {batch_num}] ROUND {round_num} [{profile_id}] ❌ Exception during chain execution: {e}")
+                        logger.info(f"[BATCH {batch_num}] ROUND {round_num} [{profile_id}] ❌ Exception during chain execution: {e}")
                         import traceback
                         traceback.print_exc()
                         profiles_to_remove.append(profile_id)
             
-                    print(f"[BATCH {batch_num}] ROUND {round_num} [{profile_id}] ========== LOCK RELEASED")
+                    logger.info(f"[BATCH {batch_num}] ROUND {round_num} [{profile_id}] ========== LOCK RELEASED")
         
                 # Remove completed/failed profiles
                 profiles_to_remove_set = set(profiles_to_remove)
                 active_profiles = [pid for pid in active_profiles if pid not in profiles_to_remove_set]
     
-            print()
-            print("=" * 80)
-            print(f"[BATCH {batch_num}] PHASE 3: All profiles completed all chains")
-            print("=" * 80)
-            print()
+            
+            logger.info("=" * 80)
+            logger.info(f"[BATCH {batch_num}] PHASE 3: All profiles completed all chains")
+            logger.info("=" * 80)
+            
     
             # ========== PHASE 4: CLOSE BROWSERS WITH ALT+F4 (UPDATED) ==========
-            print(f"[BATCH {batch_num}] PHASE 4: Closing {len(opened_profiles)} browsers with Alt+F4 (FIFO order)...")
-            print(f"[BATCH {batch_num}] Order: {opened_profiles}")
+            logger.info(f"[BATCH {batch_num}] PHASE 4: Closing {len(opened_profiles)} browsers with Alt+F4 (FIFO order)...")
+            logger.info(f"[BATCH {batch_num}] Order: {opened_profiles}")
 
             closed_count = 0
             for profile_id in opened_profiles:  # opened_profiles đã theo thứ tự FIFO
@@ -805,29 +805,29 @@ class GoLoginAutoAction(BaseAction):
                         pyautogui.hotkey('alt', 'f4')
                         time.sleep(1)
     
-                        print(f"{log_prefix} ✓ Browser closed")
+                        logger.info(f"{log_prefix} ✓ Browser closed")
                         closed_count += 1
     
                 except Exception as e:
-                    print(f"{log_prefix} ❌ Failed to close: {e}")
+                    logger.info(f"{log_prefix} ❌ Failed to close: {e}")
                     import traceback
                     traceback.print_exc()
 
-            print(f"[BATCH {batch_num}] PHASE 4: Closed {closed_count}/{len(opened_profiles)} browsers")
+            logger.info(f"[BATCH {batch_num}] PHASE 4: Closed {closed_count}/{len(opened_profiles)} browsers")
             
     
             total_success += len(opened_profiles)
             total_failed += len(failed_profiles)
 
         # ========== FINAL SUMMARY ==========
-        print()
-        print("=" * 80)
-        print("[PARALLEL MODE] ========== ALL BATCHES COMPLETED ==========")
-        print("=" * 80)
-        print(f"Total profiles processed: {len(profile_list)}")
-        print(f"  ✓ Success: {total_success}")
-        print(f"  ❌ Failed: {total_failed}")
-        print("=" * 80)
+        
+        logger.info("=" * 80)
+        logger.info("[PARALLEL MODE] ========== ALL BATCHES COMPLETED ==========")
+        logger.info("=" * 80)
+        logger.info(f"Total profiles processed: {len(profile_list)}")
+        logger.info(f"  ✓ Success: {total_success}")
+        logger.info(f"  ❌ Failed: {total_failed}")
+        logger.info("=" * 80)
 
         self.set_variable(total_success > 0)
 
@@ -840,7 +840,7 @@ class GoLoginAutoAction(BaseAction):
         Args:
             profiles: List of profile_ids to close (opened ones)
         """
-        print(f"[EMERGENCY CLEANUP] Closing {len(profiles)} partial profiles: {profiles}")
+        logger.info(f"[EMERGENCY CLEANUP] Closing {len(profiles)} partial profiles: {profiles}")
 
         closed_count = 0
         for profile_id in profiles:
@@ -857,14 +857,14 @@ class GoLoginAutoAction(BaseAction):
                     # Alt+F4
                     pyautogui.hotkey('alt', 'f4')
                     time.sleep(1)  # Short delay
-                    print(f"{log_prefix} ✓ Closed")
+                    logger.info(f"{log_prefix} ✓ Closed")
                     closed_count += 1
             except Exception as e:
-                print(f"{log_prefix} ❌ Close failed: {e}")
+                logger.info(f"{log_prefix} ❌ Close failed: {e}")
                 import traceback
                 traceback.print_exc()
 
-        print(f"[EMERGENCY CLEANUP] Closed {closed_count}/{len(profiles)} profiles")
+        logger.info(f"[EMERGENCY CLEANUP] Closed {closed_count}/{len(profiles)} profiles")
 
 
     def _get_mixed_keyword_google(self):
@@ -971,29 +971,29 @@ class GoLoginAutoAction(BaseAction):
         action_type = self.params.get("action_type", None)
         browse_youtube = self.params.get("browse_youtube", False)
 
-        print("[GOLOGIN AUTO] ========== SINGLE MODE ==========")
-        print("=" * 80)
-        print(f"[SINGLE MODE] Profile ID: {profile_id}")
-        print(f"[SINGLE MODE] Action type: {action_type}")
-        print("=" * 80)
-        print()
+        logger.info("[GOLOGIN AUTO] ========== SINGLE MODE ==========")
+        logger.info("=" * 80)
+        logger.info(f"[SINGLE MODE] Profile ID: {profile_id}")
+        logger.info(f"[SINGLE MODE] Action type: {action_type}")
+        logger.info("=" * 80)
+        
 
         # ========== PHASE 1: OPEN PROFILE (UPDATED) ==========
-        print(f"[{profile_id}] PHASE 1: Opening profile...")
+        logger.info(f"[{profile_id}] PHASE 1: Opening profile...")
 
         try:
             # ========== CALL _open_profile() METHOD (UPDATED: PASS PROXY ARGS) ==========
             result = self._open_profile(profile_id, None)  # batch_num=None for single
 
             if not result['success']:
-                print(f"[{profile_id}] ❌ Failed to open profile: {result['error']}")
+                logger.info(f"[{profile_id}] ❌ Failed to open profile: {result['error']}")
                 return False
             
-            print(f"[{profile_id}] ✓ Profile opened successfully (MANUAL mode)")
+            logger.info(f"[{profile_id}] ✓ Profile opened successfully (MANUAL mode)")
 
         except ProxyAssignmentFailed:
             # New: Propagate proxy fail raise (stop entire action if required)
-            print(f"[{profile_id}] Proxy assignment failed - stopping action")
+            logger.info(f"[{profile_id}] Proxy assignment failed - stopping action")
             raise  # Re-raise to prepare_play
 
         # Store profile data
@@ -1007,12 +1007,12 @@ class GoLoginAutoAction(BaseAction):
 
         # ========== CHECK ACTION TYPE (KEEP ORIGINAL) ==========
         if action_type is None:
-            print(f"[{profile_id}] PHASE 2: Action type is None, skipping flow execution")
-            print(f"[{profile_id}] Profile opened and kept running (no cleanup)")
+            logger.info(f"[{profile_id}] PHASE 2: Action type is None, skipping flow execution")
+            logger.info(f"[{profile_id}] Profile opened and kept running (no cleanup)")
             return True  # Success - profile opened
 
         # ========== PHASE 2: CREATE FLOW ITERATOR (KEEP ORIGINAL) ==========
-        print(f"[{profile_id}] PHASE 2: Creating flow iterator...")        
+        logger.info(f"[{profile_id}] PHASE 2: Creating flow iterator...")        
 
         driver = None  # ← Will be None for manual mode
         debugger_address = None  # ← Will be None for manual mode
@@ -1039,26 +1039,26 @@ class GoLoginAutoAction(BaseAction):
                     )
             elif action_type == "Google":
                 # TODO: Implement GoogleFlowAuto later
-                print(f"[{profile_id}] Google flow not implemented for Auto Action yet")
+                logger.info(f"[{profile_id}] Google flow not implemented for Auto Action yet")
                 GoLoginProfileHelper.cleanup_profiles(profile_data, self.gologin_api, f"[{profile_id}]")
                 return False
             else:
-                print(f"[{profile_id}] Unknown action type: {action_type}")
+                logger.info(f"[{profile_id}] Unknown action type: {action_type}")
                 GoLoginProfileHelper.cleanup_profiles(profile_data, self.gologin_api, f"[{profile_id}]")
                 return False
 
         except Exception as e:
-            print(f"[{profile_id}] Failed to create flow iterator: {e}")
+            logger.info(f"[{profile_id}] Failed to create flow iterator: {e}")
             import traceback
             traceback.print_exc()
             GoLoginProfileHelper.cleanup_profiles(profile_data, self.gologin_api, f"[{profile_id}]")
             return False
 
-        print(f"[{profile_id}] ✓ Flow iterator created")
+        logger.info(f"[{profile_id}] ✓ Flow iterator created")
 
         # ========== PHASE 3: EXECUTE ALL CHAINS (KEEP ORIGINAL) ==========
-        print(f"[{profile_id}] PHASE 3: Executing chains...")
-        print("=" * 80)
+        logger.info(f"[{profile_id}] PHASE 3: Executing chains...")
+        logger.info("=" * 80)
 
         chain_num = 0
 
@@ -1072,8 +1072,8 @@ class GoLoginAutoAction(BaseAction):
     
             # Show progress
             progress = flow_iterator.get_progress()
-            print(f"\n[{profile_id}] Chain {chain_num}/{progress['total']} ({progress['percentage']:.1f}%)")
-            print("-" * 80)
+            logger.info(f"\n[{profile_id}] Chain {chain_num}/{progress['total']} ({progress['percentage']:.1f}%)")
+            logger.info("-" * 80)
     
             # Bring window to front
             try:
@@ -1082,9 +1082,9 @@ class GoLoginAutoAction(BaseAction):
                     driver=driver,
                     log_prefix=f"[{profile_id}]"
                 )
-                print(f"[{profile_id}] Window brought to front")
+                logger.info(f"[{profile_id}] Window brought to front")
             except Exception as e:
-                print(f"[{profile_id}] Could not bring to front: {e}")
+                logger.info(f"[{profile_id}] Could not bring to front: {e}")
     
             # ===== CHECK PAUSE/BREAK FLAG BEFORE EXECUTE (FIX) =====
             if self.controller and hasattr(self.controller, 'is_execution_stopped') and self.controller.is_execution_stopped:
@@ -1102,22 +1102,22 @@ class GoLoginAutoAction(BaseAction):
                 # ==============================================
         
                 if success:
-                    print(f"[{profile_id}] ✓ Chain {chain_num} executed successfully")
+                    logger.info(f"[{profile_id}] ✓ Chain {chain_num} executed successfully")
                 else:
-                    print(f"[{profile_id}] ❌ Chain {chain_num} execution failed")
+                    logger.info(f"[{profile_id}] ❌ Chain {chain_num} execution failed")
                     break
     
             except Exception as e:
-                print(f"[{profile_id}] ❌ Exception during chain execution: {e}")
+                logger.info(f"[{profile_id}] ❌ Exception during chain execution: {e}")
                 import traceback
                 traceback.print_exc()
                 break
 
-        print()
-        print("=" * 80)
-        print(f"[{profile_id}] PHASE 3: All chains completed")
-        print("=" * 80)
-        print()
+        
+        logger.info("=" * 80)
+        logger.info(f"[{profile_id}] PHASE 3: All chains completed")
+        logger.info("=" * 80)
+        
 
         # ========== PHASE 4: CLOSE BROWSER WITH ALT+F4 (UPDATED) ==========
         logger.info(f"[{profile_id}] PHASE 4: Closing browser with Alt+F4...")
@@ -1134,17 +1134,17 @@ class GoLoginAutoAction(BaseAction):
                 time.sleep(1)
 
                 # Send Alt+F4
-                print(f"[{profile_id}] Sending Alt+F4...")
+                logger.info(f"[{profile_id}] Sending Alt+F4...")
                 pyautogui.hotkey('alt', 'f4')
                 time.sleep(2)  # Fixed: Added time.sleep for the random delay (original missed)
 
-                print(f"[{profile_id}] ✓ Browser closed successfully")
+                logger.info(f"[{profile_id}] ✓ Browser closed successfully")
                 return True
             
-            print(f"[{profile_id}] ❌ Failed to close browser")
+            logger.info(f"[{profile_id}] ❌ Failed to close browser")
             return False
         except Exception as e:
-            print(f"[{profile_id}] ❌ Failed to close browser: {e}")
+            logger.info(f"[{profile_id}] ❌ Failed to close browser: {e}")
             import traceback
             traceback.print_exc()
             return False

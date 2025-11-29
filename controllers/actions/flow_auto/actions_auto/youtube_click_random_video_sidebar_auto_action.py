@@ -29,10 +29,8 @@ class YouTubeClickRandomVideoSidebarAutoAction(BaseFlowAutoAction):
             profile_id: GoLogin profile ID
             log_prefix: Log prefix for messages
         """
-        super().__init__(profile_id, log_prefix)
-        self.profile_id = profile_id
+        super().__init__(profile_id, log_prefix)      
         self.parameters = parameters
-        self.log_prefix = log_prefix
         
         # Get sidebar area params from GlobalVariables
         self.sidebar_x = int(parameters.get('youtube_sidebar_area_x', 0))

@@ -172,48 +172,76 @@ def start_watchdog_process():
         flags = CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
         
         # Detect môi trường: frozen (.exe) hay script (.py)
+        # if getattr(sys, 'frozen', False):
+        #     # === PRODUCTION MODE: App chạy từ .exe ===
+        #     # Tìm watchdog_monitor.exe trong cùng thư mục với app.exe
+        #     app_dir = os.path.dirname(sys.executable)
+        #     watchdog_path = os.path.join(app_dir, 'watchdog_monitor.exe')
+            
+        #     if os.path.exists(watchdog_path):
+        #         print(f"[WATCHDOG] Starting watchdog process (production): {watchdog_path}")               
+        #         startupinfo = subprocess.STARTUPINFO()
+        #         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        #         startupinfo.wShowWindow = subprocess.SW_HIDE
+
+        #         subprocess.Popen(
+        #             [watchdog_path],
+        #             startupinfo=startupinfo,
+        #             creationflags=flags,
+        #             stdout=subprocess.DEVNULL,
+        #             stderr=subprocess.DEVNULL,
+        #             stdin=subprocess.DEVNULL,
+        #             close_fds=True
+        #         )
+        #         print("[WATCHDOG] ✓ Watchdog process started")
+        #     else:
+        #         print(f"[WATCHDOG] ⚠ Warning: watchdog_monitor.exe not found at {watchdog_path}")
+         
         if getattr(sys, 'frozen', False):
             # === PRODUCTION MODE: App chạy từ .exe ===
             # Tìm watchdog_monitor.exe trong cùng thư mục với app.exe
             app_dir = os.path.dirname(sys.executable)
             watchdog_path = os.path.join(app_dir, 'watchdog_monitor.exe')
-            
+    
             if os.path.exists(watchdog_path):
-                print(f"[WATCHDOG] Starting watchdog process (production): {watchdog_path}")               
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                startupinfo.wShowWindow = subprocess.SW_HIDE
-
-                subprocess.Popen(
-                    [watchdog_path],
-                    startupinfo=startupinfo,
-                    creationflags=flags,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    stdin=subprocess.DEVNULL,
-                    close_fds=True
-                )
-                print("[WATCHDOG] ✓ Watchdog process started")
+                logger.info(f"[WATCHDOG] Starting watchdog process (production): {watchdog_path}")
+        
+                # ========== FIX: Dùng os.startfile() thay vì subprocess.Popen ==========
+                # os.startfile() spawn process hoàn toàn độc lập, không bị kill khi parent exit
+                try:                   
+                    os.startfile(watchdog_path)
+                    logger.info("[WATCHDOG] ✓ Watchdog process started via os.startfile()")
+                except Exception as e:
+                    logger.info(f"[WATCHDOG] ✗ Failed to start via os.startfile(): {e}")
+                    # Fallback: Try subprocess với shell
+                    subprocess.Popen(
+                        f'start /B "" "{watchdog_path}"',
+                        shell=True,
+                        creationflags=CREATE_NO_WINDOW
+                    )
+                    logger.info("[WATCHDOG] ✓ Watchdog started via shell (fallback)")
+                # ========================================================================
             else:
-                print(f"[WATCHDOG] ⚠ Warning: watchdog_monitor.exe not found at {watchdog_path}")
+                logger.info(f"[WATCHDOG] ⚠ Warning: watchdog_monitor.exe not found at {watchdog_path}")
+        
         else:
             # === DEVELOPMENT MODE: App chạy từ Python script ===
             script_dir = os.path.dirname(os.path.abspath(__file__))
             watchdog_path = os.path.join(script_dir, 'watchdog_monitor.py')
             
             if os.path.exists(watchdog_path):
-                print(f"[WATCHDOG] Starting watchdog process (development): python {watchdog_path}")
+                logger.info(f"[WATCHDOG] Starting watchdog process (development): python {watchdog_path}")
                 subprocess.Popen(
                     [sys.executable, watchdog_path],
                     creationflags=flags,
                     close_fds=True
                 )
-                print("[WATCHDOG] ✓ Watchdog process started")
+                logger.info("[WATCHDOG] ✓ Watchdog process started")
             else:
-                print(f"[WATCHDOG] ⚠ Warning: watchdog_monitor.py not found at {watchdog_path}")
+                logger.info(f"[WATCHDOG] ⚠ Warning: watchdog_monitor.py not found at {watchdog_path}")
                 
     except Exception as e:
-        print(f"[WATCHDOG] ⚠ Failed to start watchdog: {e}")
+        logger.info(f"[WATCHDOG] ⚠ Failed to start watchdog: {e}")
 
 # ========== END WATCHDOG PROCESS STARTER ==========
 
@@ -366,6 +394,7 @@ class TomSamAutobot:
                     logger.info("[CRASH] Starting watchdog for auto-restart...")
                     start_watchdog_process()
                     logger.info("[CRASH] ✓ Watchdog started")
+                 
                 else:
                     logger.warning("[CRASH] ⚠ Crash limit exceeded (3 times in 10 minutes)")
                     logger.warning("[CRASH] Auto-restart disabled to prevent crash loop")

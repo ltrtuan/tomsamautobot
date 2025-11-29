@@ -49,6 +49,8 @@ AUTH_ENV_VAR = "tomsamautobot_auth"
 ENCRYPTED_USERNAME = "36997e66306f6da5c646ea4a605b533f61e62ccb702996dcc34d4d093b474140"
 ENCRYPTED_PASSWORD = "ae6ef896e85acb354c5c699b2d934fdc19b92bd1f8c485d90bebdba5190299d2"
 
+
+
 # Mã hóa dữ liệu bằng SHA-256
 def encrypt_data(data):
     """Mã hóa dữ liệu bằng SHA-256"""
@@ -129,6 +131,10 @@ SMTP_USERNAME = ""       # Email gửi (sender)
 SMTP_PASSWORD = ""       # Password (plain text - simple project)
 SMTP_TO_EMAIL = ""       # Email nhận cảnh báo (recipient)
 SMTP_FROM_EMAIL = ""
+
+# ========== HEARTBEAT EMAIL SETTINGS (NEW) ==========
+HEARTBEAT_ENABLED = False  # Bật/tắt heartbeat email
+HEARTBEAT_INTERVAL_HOURS = 1.0  # Gửi email mỗi X giờ (default 1 giờ)
 # Ensure the config directory exists
 def ensure_config_directory():
     if not os.path.exists(CONFIG_DIR):
@@ -157,6 +163,8 @@ def save_config():
         "SMTP_PASSWORD": SMTP_PASSWORD,
         "SMTP_TO_EMAIL": SMTP_TO_EMAIL,
         "SMTP_FROM_EMAIL": SMTP_FROM_EMAIL,
+        "HEARTBEAT_ENABLED": HEARTBEAT_ENABLED,  # ← NEW
+        "HEARTBEAT_INTERVAL_HOURS": HEARTBEAT_INTERVAL_HOURS,  # ← NEW
     }
 
     try:
@@ -170,6 +178,7 @@ def save_config():
 def load_config():    
     global FILE_PATH, SMTP_ENABLED, SMTP_HOST, SMTP_PORT, SMTP_USE_TLS, LOG_RETENTION_DAYS
     global SMTP_USERNAME, SMTP_PASSWORD, SMTP_TO_EMAIL, SMTP_FROM_EMAIL
+    global HEARTBEAT_ENABLED, HEARTBEAT_INTERVAL_HOURS
     # Ensure the config directory exists
     ensure_config_directory()
     
@@ -189,6 +198,8 @@ def load_config():
             SMTP_PASSWORD = config_data.get("SMTP_PASSWORD", "")
             SMTP_TO_EMAIL = config_data.get("SMTP_TO_EMAIL", "")
             SMTP_FROM_EMAIL = config_data.get("SMTP_FROM_EMAIL", "")
+            HEARTBEAT_ENABLED = config_data.get("HEARTBEAT_ENABLED", False)
+            HEARTBEAT_INTERVAL_HOURS = config_data.get("HEARTBEAT_INTERVAL_HOURS", 1.0)
 
             print(f"Configuration loaded from {CONFIG_PATH}")
         except Exception as e:

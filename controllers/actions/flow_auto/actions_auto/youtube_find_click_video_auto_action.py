@@ -11,6 +11,7 @@ from controllers.actions.mouse_move_action import MouseMoveAction
 from controllers.actions.flow_auto.actions_auto.base_flow_auto_action import BaseFlowAutoAction
 from controllers.actions.flow_auto.actions_auto.youtube_random_move_scroll_auto_action import YouTubeRandomMoveScrollAutoAction
 from controllers.actions.flow_auto.actions_auto.youtube_mouse_move_auto_action import YouTubeMouseMoveAutoAction
+from controllers.actions.flow_auto.actions_auto.youtube_find_search_box_auto_action import YouTubeFindSearchBoxAutoAction
 from helpers.gologin_profile_helper import GoLoginProfileHelper
 from helpers.app_helpers import is_hand_cursor
 
@@ -28,6 +29,7 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
             profile_id: GoLogin profile ID
             parameters: Full parameters dict containing:
                 - youtube_image_search_path: Main area logo path (channel-specific)
+                - youtube_home_logo_path: Home area logo path (channel-specific)
                 - youtube_sidebar_image_search_path: Sidebar logo path (channel-specific)
                 - youtube_area_x/y/width/height: Main area coords
                 - youtube_sidebar_area_x/y/width/height: Sidebar area coords
@@ -38,7 +40,6 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
             search_and_click : True / False : for search logo channel in current video, found logo -> return true, viewing the Channel, not return False
         """
         super().__init__(profile_id, log_prefix)
-        self.profile_id = profile_id
         self.parameters = parameters
         self.area = area.lower()
         self.flow_type = flow_type
@@ -51,7 +52,14 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
             area_width = int(parameters.get('youtube_sidebar_area_width', 400))
             area_height = int(parameters.get('youtube_sidebar_area_height', 1080))
             
-        elif self.area == "main" or self.area == "channel":
+        elif self.area == "main":#HOME PAGE
+            self.logo_path = parameters.get('youtube_home_logo_path', '').strip()
+            area_x = int(parameters.get('youtube_main_area_x', 0))
+            area_y = int(parameters.get('youtube_main_area_y', 0))
+            area_width = int(parameters.get('youtube_main_area_width', 400))
+            area_height = int(parameters.get('youtube_main_area_height', 1080))
+            
+        elif self.area == "channel":
             self.logo_path = parameters.get('youtube_channel_logo_path', '').strip()
             area_x = int(parameters.get('youtube_main_area_x', 0))
             area_y = int(parameters.get('youtube_main_area_y', 0))
@@ -87,9 +95,27 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
         # - 1/ 35% search video home page
         # - 2/ If 1 True -> Do not need search video
         # - 3/ If 1 False -> Search video area = search
+
         result_bring = GoLoginProfileHelper.bring_profile_to_front(self.profile_id, driver=None)
         if result_bring:
             self._close_extra_tabs_keep_first()
+                     
+            not_full_load = int(GlobalVariables().get(f'not_full_load_{self.profile_id}', 0));
+            if not_full_load < 3:
+                current_url = self._get_current_url()
+                if "youtube.com" not in current_url.lower():
+                    search_action = YouTubeFindSearchBoxAutoAction(
+                        profile_id=self.profile_id,
+                        parameters=self.parameters,  # Contains keywords_google
+                        log_prefix=self.log_prefix
+                    )    
+                    search_action.execute()
+              
+                
+            not_full_load = int(GlobalVariables().get(f'not_full_load_{self.profile_id}', 0));
+            if not_full_load >= 3:
+                return False
+            
             try:
                 # If find logo channel when view a video , just try once
                 if self.area == "channel":
@@ -191,11 +217,10 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
     
                         # ========== LOGIC RANDOM SCROLL FOR SEARCH AREA ==========
                         should_random_scroll = False
-                        if self.area == "search" and attempt <= 2:
-                            # Random 50% giữa click trực tiếp và scroll random
-                            should_random_scroll = random.choice([True, False])
-        
-                        if should_random_scroll:
+                        if self.area == "search" and attempt <= 2:                            
+                            should_random_scroll = True
+       
+                        if should_random_scroll and random.random() < 0.75:
                             self.log(f"[HUMAN SIMULATION] Randomly scrolling before clicking (attempt {attempt})")
         
                             # Số lần scroll random từ 1-3
@@ -239,7 +264,7 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
                         # ========== CLICK VIDEO (COMMON FOR BOTH CASES) ==========
                         click_x, click_y = video_position
                         self.log(f"Clicking video at ({click_x}, {click_y})")
-    
+                        
                         # Click using human-like movement
                         MouseMoveAction.move_and_click_static(
                             click_x, click_y,
@@ -302,8 +327,8 @@ class YouTubeFindClickVideoAutoAction(BaseFlowAutoAction):
             tuple: (x, y) position to click video, or None if not found
         """
         # Use defined region or full screen
-        search_region = self.region
-    
+        search_region = self.region        
+            
         if not search_region:
             # Fallback to full screen if no region defined
             screen_width, screen_height = pyautogui.size()

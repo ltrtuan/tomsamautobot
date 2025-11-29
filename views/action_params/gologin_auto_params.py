@@ -68,7 +68,8 @@ class GoLoginAutoParams(BaseActionParams):
             'youtube_select_area_button': self.youtube_select_area_button,
             'youtube_sidebar_select_area_button': self.youtube_sidebar_select_area_button,
             'youtube_ads_select_area_button': self.youtube_ads_select_area_button,
-            'youtube_skip_ads_select_area_button': self.youtube_skip_ads_select_area_button
+            'youtube_skip_ads_select_area_button': self.youtube_skip_ads_select_area_button,
+            'reload_browser_select_area_button':  self.reload_browser_select_area_button
         }
     
     def create_api_key_variable_section(self):
@@ -334,6 +335,103 @@ class GoLoginAutoParams(BaseActionParams):
         browse_search_icon_button = ttk.Button(search_icon_browse_frame, text="Duyệt...", command=browse_youtube_search_icon)
         browse_search_icon_button.pack(side=tk.RIGHT, padx=5)
         
+        # ========== RELOAD BROWSER ICON IMAGE (GLOBAL) - NEW ==========
+        reload_browser_icon_label = tk.Label(
+            self.youtube_option_frame,
+            text="Reload Browser Icon Image (for page load verification):",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10, "bold")
+        )
+        reload_browser_icon_label.pack(anchor=tk.W, pady=(5, 3))
+    
+        reload_browser_icon_browse_frame = tk.Frame(self.youtube_option_frame, bg=cfg.LIGHT_BG_COLOR)
+        reload_browser_icon_browse_frame.pack(fill=tk.X, pady=(0, 5))
+    
+        tk.Label(reload_browser_icon_browse_frame, text="Đường dẫn hình ảnh:", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT, padx=(0, 5))
+    
+        self.reload_browser_icon_path_var = tk.StringVar()
+        if self.parameters:
+            self.reload_browser_icon_path_var.set(self.parameters.get("reload_browser_icon_path", ""))
+        else:
+            self.reload_browser_icon_path_var.set("")
+    
+        reload_browser_icon_entry = ttk.Entry(reload_browser_icon_browse_frame, textvariable=self.reload_browser_icon_path_var, width=40)
+        reload_browser_icon_entry.pack(side=tk.LEFT, padx=(0, 5), fill=tk.X, expand=True)
+    
+        def browse_reload_browser_icon():
+            filename = filedialog.askopenfilename(
+                title="Chọn reload browser icon",
+                filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp *.gif"), ("All files", "*.*")]
+            )
+            if filename:
+                self.reload_browser_icon_path_var.set(filename)
+    
+        browse_reload_browser_icon_button = ttk.Button(reload_browser_icon_browse_frame, text="Duyệt...", command=browse_reload_browser_icon)
+        browse_reload_browser_icon_button.pack(side=tk.RIGHT, padx=5)
+        
+
+        # ========== RELOAD BROWSER AREA (for reload icon detection) - NEW ==========
+        reload_browser_area_label = tk.Label(
+            self.youtube_option_frame,
+            text="Reload Browser Area (for reload icon detection):",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10, "bold")
+        )
+        reload_browser_area_label.pack(anchor=tk.W, pady=(5, 3))
+    
+        reload_browser_coords_frame = tk.Frame(self.youtube_option_frame, bg=cfg.LIGHT_BG_COLOR)
+        reload_browser_coords_frame.pack(fill=tk.X, pady=(0, 10))
+    
+        # X
+        tk.Label(reload_browser_coords_frame, text="X:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0, 5))
+        self.reload_browser_area_x_var = tk.StringVar()
+        if self.parameters:
+            self.reload_browser_area_x_var.set(self.parameters.get("reload_browser_area_x", "0"))
+        else:
+            self.reload_browser_area_x_var.set("0")
+        reload_browser_x_entry = ttk.Entry(reload_browser_coords_frame, textvariable=self.reload_browser_area_x_var, width=8)
+        reload_browser_x_entry.pack(side=tk.LEFT, padx=5)
+    
+        # Y
+        tk.Label(reload_browser_coords_frame, text="Y:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(15, 5))
+        self.reload_browser_area_y_var = tk.StringVar()
+        if self.parameters:
+            self.reload_browser_area_y_var.set(self.parameters.get("reload_browser_area_y", "0"))
+        else:
+            self.reload_browser_area_y_var.set("0")
+        reload_browser_y_entry = ttk.Entry(reload_browser_coords_frame, textvariable=self.reload_browser_area_y_var, width=8)
+        reload_browser_y_entry.pack(side=tk.LEFT, padx=5)
+    
+        # Width
+        tk.Label(reload_browser_coords_frame, text="Width:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(15, 5))
+        self.reload_browser_area_width_var = tk.StringVar()
+        if self.parameters:
+            self.reload_browser_area_width_var.set(self.parameters.get("reload_browser_area_width", "200"))
+        else:
+            self.reload_browser_area_width_var.set("200")
+        reload_browser_width_entry = ttk.Entry(reload_browser_coords_frame, textvariable=self.reload_browser_area_width_var, width=8)
+        reload_browser_width_entry.pack(side=tk.LEFT, padx=5)
+    
+        # Height
+        tk.Label(reload_browser_coords_frame, text="Height:", bg=cfg.LIGHT_BG_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(15, 5))
+        self.reload_browser_area_height_var = tk.StringVar()
+        if self.parameters:
+            self.reload_browser_area_height_var.set(self.parameters.get("reload_browser_area_height", "100"))
+        else:
+            self.reload_browser_area_height_var.set("100")
+        reload_browser_height_entry = ttk.Entry(reload_browser_coords_frame, textvariable=self.reload_browser_area_height_var, width=8)
+        reload_browser_height_entry.pack(side=tk.LEFT, padx=5)
+    
+        # Select area button
+        self.reload_browser_select_area_button = ttk.Button(
+            reload_browser_coords_frame,
+            text="Select area",
+            command=self.on_reload_browser_select_area_click
+        )
+        self.reload_browser_select_area_button.pack(side=tk.LEFT, padx=(15, 0))
+        
+
+        
         # ========== VIDEOS MENU CHANNEL IMAGE (GLOBAL) ==========
         separator_videos_menu = ttk.Separator(self.youtube_option_frame, orient="horizontal")
         separator_videos_menu.pack(fill=tk.X, pady=10)
@@ -574,6 +672,7 @@ class GoLoginAutoParams(BaseActionParams):
                     "channel_index": 1,
                     "enabled": True,
                     "logo_path": "path/to/logo.png",
+                    "logo_home_path": "path/to/logo.png",
                     "main_image_search_path": "...",
                     "sidebar_image_search_path": "...",
                     "suffix_prefix": "watch; how to",
@@ -705,6 +804,35 @@ class GoLoginAutoParams(BaseActionParams):
     
         logo_browse_btn = ttk.Button(logo_browse_frame, text="Duyệt...", command=browse_logo)
         logo_browse_btn.pack(side=tk.LEFT)
+        
+        # ========== 2b. LOGO HOME - NEW ==========
+        logo_home_label = tk.Label(
+            parent_frame,
+            text="Logo Home (for home page detection):",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10, "bold")
+        )
+        logo_home_label.pack(anchor=tk.W, pady=(5, 3))
+    
+        logo_home_browse_frame = tk.Frame(parent_frame, bg=cfg.LIGHT_BG_COLOR)
+        logo_home_browse_frame.pack(fill=tk.X, pady=(0, 10))
+    
+        tk.Label(logo_home_browse_frame, text="Đường dẫn logo:", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT, padx=(0, 5))
+    
+        channel_vars["logo_home_path"] = tk.StringVar(value=channel_data.get("logo_home_path", ""))
+        logo_home_entry = ttk.Entry(logo_home_browse_frame, textvariable=channel_vars["logo_home_path"], width=40)
+        logo_home_entry.pack(side=tk.LEFT, padx=(0, 5), fill=tk.X, expand=True)
+    
+        def browse_logo_home():
+            filename = filedialog.askopenfilename(
+                title="Chọn logo home",
+                filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp *.gif"), ("All files", "*.*")]
+            )
+            if filename:
+                channel_vars["logo_home_path"].set(filename)
+    
+        logo_home_browse_btn = ttk.Button(logo_home_browse_frame, text="Duyệt...", command=browse_logo_home)
+        logo_home_browse_btn.pack(side=tk.LEFT)
     
         # Separator
         separator1 = ttk.Separator(parent_frame, orient="horizontal")
@@ -949,6 +1077,36 @@ class GoLoginAutoParams(BaseActionParams):
     
         logo_browse_btn = ttk.Button(logo_browse_frame, text="Duyệt...", command=browse_logo)
         logo_browse_btn.pack(side=tk.LEFT)
+        
+        # ========== 2b. LOGO HOME - NEW ==========
+        logo_home_label = tk.Label(
+            parent_frame,
+            text="Logo Home (for home page detection):",
+            bg=cfg.LIGHT_BG_COLOR,
+            font=("Segoe UI", 10, "bold")
+        )
+        logo_home_label.pack(anchor=tk.W, pady=(5, 3))
+    
+        logo_home_browse_frame = tk.Frame(parent_frame, bg=cfg.LIGHT_BG_COLOR)
+        logo_home_browse_frame.pack(fill=tk.X, pady=(0, 10))
+    
+        tk.Label(logo_home_browse_frame, text="Đường dẫn logo:", bg=cfg.LIGHT_BG_COLOR).pack(side=tk.LEFT, padx=(0, 5))
+    
+        channel_vars["logo_home_path"] = tk.StringVar(value="")
+        logo_home_entry = ttk.Entry(logo_home_browse_frame, textvariable=channel_vars["logo_home_path"], width=40)
+        logo_home_entry.pack(side=tk.LEFT, padx=(0, 5), fill=tk.X, expand=True)
+    
+        def browse_logo_home():
+            filename = filedialog.askopenfilename(
+                title="Chọn logo home",
+                filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp *.gif"), ("All files", "*.*")]
+            )
+            if filename:
+                channel_vars["logo_home_path"].set(filename)
+                print(f"[CHANNEL {channel_id}] Logo home set: {filename}")
+    
+        logo_home_browse_btn = ttk.Button(logo_home_browse_frame, text="Duyệt...", command=browse_logo_home)
+        logo_home_browse_btn.pack(side=tk.LEFT)
     
         # Separator
         separator1 = ttk.Separator(parent_frame, orient="horizontal")
@@ -1181,6 +1339,26 @@ class GoLoginAutoParams(BaseActionParams):
             callback=update_coords
         )
         selector.show()
+        
+    def on_reload_browser_select_area_click(self):
+        """Handler khi click button Select area của Reload Browser Area"""
+        from views.screen_area_selector import ScreenAreaSelector
+    
+        # Callback để update các textboxes
+        def update_coords(x, y, width, height):
+            self.reload_browser_area_x_var.set(str(x))
+            self.reload_browser_area_y_var.set(str(y))
+            self.reload_browser_area_width_var.set(str(width))
+            self.reload_browser_area_height_var.set(str(height))
+            print(f"[RELOAD_BROWSER_SELECT_AREA] Updated: x={x}, y={y}, w={width}, h={height}")
+    
+        # Tìm dialog cha (ActionDialogView)
+        dialog = self.parent_frame.winfo_toplevel()
+    
+        # Tạo và show selector
+        selector = ScreenAreaSelector(parent_dialog=dialog, callback=update_coords)
+        selector.show()
+
 
     def on_youtube_ads_select_area_click(self):
         """Handler khi click button Select area của Ads Youtube Option"""
@@ -1814,6 +1992,14 @@ class GoLoginAutoParams(BaseActionParams):
 
     
         params["youtube_search_icon_path"] = self.youtube_search_icon_path_var.get()
+        
+        params["reload_browser_icon_path"] = self.reload_browser_icon_path_var.get()
+        params["reload_browser_icon_path"] = self.reload_browser_icon_path_var.get()
+        params["reload_browser_area_x"] = self.reload_browser_area_x_var.get()
+        params["reload_browser_area_y"] = self.reload_browser_area_y_var.get()
+        params["reload_browser_area_width"] = self.reload_browser_area_width_var.get()
+        params["reload_browser_area_height"] = self.reload_browser_area_height_var.get()
+        
         params["youtube_videos_menu_channel_path"] = self.youtube_videos_menu_channel_path_var.get()
 
     
@@ -1844,6 +2030,7 @@ class GoLoginAutoParams(BaseActionParams):
                 "channel_index": channel["channel_index"],
                 "enabled": channel_vars["enabled"].get(),
                 "logo_path": channel_vars["logo_path"].get(),
+                "logo_home_path": channel_vars["logo_home_path"].get(),
                 "main_image_search_path": channel_vars["main_image_search_path"].get(),
                 "sidebar_image_search_path": channel_vars["sidebar_image_search_path"].get(),
                 "suffix_prefix": channel_vars["suffix_prefix"].get(),

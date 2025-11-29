@@ -7,6 +7,7 @@ import os
 from controllers.actions.mouse_move_action import MouseMoveAction
 from controllers.actions.flow_auto.actions_auto.base_flow_auto_action import BaseFlowAutoAction
 from controllers.actions.flow_auto.actions_auto.youtube_navigate_auto_action import YouTubeNavigateAutoAction
+from models.global_variables import GlobalVariables
 import logging
 logger = logging.getLogger('TomSamAutobot')
 from helpers.gologin_profile_helper import GoLoginProfileHelper
@@ -31,18 +32,20 @@ class YouTubeFindSearchBoxAutoAction(BaseFlowAutoAction):
             log_prefix: Log prefix
         """
         super().__init__(profile_id, log_prefix)
-        self.profile_id = profile_id
-        self.log_prefix = log_prefix
         self.parameters = parameters
         self.search_type = search_type
 
     
     def _execute_internal(self):
         """Execute find search box → click → type keyword → enter"""
+        not_full_load = int(GlobalVariables().get(f'not_full_load_{self.profile_id}', 0));
+        if not_full_load >= 3:
+            return False
+        
         result_bring = GoLoginProfileHelper.bring_profile_to_front(self.profile_id, driver=None)
         if result_bring:
             self._close_extra_tabs_keep_first()
-            try:
+            try:              
                 # ========== STEP 1: GENERATE KEYWORD ==========
                 # Build minimal dict for _generate_keyword()
                 keyword = ""
@@ -74,7 +77,7 @@ class YouTubeFindSearchBoxAutoAction(BaseFlowAutoAction):
                 # ========== STEP 2: FIND SEARCH BOX (RETRY 3 TIMES) ==========
                 search_icon_path = self.parameters.get('youtube_search_icon_path', '').strip()
                 search_result = None
-                max_retries = 5
+                max_retries = 3
         
                 for attempt in range(1, max_retries + 1):
                     self.log(f"Attempt {attempt}/{max_retries}: Looking for search box")
@@ -103,7 +106,7 @@ class YouTubeFindSearchBoxAutoAction(BaseFlowAutoAction):
                     # Wait before retry
                     if attempt < max_retries:
                         self.log("Search icon not found, retrying...")
-                        YouTubeNavigateAutoAction(self.profile_id,self.log_prefix).execute()
+                        YouTubeNavigateAutoAction(self.profile_id, self.parameters, self.log_prefix).execute()
         
                 # ========== STEP 3: CALCULATE CLICK POSITION ==========
                 if search_result and search_result['found']:
@@ -122,53 +125,40 @@ class YouTubeFindSearchBoxAutoAction(BaseFlowAutoAction):
                     self.log(f"Clicking search box at ({click_x}, {click_y}) "
                             f"[icon at ({icon_x}, {icon_y}), offset: ({offset_x}, {offset_y}), "
                             f"confidence: {confidence:.3f}]")
-                else:
-                    # Fallback: Use fixed position (center of screen, top area)
-                    self.log("Using fixed position (fallback)", "WARNING")
-                    screen_width, screen_height = pyautogui.size()
-            
-                    search_x = screen_width // 2
-                    search_y = 100
-            
-                    # Add small random offset
-                    offset_x = random.randint(-50, 50)
-                    offset_y = random.randint(-2, 2)
-            
-                    click_x = search_x + offset_x
-                    click_y = search_y + offset_y
-            
-                    self.log(f"Clicking search box at ({click_x}, {click_y}) [fixed position with random offset]")
+                
         
-                # Click search box
-                MouseMoveAction.move_and_click_static(click_x, click_y, click_type="single_click", fast=False)
-                self._random_short_pause()
-                # Ctrl+L to focus address bar
-                pyautogui.hotkey('ctrl', 'a')
-                time.sleep(0.3)
-                if random.random() < 0.5:
-                    pyautogui.press('backspace')
-                # ========== STEP 4: TYPE KEYWORD WITH MISTAKES ==========
-                self.log(f"Typing keyword: '{keyword}'")
+                    # Click search box
+                    MouseMoveAction.move_and_click_static(click_x, click_y, click_type="single_click", fast=False)
+                    self._random_short_pause()
+                    # Ctrl+L to focus address bar
+                    pyautogui.hotkey('ctrl', 'a')
+                    time.sleep(0.3)
+                    if random.random() < 0.5:
+                        pyautogui.press('backspace')
+                    # ========== STEP 4: TYPE KEYWORD WITH MISTAKES ==========
+                    self.log(f"Typing keyword: '{keyword}'")
         
-                # 40% chance to make mistakes while typing (more realistic)
-                if random.random() < 0.35:
-                    self._type_with_mistakes(keyword, mistake_rate=0.1)
-                else:
-                    self._type_human_like(keyword)
+                    # 40% chance to make mistakes while typing (more realistic)
+                    if random.random() < 0.35:
+                        self._type_with_mistakes(keyword, mistake_rate=0.1)
+                    else:
+                        self._type_human_like(keyword)
         
-                self._random_short_pause()
+                    self._random_short_pause()
         
-                # ========== STEP 5: PRESS ENTER ==========
-                pyautogui.press('enter')
-                self.log("Pressed Enter to search")
+                    # ========== STEP 5: PRESS ENTER ==========
+                    pyautogui.press('enter')
+                    self.log("Pressed Enter to search")
         
-                # ========== STEP 6: WAIT FOR RESULTS ==========
-                wait_time = random.uniform(4, 8)
-                self.log(f"Waiting {wait_time:.1f}s for search results")
-                time.sleep(wait_time)
+                    # ========== STEP 6: WAIT FOR RESULTS ==========
+                    wait_time = random.uniform(4, 8)
+                    self.log(f"Waiting {wait_time:.1f}s for search results")
+                    time.sleep(wait_time)
         
-                self.log("✓ Search completed")
-                return True            
+                    self.log("✓ Search completed")
+                    return True
+                
+                return False
             except Exception as e:
                 self.log(f"✗ Find search box failed: {e}", "ERROR")
                 import traceback

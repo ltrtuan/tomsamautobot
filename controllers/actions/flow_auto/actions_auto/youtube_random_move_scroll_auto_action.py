@@ -10,10 +10,9 @@ class YouTubeRandomMoveScrollAutoAction(BaseFlowAutoAction):
     """Random mouse move and scroll actions"""
     
     def __init__(self, profile_id, num_actions=2, area = "main", log_prefix="[YOUTUBE AUTO]"):
-        self.profile_id = profile_id
+        super().__init__(profile_id, log_prefix)
         self.num_actions = num_actions
         self.area = area
-        self.log_prefix = log_prefix
     
     def _execute_internal(self):
         """Execute random actions"""

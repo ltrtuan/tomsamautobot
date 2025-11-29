@@ -3,16 +3,9 @@
 
 import random
 # Import all action classes
-from controllers.actions.flow_auto.actions_auto.youtube_navigate_auto_action import YouTubeNavigateAutoAction
-from controllers.actions.flow_auto.actions_auto.youtube_random_move_scroll_auto_action import YouTubeRandomMoveScrollAutoAction
-from controllers.actions.flow_auto.actions_auto.youtube_find_search_box_auto_action import YouTubeFindSearchBoxAutoAction
-from controllers.actions.flow_auto.actions_auto.youtube_find_click_video_auto_action import YouTubeFindClickVideoAutoAction
 
-from controllers.actions.flow_auto.actions_auto.youtube_skip_ads_auto_action import YouTubeSkipAdsAutoAction
+from controllers.actions.flow_auto.actions_auto.youtube_random_move_scroll_auto_action import YouTubeRandomMoveScrollAutoAction
 from controllers.actions.flow_auto.actions_auto.youtube_mouse_move_auto_action import YouTubeMouseMoveAutoAction
-from controllers.actions.flow_auto.actions_auto.youtube_pause_resume_auto_action import YouTubePauseResumeAutoAction
-from controllers.actions.flow_auto.actions_auto.youtube_fullscreen_auto_action import YouTubeFullscreenAutoAction
-from controllers.actions.flow_auto.actions_auto.youtube_prev_next_auto_action import YouTubePrevNextAutoAction
 from controllers.actions.flow_auto.actions_auto.browse_website_auto_action import BrowseWebsiteAutoAction
 
 from controllers.actions.flow_auto.base_youtube_flow_auto import BaseYouTubeFlowAutoIterator
@@ -38,9 +31,9 @@ class YouTubeFlowAutoBrowseIterator(BaseYouTubeFlowAutoIterator):
         
         repeat_count = 2
         if len(opened_profiles) == 2:
-            repeat_count = 6
-        elif len(opened_profiles) == 1:
             repeat_count = 10
+        elif len(opened_profiles) == 1:
+            repeat_count = 16
         
         for i in range(repeat_count):
             choice_browse = random.choice([1,2])

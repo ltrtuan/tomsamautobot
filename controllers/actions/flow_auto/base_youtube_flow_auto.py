@@ -104,6 +104,7 @@ class BaseYouTubeFlowAutoIterator:
                     "channel_index": 1,
                     "enabled": True,
                     "logo_path": "logo1.png",
+                    "logo_home": "logo1.png",
                     "main_image_search_path": "main1.png",
                     "sidebar_image_search_path": "sidebar1.png",
                     "suffix_prefix": "watch; how to",
@@ -153,6 +154,7 @@ class BaseYouTubeFlowAutoIterator:
     
         # ========== STORE LOGO PATH (for future use) ==========
         self.parameters["youtube_channel_logo_path"] = channel.get("logo_path", "")
+        self.parameters["youtube_home_logo_path"] = channel.get("logo_home_path", "")
     
         self.log(f"Channel params overridden: "
                  f"keywords={len(self.parameters.get('keywords_youtube', []))}, "
@@ -210,7 +212,7 @@ class BaseYouTubeFlowAutoIterator:
             result_bring = GoLoginProfileHelper.bring_profile_to_front(self.profile_id, driver=None)
             if result_bring:
                 time.sleep(1)
-                
+                not_full_load = int(GlobalVariables().get(f'not_full_load_{self.profile_id}', 0));
                 list_special_action = ["not_found_video_home_", "not_found_clicked_video_", "not_clicked_second_video_"]
                 # ========== EXECUTE ALL ACTIONS IN CHAIN ==========
                 for action_name, action_obj in chain_actions:
@@ -225,7 +227,11 @@ class BaseYouTubeFlowAutoIterator:
                     if action_name == "delay" or action_name == "delay_loop":
                         delay_seconds = action_obj
                         self.log(f" → Delay: {delay_seconds:.1f} seconds")
-                        time.sleep(delay_seconds)
+                        
+                        if not_full_load >= 3:
+                            time.sleep(30)
+                        else:
+                            time.sleep(delay_seconds)
                         continue
                     
                     # ========== SPECIAL ACTIONS: Check conditions to skip ==========

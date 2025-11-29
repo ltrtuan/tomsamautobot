@@ -27,6 +27,8 @@ class ActionController:
         self.auto_trigger_cancelled = False
         self.auto_trigger_active = False
         
+        self.heartbeat_timer = None
+        self.heartbeat_start_time = None
 
     def create_tray_icon(self):
         """
@@ -704,6 +706,10 @@ class ActionController:
         # Đánh dấu app đã Start (watchdog sẽ check biến này để tự exit)
         cfg.set_app_running(True)
         print("[AUTO-RESTART] ✓ App marked as RUNNING")
+        
+        # ========== HEARTBEAT EMAIL: START TIMER (NEW) ==========
+        self.start_heartbeat_timer()
+        # ========================================================
     
         # Clear countdown nếu đang có (vì user đã Start thủ công)
         cfg.set_restart_countdown(0)
@@ -1110,6 +1116,10 @@ class ActionController:
             cfg.set_app_running(False)
             print("[AUTO-RESTART] ✓ App marked as STOPPED")
             # ===============================================================
+
+            # Cancel heartbeat timer (NEW)
+            self.cancel_heartbeat_timer()
+            print("[HEARTBEAT] Timer cancelled")
 
             print("[EXECUTION] Showing window back...")
             self.root.deiconify()
@@ -2065,5 +2075,100 @@ class ActionController:
         logger.info("[AUTO-TRIGGER] ✓ Crash env vars reset")
     # ==========================================================
 
+    def start_heartbeat_timer(self):
+        """
+        Start heartbeat email timer - gửi email định kỳ để check app hoạt động
+        
+        Logic:
+        - Chỉ start nếu HEARTBEAT_ENABLED = True
+        - Gửi email đầu tiên sau HEARTBEAT_INTERVAL_HOURS
+        - Sau mỗi lần gửi, schedule lần tiếp theo
+        - Chạy trong background thread - KHÔNG block app
+        """
+        import threading
+        from datetime import datetime
+        
+        # Check if enabled
+        if not cfg.HEARTBEAT_ENABLED:
+            logger.info("[HEARTBEAT] Heartbeat email disabled in settings")
+            return
+        
+        # Check if SMTP configured
+        if not cfg.SMTP_ENABLED or not cfg.SMTP_TO_EMAIL:
+            logger.warning("[HEARTBEAT] SMTP not configured, skipping heartbeat")
+            return
+        
+        # Cancel existing timer if any
+        self.cancel_heartbeat_timer()
+        
+        # Record start time
+        self.heartbeat_start_time = datetime.now()
+        
+        # Calculate interval in seconds
+        interval_seconds = cfg.HEARTBEAT_INTERVAL_HOURS * 3600
+        
+        logger.info(f"[HEARTBEAT] Starting heartbeat timer - will send email every {cfg.HEARTBEAT_INTERVAL_HOURS} hour(s)")
+        
+        def send_heartbeat_email():
+            """Send heartbeat email và schedule next one - runs in background thread"""
+            try:
+                from helpers.email_notifier import send_email, format_heartbeat_email
+                from datetime import datetime
+                
+                # Calculate uptime
+                if self.heartbeat_start_time:
+                    uptime_seconds = (datetime.now() - self.heartbeat_start_time).total_seconds()
+                    uptime_hours = uptime_seconds / 3600
+                    
+                    # Format uptime nicely
+                    if uptime_hours < 1:
+                        uptime_minutes = uptime_seconds / 60
+                        uptime_str = f"{uptime_minutes:.0f} phút"
+                    else:
+                        uptime_str = f"{uptime_hours:.1f} giờ"
+                else:
+                    uptime_str = "Unknown"
+                
+                # Format email using template (giống format_crash_email)
+                title, content = format_heartbeat_email(
+                    uptime_str=uptime_str,
+                    interval_hours=cfg.HEARTBEAT_INTERVAL_HOURS,
+                    context={
+                        "version": cfg.APP_VERSION if hasattr(cfg, 'APP_VERSION') else "1.0",
+                    }
+                )
+                
+                # Send email (non-blocking, runs in thread)
+                logger.info("[HEARTBEAT] Sending heartbeat email...")
+                send_email(title=title, content=content, throttle_seconds=0)  # No throttle for heartbeat
+                logger.info("[HEARTBEAT] Heartbeat email sent successfully")
+                
+            except Exception as e:
+                logger.error(f"[HEARTBEAT] Failed to send heartbeat email: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+            
+            # Schedule next heartbeat (recursive)
+            if cfg.HEARTBEAT_ENABLED and self.is_actions_running:
+                logger.info(f"[HEARTBEAT] Scheduling next heartbeat in {cfg.HEARTBEAT_INTERVAL_HOURS} hour(s)")
+                self.heartbeat_timer = threading.Timer(interval_seconds, send_heartbeat_email)
+                self.heartbeat_timer.daemon = True
+                self.heartbeat_timer.start()
+            else:
+                logger.info("[HEARTBEAT] Heartbeat stopped (disabled or execution stopped)")
+        
+        # Start first timer
+        self.heartbeat_timer = threading.Timer(interval_seconds, send_heartbeat_email)
+        self.heartbeat_timer.daemon = True
+        self.heartbeat_timer.start()
+        
+        logger.info(f"[HEARTBEAT] First heartbeat email will be sent in {cfg.HEARTBEAT_INTERVAL_HOURS} hour(s)")
 
 
+    def cancel_heartbeat_timer(self):
+        """Cancel heartbeat timer nếu đang chạy"""
+        if self.heartbeat_timer and self.heartbeat_timer.is_alive():
+            self.heartbeat_timer.cancel()
+            logger.info("[HEARTBEAT] Heartbeat timer cancelled")
+            self.heartbeat_timer = None
+            self.heartbeat_start_time = None

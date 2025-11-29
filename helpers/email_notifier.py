@@ -452,3 +452,45 @@ def format_crash_email(exception_type, exception_message, traceback_str, context
     content = format_email_content(title="Application Crash Alert", sections=sections)
     
     return title, content
+
+
+def format_heartbeat_email(uptime_str, interval_hours, context=None):
+    """
+    Pre-defined template: Heartbeat health check email
+    
+    Args:
+        uptime_str (str): Uptime string (e.g., "2.5 hours")
+        interval_hours (float): Check interval in hours
+        context (dict, optional): Extra context info
+    
+    Returns:
+        tuple: (title, html_content)
+    """
+    sections = [
+        ("Trạng thái", "✓ <span style='color: #107c10; font-weight: bold;'>App Đang Hoạt Động Bình Thường</span>"),
+        ("Thời gian chạy", uptime_str),
+        ("Khoảng kiểm tra", f"Mỗi {interval_hours} giờ"),
+    ]
+    
+    # Add extra context if provided
+    if context:
+        for key, value in context.items():
+            sections.append((key.capitalize(), str(value)))
+    
+    # Add note
+    sections.append(("", ""))  # Separator
+    sections.append(
+        ("Lưu ý", 
+         f"<em style='color: #666; font-size: 12px;'>"
+         f"Email tự động được gửi để xác nhận app vẫn đang chạy.<br>"
+         f"Nếu bạn không nhận được email sau <strong>{interval_hours} giờ</strong>, "
+         f"có thể app đã dừng hoặc gặp sự cố.</em>")
+    )
+    
+    title = f"✓ Heartbeat - App đang hoạt động"
+    content = format_email_content(
+        title="Health Check - App Running",
+        sections=sections
+    )
+    
+    return title, content

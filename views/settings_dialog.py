@@ -38,22 +38,63 @@ class SettingsDialog:
         self.dialog.geometry(f"{width}x{height}+{x}+{y}")
         
     def create_widgets(self):
-        # ========== SECTION 1: THÔNG SỐ CHÍNH ==========
+        # ========== MAIN LABEL (FIXED AT TOP) ==========
         main_label = ttk.Label(self.dialog, text="Thông số chính", font=("Arial", 12, "bold"))
         main_label.pack(pady=10)
     
-        # File path frame
-        file_frame = ttk.Frame(self.dialog)
-        file_frame.pack(fill="x", padx=20, pady=5)
+        # ========== CREATE CANVAS + SCROLLBAR CONTAINER ==========
+        # Container frame for canvas + scrollbar
+        container_frame = ttk.Frame(self.dialog)
+        container_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
     
+        # Canvas
+        canvas = tk.Canvas(container_frame, highlightthickness=0)
+        canvas.pack(side="left", fill="both", expand=True)
+    
+        # Scrollbar
+        scrollbar = ttk.Scrollbar(container_frame, orient="vertical", command=canvas.yview)
+        scrollbar.pack(side="right", fill="y")
+    
+        # Configure canvas
+        canvas.configure(yscrollcommand=scrollbar.set)
+    
+        # Scrollable frame inside canvas
+        scrollable_frame = ttk.Frame(canvas)
+        canvas_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    
+        # Update scroll region when frame size changes
+        def on_frame_configure(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+    
+        scrollable_frame.bind("<Configure>", on_frame_configure)
+    
+        # Update canvas window width to match canvas width
+        def on_canvas_configure(event):
+            canvas.itemconfig(canvas_window, width=event.width)
+    
+        canvas.bind("<Configure>", on_canvas_configure)
+    
+        # Bind mousewheel scrolling
+        def on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+    
+        canvas.bind_all("<MouseWheel>", on_mousewheel)
+    
+        # ========== ALL SECTIONS GO INTO scrollable_frame NOW ==========
+    
+        # ========== SECTION 1: THÔNG SỐ CHÍNH ==========
+        # File path frame
+        file_frame = ttk.Frame(scrollable_frame)
+        file_frame.pack(fill="x", padx=20, pady=5)
+
         file_label = ttk.Label(file_frame, text="Đường dẫn file và hình:")
         file_label.grid(row=0, column=0, sticky="w", padx=5, pady=5)
-    
+
         path_browse_frame = ttk.Frame(file_frame)
         path_browse_frame.grid(row=0, column=1, sticky="w", padx=5, pady=5)
-    
+
         self.file_path_var = tk.StringVar(value=config.FILE_PATH)
-    
+
         self.path_display = ttk.Label(
             path_browse_frame, 
             textvariable=self.file_path_var,
@@ -62,20 +103,20 @@ class SettingsDialog:
             relief="sunken"
         )
         self.path_display.pack(side="left", fill="x", expand=True, padx=(0, 5))
-    
+
         browse_button = ttk.Button(path_browse_frame, text="Browse", command=self.browse_folder)
         browse_button.pack(side="left")
-    
+
         # Số ngày giữ logs
-        log_days_frame = ttk.Frame(self.dialog)
+        log_days_frame = ttk.Frame(scrollable_frame)
         log_days_frame.pack(fill="x", padx=20, pady=5)
-    
+
         log_days_label = ttk.Label(log_days_frame, text="Số ngày giữ logs:")
         log_days_label.grid(row=0, column=0, sticky="w", padx=5, pady=5)
-    
+
         spinbox_frame = ttk.Frame(log_days_frame)
         spinbox_frame.grid(row=0, column=1, sticky="w", padx=5, pady=5)
-    
+
         self.log_days_var = tk.IntVar(value=config.LOG_RETENTION_DAYS)
         self.log_days_spinbox = ttk.Spinbox(
             spinbox_frame,
@@ -87,18 +128,18 @@ class SettingsDialog:
         )
         self.log_days_spinbox.pack(side=tk.LEFT)
         ttk.Label(spinbox_frame, text="ngày", font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(5, 0))
-    
+
         # ========== SEPARATOR ==========
-        ttk.Separator(self.dialog, orient='horizontal').pack(fill='x', padx=20, pady=15)
-    
+        ttk.Separator(scrollable_frame, orient='horizontal').pack(fill='x', padx=20, pady=15)
+
         # ========== SECTION 2: CẤU HÌNH SMTP EMAIL ==========
-        smtp_label = ttk.Label(self.dialog, text="Cấu hình SMTP Email", font=("Arial", 12, "bold"))
+        smtp_label = ttk.Label(scrollable_frame, text="Cấu hình SMTP Email", font=("Arial", 12, "bold"))
         smtp_label.pack(pady=10)
-    
+
         # Checkbox: Bật/Tắt email alerts
-        smtp_enable_frame = ttk.Frame(self.dialog)
+        smtp_enable_frame = ttk.Frame(scrollable_frame)
         smtp_enable_frame.pack(fill="x", padx=20, pady=5)
-    
+
         self.smtp_enabled_var = tk.BooleanVar(value=config.SMTP_ENABLED)
         smtp_enable_check = ttk.Checkbutton(
             smtp_enable_frame,
@@ -107,9 +148,9 @@ class SettingsDialog:
             command=self.toggle_smtp_fields
         )
         smtp_enable_check.pack(anchor="w", padx=5)
-    
+
         # Frame chứa tất cả SMTP fields
-        self.smtp_fields_frame = ttk.Frame(self.dialog)
+        self.smtp_fields_frame = ttk.Frame(scrollable_frame)
         self.smtp_fields_frame.pack(fill="x", padx=20, pady=5)
 
         # Row 1: SMTP Host
@@ -180,7 +221,7 @@ class SettingsDialog:
         self.smtp_to_email_entry.grid(row=5, column=1, sticky="w", padx=5, pady=3)
 
         # Test Email Button
-        test_email_frame = ttk.Frame(self.dialog)
+        test_email_frame = ttk.Frame(scrollable_frame)
         test_email_frame.pack(fill="x", padx=20, pady=10)
 
         self.test_email_btn = ttk.Button(
@@ -189,44 +230,102 @@ class SettingsDialog:
             command=self.test_smtp
         )
         self.test_email_btn.pack(anchor="w", padx=5)
-        
-        
-        # ========== SEPARATOR ========== (THÊM MỚI)
-        ttk.Separator(self.dialog, orient='horizontal').pack(fill='x', padx=20, pady=15)
-        
-        # ========== SECTION 3: AUTO-START DELAY (NEW) ==========
+    
+        # ========== SEPARATOR ==========
+        ttk.Separator(scrollable_frame, orient="horizontal").pack(fill="x", padx=20, pady=15)
+    
+        # ========== SECTION 3: HEARTBEAT EMAIL (NEW) ==========
+        heartbeat_label = ttk.Label(
+            scrollable_frame,
+            text="Heartbeat Email (Kiểm tra hoạt động)",
+            font=("Arial", 12, "bold")
+        )
+        heartbeat_label.pack(pady=10)
+    
+        # Checkbox: Enable heartbeat
+        heartbeat_enable_frame = ttk.Frame(scrollable_frame)
+        heartbeat_enable_frame.pack(fill="x", padx=20, pady=5)
+    
+        self.heartbeat_enabled_var = tk.BooleanVar(value=config.HEARTBEAT_ENABLED)
+        heartbeat_enable_check = ttk.Checkbutton(
+            heartbeat_enable_frame,
+            text="Bật gửi email định kỳ",
+            variable=self.heartbeat_enabled_var,
+            command=self.toggle_heartbeat_fields
+        )
+        heartbeat_enable_check.pack(anchor="w", padx=5)
+    
+        # Frame chứa heartbeat settings
+        self.heartbeat_fields_frame = ttk.Frame(scrollable_frame)
+        self.heartbeat_fields_frame.pack(fill="x", padx=20, pady=5)
+    
+        # Interval setting
+        ttk.Label(
+            self.heartbeat_fields_frame,
+            text="Gửi email mỗi (giờ):",
+            font=("Segoe UI", 10)
+        ).grid(row=0, column=0, sticky="w", padx=5, pady=5)
+    
+        self.heartbeat_interval_var = tk.DoubleVar(value=config.HEARTBEAT_INTERVAL_HOURS)
+        self.heartbeat_interval_spinbox = ttk.Spinbox(
+            self.heartbeat_fields_frame,
+            from_=0.1,
+            to=24.0,
+            increment=0.5,
+            textvariable=self.heartbeat_interval_var,
+            width=10,
+            font=("Segoe UI", 10)
+        )
+        self.heartbeat_interval_spinbox.grid(row=0, column=1, sticky="w", padx=5, pady=5)
+    
+        # Help text
+        help_heartbeat_frame = ttk.Frame(scrollable_frame)
+        help_heartbeat_frame.pack(fill="x", padx=20, pady=(0, 5))
+    
+        help_heartbeat_text = ttk.Label(
+            help_heartbeat_frame,
+            text="App sẽ gửi email thông báo vẫn đang hoạt động theo khoảng thời gian trên",
+            font=("Segoe UI", 8),
+            foreground="gray"
+        )
+        help_heartbeat_text.pack(anchor="w", padx=5)
+    
+        # ========== SEPARATOR ==========
+        ttk.Separator(scrollable_frame, orient='horizontal').pack(fill='x', padx=20, pady=15)
+    
+        # ========== SECTION 4: AUTO-START DELAY ==========
         auto_start_label = ttk.Label(
-            self.dialog, 
+            scrollable_frame, 
             text="Tự động khởi động sau khi crash", 
             font=("Arial", 12, "bold")
         )
         auto_start_label.pack(pady=10)
-        
+    
         # Frame chứa field
-        auto_start_frame = ttk.Frame(self.dialog)
+        auto_start_frame = ttk.Frame(scrollable_frame)
         auto_start_frame.pack(fill="x", padx=20, pady=5)
-        
+    
         # Label bên trái
         ttk.Label(
             auto_start_frame,
             text="Delay trước khi auto-start (giây):",
             font=("Segoe UI", 10)
         ).grid(row=0, column=0, sticky="w", padx=5, pady=5)
-        
+    
         # Spinbox cho delay
         self.auto_start_delay_var = tk.IntVar(value=config.get_auto_start_delay())
         self.auto_start_delay_spinbox = ttk.Spinbox(
             auto_start_frame,
             from_=0,
-            to=9999,  # No limit
+            to=9999,
             textvariable=self.auto_start_delay_var,
             width=10,
             font=("Segoe UI", 10)
         )
         self.auto_start_delay_spinbox.grid(row=0, column=1, sticky="w", padx=5, pady=5)
-        
+    
         # Help text
-        help_frame = ttk.Frame(self.dialog)
+        help_frame = ttk.Frame(scrollable_frame)
         help_frame.pack(fill="x", padx=20, pady=(0, 5))
         help_text = ttk.Label(
             help_frame,
@@ -235,23 +334,29 @@ class SettingsDialog:
             foreground="gray"
         )
         help_text.pack(anchor="w", padx=5)
-        # ========================================================
 
-    
-        # ========== BUTTON FRAME (SAVE/CANCEL) ==========
+        # ========== BUTTON FRAME (FIXED AT BOTTOM) ==========
         button_frame = ttk.Frame(self.dialog)
         button_frame.pack(pady=15)
-    
+
         save_button = ttk.Button(button_frame, text="Lưu", command=self.save_settings)
         save_button.pack(side="left", padx=5)
-    
+
         cancel_button = ttk.Button(button_frame, text="Hủy", command=self.dialog.destroy)
         cancel_button.pack(side="left", padx=5)
-    
-        # Initial state của SMTP fields
-        self.toggle_smtp_fields()
-        
 
+        # Initial state của fields
+        self.toggle_smtp_fields()
+        self.toggle_heartbeat_fields()
+
+        
+    def toggle_heartbeat_fields(self):
+        """Enable/disable heartbeat fields based on checkbox state"""
+        state = "normal" if self.heartbeat_enabled_var.get() else "disabled"
+        
+        for widget in self.heartbeat_fields_frame.winfo_children():
+            if isinstance(widget, (ttk.Entry, ttk.Spinbox)):
+                widget.config(state=state)
         
     def toggle_smtp_fields(self):
         """Enable/disable SMTP fields based on checkbox"""
@@ -349,6 +454,9 @@ class SettingsDialog:
         config.SMTP_PASSWORD = self.smtp_password_var.get()
         config.SMTP_TO_EMAIL = self.smtp_to_email_var.get()
         config.SMTP_FROM_EMAIL = self.smtp_from_email_var.get()
+        
+        config.HEARTBEAT_ENABLED = self.heartbeat_enabled_var.get()
+        config.HEARTBEAT_INTERVAL_HOURS = self.heartbeat_interval_var.get()
         
         # ========== Lưu AUTO_START_DELAY (NEW) ==========
         try:

@@ -51,9 +51,9 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         repeat_count = 3
        
         if len(opened_profiles) == 2:
-            repeat_count = 8
+            repeat_count = 14
         elif len(opened_profiles) == 1:
-            repeat_count = 15
+            repeat_count = 20
         
         for i in range(repeat_count):
             self._build_video_interaction_chains(index_action = i) 
@@ -122,7 +122,7 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         )
         # Action 1: Navigate to YouTube
         chain1_actions.append(
-            ("navigate_youtube", YouTubeNavigateAutoAction(self.profile_id, self.log_prefix))
+            ("navigate_youtube", YouTubeNavigateAutoAction(self.profile_id, self.parameters, self.log_prefix))
         )        
         
         if random.random() < 0.75:
@@ -231,7 +231,7 @@ class YouTubeFlowAutoIterator(BaseYouTubeFlowAutoIterator):
         keywords_list = self.parameters.get("keywords_youtube", [])
         if keywords_list:  # ← Check dict, not instance var
             chain_actions.append(
-                ("not_found_clicked_video_find_navigate_youtube", YouTubeNavigateAutoAction(self.profile_id, self.log_prefix))
+                ("not_found_clicked_video_find_navigate_youtube", YouTubeNavigateAutoAction(self.profile_id, self.parameters, self.log_prefix))
             )        
             
             chain_actions.append(
