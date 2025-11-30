@@ -448,7 +448,9 @@ def format_crash_email(exception_type, exception_message, traceback_str, context
         f"<pre style='background: #f5f5f5; padding: 12px; border-left: 3px solid #d13438; overflow-x: auto; font-size: 11px;'>{traceback_html}</pre>"
     ))
     
-    title = f"🚨 CRASH: {exception_type}"
+    pc_name = get_machine_name()
+    pc_ip = get_machine_ip()
+    title = f"🚨 CRASH: {exception_type} | {pc_name} ({pc_ip})"
     content = format_email_content(title="Application Crash Alert", sections=sections)
     
     return title, content
@@ -487,7 +489,9 @@ def format_heartbeat_email(uptime_str, interval_hours, context=None):
          f"có thể app đã dừng hoặc gặp sự cố.</em>")
     )
     
-    title = f"✓ Heartbeat - App đang hoạt động"
+    pc_name = get_machine_name()
+    pc_ip = get_machine_ip()
+    title = f"✓ Heartbeat - App đang hoạt động | {pc_name} ({pc_ip})"
     content = format_email_content(
         title="Health Check - App Running",
         sections=sections
